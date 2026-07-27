@@ -148,11 +148,38 @@ dependencies {
     }
     if (propertyBool('enable_junit_testing')) {
         testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
+        testImplementation 'org.mockito:mockito-core:3.12.4'
         testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     }
 }
 
 apply from: 'gradle/scripts/dependencies.gradle'
+
+sourceSets {
+    developmentFixture {
+        java.srcDir 'src/developmentFixture/java'
+        runtimeClasspath += output + sourceSets.main.runtimeClasspath
+    }
+}
+
+configurations {
+    developmentFixtureImplementation.extendsFrom implementation
+    developmentFixtureCompileOnly.extendsFrom compileOnly
+}
+
+tasks.named(sourceSets.developmentFixture.compileJavaTaskName, JavaCompile).configure {
+    dependsOn tasks.named(sourceSets.main.classesTaskName)
+    classpath = tasks.named('compileJava', JavaCompile).get().classpath + sourceSets.main.output
+}
+
+['runClient', 'runServer'].each { runTaskName ->
+    tasks.named(runTaskName).configure {
+        dependsOn sourceSets.developmentFixture.classesTaskName
+        doFirst {
+            classpath += sourceSets.developmentFixture.output
+        }
+    }
+}
 
 // Adds Access Transformer files to tasks
 if (propertyBool('use_access_transformer')) {

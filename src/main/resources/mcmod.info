@@ -11,7 +11,7 @@
 	"logoFile": "${mod_logo_path}",
 	"requiredMods": [
 		"ebwizardry@[4.3.19,4.3.20)",
-		"mixinbooter@[11.0,12.0)"
+		"mixinbooter@[11.11,12.0)"
 	],
 	"dependencies": [
 		"baubles@[1.5.2,)"
