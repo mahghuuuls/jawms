@@ -31,6 +31,62 @@ class ManaStateTest {
     }
 
     @Test
+    void reservationProtectsSpellCostFromOtherConsumptionUntilCommit() {
+        ManaState state = new ManaState();
+        ManaReservation reservation = state.reserve(30);
+
+        assertEquals(50, state.getCurrentMana());
+        assertEquals(20, state.getAvailableMana());
+        assertFalse(state.tryConsume(21));
+        assertTrue(state.tryConsume(20));
+        assertEquals(30, state.getCurrentMana());
+        assertEquals(0, state.getAvailableMana());
+
+        state.commit(reservation);
+
+        assertEquals(0, state.getCurrentMana());
+        assertEquals(0, state.getAvailableMana());
+    }
+
+    @Test
+    void failedAndNestedReservationsReleaseWithoutVisibleConsumption() {
+        ManaState state = new ManaState();
+        ManaReservation outer = state.reserve(30);
+        ManaReservation inner = state.reserve(20);
+
+        assertEquals(0, state.getAvailableMana());
+        state.release(inner);
+        assertEquals(20, state.getAvailableMana());
+        assertEquals(50, state.getCurrentMana());
+        state.release(outer);
+        assertEquals(50, state.getAvailableMana());
+        assertEquals(50, state.getCurrentMana());
+    }
+
+    @Test
+    void zeroReservationCommitsExactlyOnceWithoutChangingMana() {
+        ManaState state = new ManaState();
+        ManaReservation reservation = state.reserve(0);
+
+        state.commit(reservation);
+
+        assertEquals(50, state.getCurrentMana());
+        assertThrows(IllegalStateException.class, () -> state.commit(reservation));
+        assertThrows(IllegalStateException.class, () -> state.release(reservation));
+    }
+
+    @Test
+    void repeatedInsufficientNoticeIsRateLimitedUnlessValuesChange() {
+        ManaState state = new ManaState();
+
+        assertTrue(state.shouldNotifyInsufficient(100L, 30, 20));
+        assertFalse(state.shouldNotifyInsufficient(109L, 30, 20));
+        assertTrue(state.shouldNotifyInsufficient(109L, 31, 20));
+        assertFalse(state.shouldNotifyInsufficient(110L, 31, 20));
+        assertTrue(state.shouldNotifyInsufficient(119L, 31, 20));
+    }
+
+    @Test
     void negativeMutationsAreRejected() {
         ManaState state = new ManaState();
 
@@ -138,6 +194,21 @@ class ManaStateTest {
         assertEquals(20L, state.getRemainingLockoutTicks());
         state.clampLockoutAfterReload(0L);
         assertFalse(state.isRegenerationBlocked());
+    }
+
+    @Test
+    void lockoutBlocksExactlyTheConfiguredNumberOfGateAdvances() {
+        ManaState state = new ManaState();
+        state.startRegenerationLockout(2L);
+
+        assertFalse(state.advanceRegenerationGate());
+        assertEquals(1L, state.getRemainingLockoutTicks());
+        assertFalse(state.advanceRegenerationGate());
+        assertEquals(0L, state.getRemainingLockoutTicks());
+        assertTrue(state.advanceRegenerationGate());
+
+        state.startRegenerationLockout(0L);
+        assertTrue(state.advanceRegenerationGate());
     }
 
     @Test

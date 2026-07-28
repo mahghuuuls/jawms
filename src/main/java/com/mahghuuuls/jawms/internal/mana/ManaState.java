@@ -11,6 +11,10 @@ public final class ManaState {
     private double effectiveRegeneration;
     private double regenerationRemainder;
     private long remainingLockoutTicks;
+    private int reservedMana;
+    private long lastInsufficientNoticeTick = Long.MIN_VALUE;
+    private int lastInsufficientRequired = -1;
+    private int lastInsufficientAvailable = -1;
     private long revision;
 
     public ManaState() {
@@ -26,6 +30,10 @@ public final class ManaState {
 
     public int getMaximumMana() {
         return effectiveMaximum;
+    }
+
+    public int getAvailableMana() {
+        return currentMana - reservedMana;
     }
 
     public double getEffectiveRegeneration() {
@@ -48,13 +56,54 @@ public final class ManaState {
 
     public boolean tryConsume(int amount) {
         requireNonNegative(amount);
-        if (amount > currentMana) {
+        if (amount > getAvailableMana()) {
             return false;
         }
         if (amount > 0) {
             currentMana -= amount;
             revision++;
         }
+        return true;
+    }
+
+    ManaReservation reserve(int amount) {
+        requireNonNegative(amount);
+        if (amount > getAvailableMana()) {
+            return null;
+        }
+        reservedMana += amount;
+        return new ManaReservation(this, amount);
+    }
+
+    void commit(ManaReservation reservation) {
+        requireActiveReservation(reservation);
+        reservedMana -= reservation.getAmount();
+        currentMana -= reservation.getAmount();
+        reservation.resolve();
+        if (reservation.getAmount() > 0) {
+            revision++;
+        }
+    }
+
+    void release(ManaReservation reservation) {
+        requireActiveReservation(reservation);
+        reservedMana -= reservation.getAmount();
+        reservation.resolve();
+    }
+
+    boolean shouldNotifyInsufficient(long currentTick, int required, int available) {
+        requireNonNegative(required);
+        requireNonNegative(available);
+        boolean valuesChanged = required != lastInsufficientRequired
+                || available != lastInsufficientAvailable;
+        boolean intervalElapsed = currentTick < lastInsufficientNoticeTick
+                || currentTick - lastInsufficientNoticeTick >= 10L;
+        if (!valuesChanged && !intervalElapsed) {
+            return false;
+        }
+        lastInsufficientNoticeTick = currentTick;
+        lastInsufficientRequired = required;
+        lastInsufficientAvailable = available;
         return true;
     }
 
@@ -102,15 +151,16 @@ public final class ManaState {
     public boolean advanceRegenerationGate() {
         if (remainingLockoutTicks > 0L) {
             remainingLockoutTicks--;
+            return false;
         }
-        return remainingLockoutTicks == 0L;
+        return true;
     }
 
     public boolean isRegenerationBlocked() {
         return remainingLockoutTicks > 0L;
     }
 
-    long getRemainingLockoutTicks() {
+    public long getRemainingLockoutTicks() {
         return remainingLockoutTicks;
     }
 
@@ -142,6 +192,7 @@ public final class ManaState {
         currentMana = clamp(original.currentMana);
         regenerationRemainder = 0.0D;
         remainingLockoutTicks = 0L;
+        resetTransientCastingState();
         revision = original.revision + 1L;
     }
 
@@ -159,6 +210,7 @@ public final class ManaState {
         }
         regenerationRemainder = 0.0D;
         remainingLockoutTicks = 0L;
+        resetTransientCastingState();
         revision++;
     }
 
@@ -170,5 +222,21 @@ public final class ManaState {
         if (amount < 0) {
             throw new IllegalArgumentException("Mana amount must not be negative.");
         }
+    }
+
+    private void requireActiveReservation(ManaReservation reservation) {
+        if (reservation == null || !reservation.belongsTo(this) || !reservation.isActive()) {
+            throw new IllegalStateException("Mana reservation is not active for this state.");
+        }
+        if (reservation.getAmount() > reservedMana) {
+            throw new IllegalStateException("Mana reservation accounting is inconsistent.");
+        }
+    }
+
+    private void resetTransientCastingState() {
+        reservedMana = 0;
+        lastInsufficientNoticeTick = Long.MIN_VALUE;
+        lastInsufficientRequired = -1;
+        lastInsufficientAvailable = -1;
     }
 }

@@ -1,6 +1,7 @@
 package com.mahghuuuls.jawms.internal.mana;
 
 import com.mahghuuuls.jawms.api.IManaService;
+import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.world.WorldServer;
 
@@ -53,5 +54,46 @@ public final class ManaService implements IManaService {
             throw new IllegalStateException("The player does not have the JAWMS mana capability.");
         }
         return state;
+    }
+
+    public static int getAvailableMana(EntityPlayer player) {
+        return requireState(player).getAvailableMana();
+    }
+
+    public static ManaReservation reserveMana(EntityPlayer player, int amount) {
+        return requireState(player).reserve(amount);
+    }
+
+    public static void releaseReservation(ManaReservation reservation) {
+        if (reservation != null && reservation.isActive()) {
+            reservation.ownerRelease();
+        }
+    }
+
+    public static void completeSuccessfulWandCast(EntityPlayer player, ManaReservation reservation) {
+        ManaState state = requireState(player);
+        if (reservation == null || !reservation.belongsTo(state)) {
+            throw new IllegalStateException("Successful wand cast has no matching mana reservation.");
+        }
+        state.commit(reservation);
+        state.startRegenerationLockout(
+                GameplayRulesManager.current().getRegenerationLockoutTicks()
+        );
+        if (reservation.getAmount() > 0) {
+            ManaNetwork.synchronize(player, state);
+        }
+    }
+
+    public static boolean shouldNotifyInsufficient(
+            EntityPlayer player,
+            long currentTick,
+            int required,
+            int available
+    ) {
+        return requireState(player).shouldNotifyInsufficient(
+                currentTick,
+                required,
+                available
+        );
     }
 }
