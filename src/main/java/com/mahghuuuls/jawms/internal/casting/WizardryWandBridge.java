@@ -1,13 +1,19 @@
 package com.mahghuuuls.jawms.internal.casting;
 
+import com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod;
 import com.mahghuuuls.jawms.internal.mana.ManaReservation;
+import com.mahghuuuls.jawms.internal.mana.ManaNetwork;
 import com.mahghuuuls.jawms.internal.mana.ManaService;
+import com.mahghuuuls.jawms.internal.mana.ManaState;
 import electroblob.wizardry.item.ItemWand;
 import electroblob.wizardry.spell.Spell;
 import electroblob.wizardry.util.SpellModifiers;
+import electroblob.wizardry.util.WandHelper;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.EnumActionResult;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.text.TextComponentTranslation;
@@ -30,8 +36,12 @@ public final class WizardryWandBridge {
             EntityPlayer caster,
             SpellModifiers modifiers
     ) {
-        if (spell.isContinuous || caster.world.isRemote) {
-            return wizardryCost;
+        if (caster.world.isRemote) {
+            return JustAnotherWizardryManaSystemMod.proxy.getClientFinalSpellCost(
+                    spell,
+                    modifiers,
+                    wizardryCost
+            );
         }
         return SpellCostService.getFinalCost(spell, modifiers);
     }
@@ -41,18 +51,58 @@ public final class WizardryWandBridge {
             Spell spell,
             EntityPlayer caster,
             EnumHand hand,
+            int castingTick,
             SpellModifiers modifiers
     ) {
-        if (spell.isContinuous) {
-            return wizardryWandMana;
+        if (caster.world.isRemote
+                && JustAnotherWizardryManaSystemMod.proxy
+                .isClientContinuousCastBlocked(spell, hand)) {
+            return -1;
         }
-        if (caster.world.isRemote || caster.isCreative()) {
+        if (caster.isCreative()) {
             return Integer.MAX_VALUE;
         }
+        if (caster.world.isRemote) {
+            int available = JustAnotherWizardryManaSystemMod.proxy.getClientAvailableMana(
+                    wizardryWandMana
+            );
+            int fallbackCost = SpellCostService.getFinalCost(spell, modifiers);
+            int synchronizedCost = JustAnotherWizardryManaSystemMod.proxy
+                    .getClientFinalSpellCost(spell, modifiers, fallbackCost);
+            int required = spell.isContinuous
+                    ? ContinuousSpellCost.portionAtTick(
+                            synchronizedCost,
+                            castingTick
+                    )
+                    : synchronizedCost;
+            if (spell.isContinuous && required > available) {
+                JustAnotherWizardryManaSystemMod.proxy.blockClientContinuousCast(
+                        spell,
+                        hand,
+                        true
+                );
+            }
+            return available;
+        }
 
-        int required = SpellCostService.getFinalCost(spell, modifiers);
+        if (spell.isContinuous
+                && ManaService.isContinuousCastRetryBlocked(
+                        caster,
+                        hand,
+                        spell.getRegistryName()
+                )) {
+            return -1;
+        }
+        int required = costForAttempt(spell, modifiers, castingTick);
         int available = ManaService.getAvailableMana(caster);
         if (required > available) {
+            if (spell.isContinuous) {
+                ManaService.exhaustContinuousCastMana(
+                        caster,
+                        hand,
+                        spell.getRegistryName()
+                );
+            }
             notifyInsufficient(caster, spell, hand, required, available);
             CastingDiagnostics.trace(
                     "precheck_rejected",
@@ -74,11 +124,11 @@ public final class WizardryWandBridge {
             int castingTick,
             SpellModifiers modifiers
     ) {
-        if (world.isRemote || spell.isContinuous || caster.isCreative()) {
+        if (world.isRemote || caster.isCreative()) {
             return spell.cast(world, caster, hand, castingTick, modifiers);
         }
 
-        int cost = SpellCostService.getFinalCost(spell, modifiers);
+        int cost = costForAttempt(spell, modifiers, castingTick);
         ManaReservation reservation = ManaService.reserveMana(caster, cost);
         if (reservation == null) {
             int available = ManaService.getAvailableMana(caster);
@@ -91,19 +141,31 @@ public final class WizardryWandBridge {
                     cost,
                     available
             );
+            if (spell.isContinuous) {
+                ManaService.exhaustContinuousCastMana(
+                        caster,
+                        hand,
+                        spell.getRegistryName()
+                );
+                ManaNetwork.stopContinuousCastVisual(
+                        caster,
+                        hand,
+                        spell.getRegistryName(),
+                        true
+                );
+                caster.stopActiveHand();
+            }
             return false;
         }
 
-        CastAttempt attempt = new CastAttempt(reservation, spell.getRegistryName(), hand);
-        ATTEMPTS.get().push(attempt);
-        CastingDiagnostics.trace(
-                "reservation_created",
-                caster,
-                attempt.spellId,
+        CastAttempt attempt = new CastAttempt(
+                reservation,
+                spell.getRegistryName(),
                 hand,
-                cost,
-                ManaService.getAvailableMana(caster)
+                !spell.isContinuous || cost > 0
         );
+        ATTEMPTS.get().push(attempt);
+        traceAttempt("reservation_created", caster, attempt);
         try {
             boolean successful = spell.cast(world, caster, hand, castingTick, modifiers);
             if (!successful) {
@@ -123,12 +185,8 @@ public final class WizardryWandBridge {
             EntityLivingBase wielder,
             Spell spell
     ) {
-        if (spell.isContinuous) {
-            wand.consumeMana(stack, wizardryCost, wielder);
-            return;
-        }
         if (!(wielder instanceof EntityPlayer)) {
-            throw new IllegalStateException("Non-continuous wand deduction did not have a player caster.");
+            throw new IllegalStateException("Wizardry wand deduction did not have a player caster.");
         }
         EntityPlayer player = (EntityPlayer) wielder;
         if (player.world.isRemote || player.isCreative()) {
@@ -138,10 +196,156 @@ public final class WizardryWandBridge {
     }
 
     public static void commitZeroCostIfPending(EntityPlayer caster, Spell spell) {
-        if (caster.world.isRemote || caster.isCreative() || spell.isContinuous) {
+        if (caster.world.isRemote || caster.isCreative()) {
             return;
         }
         commitTopAttempt(caster, spell, false);
+    }
+
+    public static void beginContinuousCast(
+            EntityPlayer caster,
+            EnumHand hand,
+            ItemStack stack,
+            ActionResult<ItemStack> result
+    ) {
+        if (caster.world.isRemote) {
+            return;
+        }
+        Spell spell = WandHelper.getCurrentSpell(stack);
+        if (!spell.isContinuous) {
+            return;
+        }
+        if (result.getType() != EnumActionResult.SUCCESS) {
+            boolean alreadyBlocked = ManaService.isContinuousCastRetryBlocked(
+                    caster,
+                    hand,
+                    spell.getRegistryName()
+            );
+            ManaService.blockContinuousCastRetry(
+                    caster,
+                    hand,
+                    spell.getRegistryName()
+            );
+            if (alreadyBlocked) {
+                return;
+            }
+            ManaNetwork.stopContinuousCastVisual(
+                    caster,
+                    hand,
+                    spell.getRegistryName(),
+                    true
+            );
+            CastingDiagnostics.trace(
+                    "continuous_start_rejected",
+                    caster,
+                    spell.getRegistryName(),
+                    hand,
+                    0,
+                    ManaService.getAvailableMana(caster)
+            );
+            return;
+        }
+        if (!caster.isHandActive() || caster.getActiveHand() != hand) {
+            return;
+        }
+        ManaService.beginContinuousCast(caster, hand, spell.getRegistryName());
+        CastingDiagnostics.trace(
+                "continuous_started",
+                caster,
+                spell.getRegistryName(),
+                hand,
+                0,
+                ManaService.getAvailableMana(caster)
+        );
+    }
+
+    public static void interruptContinuousCast(EntityPlayer caster, Spell spell, EnumHand hand) {
+        if (caster.world.isRemote || !spell.isContinuous) {
+            return;
+        }
+        boolean manaExhausted = ManaService.requireState(caster)
+                .wasContinuousCastManaExhausted();
+        ManaService.interruptContinuousCast(caster, hand, spell.getRegistryName());
+        ManaNetwork.stopContinuousCastVisual(
+                caster,
+                hand,
+                spell.getRegistryName(),
+                manaExhausted
+        );
+        CastingDiagnostics.trace(
+                "continuous_interrupted",
+                caster,
+                spell.getRegistryName(),
+                hand,
+                0,
+                ManaService.getAvailableMana(caster)
+        );
+    }
+
+    public static int getManaForContinuousFinish(
+            int wizardryWandMana,
+            EntityPlayer caster,
+            Spell spell,
+            EnumHand hand
+    ) {
+        if (!spell.isContinuous) {
+            return wizardryWandMana;
+        }
+        if (caster.world.isRemote || caster.isCreative()) {
+            boolean manaExhausted = caster.world.isRemote
+                    && JustAnotherWizardryManaSystemMod.proxy
+                    .isClientContinuousFinishSuppressed(spell, hand);
+            return ContinuousFinishPolicy.affordability(
+                    caster.isCreative(),
+                    true,
+                    manaExhausted
+            );
+        }
+        ManaState state = ManaService.requireState(caster);
+        return ContinuousFinishPolicy.affordability(
+                false,
+                state.wasContinuousCastSuccessful(),
+                state.wasContinuousCastManaExhausted()
+        );
+    }
+
+    public static void finishContinuousCast(EntityPlayer caster, Spell spell, EnumHand hand) {
+        if (caster.world.isRemote || !spell.isContinuous) {
+            return;
+        }
+        boolean lockoutStarted = ManaService.finishContinuousCast(caster);
+        CastingDiagnostics.trace(
+                lockoutStarted ? "continuous_finished" : "continuous_failed_start",
+                caster,
+                spell.getRegistryName(),
+                hand,
+                0,
+                ManaService.getAvailableMana(caster)
+        );
+    }
+
+    public static void reconcileContinuousCast(EntityPlayer caster) {
+        if (caster.world.isRemote) {
+            return;
+        }
+        ManaState state = ManaService.requireState(caster);
+        if (!state.isContinuousCastActive()) {
+            return;
+        }
+        if (!caster.isHandActive()) {
+            ManaService.finishContinuousCast(caster);
+            return;
+        }
+        EnumHand hand = caster.getActiveHand();
+        ItemStack stack = caster.getHeldItem(hand);
+        if (!(stack.getItem() instanceof ItemWand)) {
+            ManaService.finishContinuousCast(caster);
+            return;
+        }
+        Spell spell = WandHelper.getCurrentSpell(stack);
+        if (!spell.isContinuous || !state.matchesContinuousCast(hand, spell.getRegistryName())) {
+            ManaService.finishContinuousCast(caster);
+        }
     }
 
     public static int captureAttemptDepth() {
@@ -153,14 +357,7 @@ public final class WizardryWandBridge {
         while (attempts.size() > depth) {
             CastAttempt attempt = attempts.pop();
             ManaService.releaseReservation(attempt.reservation);
-            CastingDiagnostics.trace(
-                    "reservation_cleanup",
-                    caster,
-                    attempt.spellId,
-                    attempt.hand,
-                    attempt.reservation.getAmount(),
-                    ManaService.getAvailableMana(caster)
-            );
+            traceAttempt("reservation_cleanup", caster, attempt);
         }
         if (attempts.isEmpty()) {
             ATTEMPTS.remove();
@@ -186,16 +383,18 @@ public final class WizardryWandBridge {
             );
         }
 
-        ManaService.completeSuccessfulWandCast(caster, attempt.reservation);
+        if (spell.isContinuous) {
+            ManaService.completeSuccessfulContinuousPortion(
+                    caster,
+                    attempt.reservation,
+                    attempt.hand,
+                    attempt.spellId
+            );
+        } else {
+            ManaService.completeSuccessfulWandCast(caster, attempt.reservation);
+        }
         attempts.pop();
-        CastingDiagnostics.trace(
-                "reservation_committed",
-                caster,
-                attempt.spellId,
-                attempt.hand,
-                attempt.reservation.getAmount(),
-                ManaService.getAvailableMana(caster)
-        );
+        traceAttempt("reservation_committed", caster, attempt);
         if (attempts.isEmpty()) {
             ATTEMPTS.remove();
         }
@@ -212,14 +411,7 @@ public final class WizardryWandBridge {
         }
         attempts.pop();
         ManaService.releaseReservation(expected.reservation);
-        CastingDiagnostics.trace(
-                event,
-                caster,
-                expected.spellId,
-                expected.hand,
-                expected.reservation.getAmount(),
-                ManaService.getAvailableMana(caster)
-        );
+        traceAttempt(event, caster, expected);
         if (attempts.isEmpty()) {
             ATTEMPTS.remove();
         }
@@ -253,20 +445,51 @@ public final class WizardryWandBridge {
         return first == null ? second == null : first.equals(second);
     }
 
+    private static int costForAttempt(
+            Spell spell,
+            SpellModifiers modifiers,
+            int castingTick
+    ) {
+        int cost = SpellCostService.getFinalCost(spell, modifiers);
+        return spell.isContinuous
+                ? ContinuousSpellCost.portionAtTick(cost, castingTick)
+                : cost;
+    }
+
+    private static void traceAttempt(
+            String event,
+            EntityPlayer caster,
+            CastAttempt attempt
+    ) {
+        if (attempt.trace) {
+            CastingDiagnostics.trace(
+                    event,
+                    caster,
+                    attempt.spellId,
+                    attempt.hand,
+                    attempt.reservation.getAmount(),
+                    ManaService.getAvailableMana(caster)
+            );
+        }
+    }
+
     private static final class CastAttempt {
 
         private final ManaReservation reservation;
         private final ResourceLocation spellId;
         private final EnumHand hand;
+        private final boolean trace;
 
         private CastAttempt(
                 ManaReservation reservation,
                 ResourceLocation spellId,
-                EnumHand hand
+                EnumHand hand,
+                boolean trace
         ) {
             this.reservation = reservation;
             this.spellId = spellId;
             this.hand = hand;
+            this.trace = trace;
         }
     }
 }

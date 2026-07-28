@@ -26,7 +26,7 @@ public final class SpellCostService {
         return roundFinalCost(baseCost, modifiers.get(SpellModifiers.COST));
     }
 
-    static int roundFinalCost(double baseCost, float multiplier) {
+    public static int roundFinalCost(double baseCost, float multiplier) {
         if (!Double.isFinite(baseCost) || baseCost < 0.0D) {
             throw new IllegalArgumentException("Configured base spell cost must be finite and non-negative.");
         }

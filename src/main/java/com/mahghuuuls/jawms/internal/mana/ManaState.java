@@ -3,6 +3,8 @@ package com.mahghuuuls.jawms.internal.mana;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.EnumHand;
+import net.minecraft.util.ResourceLocation;
 
 public final class ManaState {
 
@@ -12,6 +14,14 @@ public final class ManaState {
     private double regenerationRemainder;
     private long remainingLockoutTicks;
     private int reservedMana;
+    private boolean continuousCastActive;
+    private boolean continuousCastSuccessful;
+    private boolean continuousCastInterrupted;
+    private boolean continuousCastManaExhausted;
+    private EnumHand continuousCastHand;
+    private ResourceLocation continuousSpellId;
+    private EnumHand blockedContinuousCastHand;
+    private ResourceLocation blockedContinuousSpellId;
     private long lastInsufficientNoticeTick = Long.MIN_VALUE;
     private int lastInsufficientRequired = -1;
     private int lastInsufficientAvailable = -1;
@@ -149,19 +159,119 @@ public final class ManaState {
     }
 
     public boolean advanceRegenerationGate() {
+        boolean lockoutBlocked = false;
         if (remainingLockoutTicks > 0L) {
             remainingLockoutTicks--;
-            return false;
+            lockoutBlocked = true;
         }
-        return true;
+        return !lockoutBlocked && !continuousCastActive;
     }
 
     public boolean isRegenerationBlocked() {
-        return remainingLockoutTicks > 0L;
+        return remainingLockoutTicks > 0L || continuousCastActive;
     }
 
     public long getRemainingLockoutTicks() {
         return remainingLockoutTicks;
+    }
+
+    public void beginContinuousCast(EnumHand hand, ResourceLocation spellId) {
+        if (hand == null) {
+            throw new NullPointerException("hand");
+        }
+        if (continuousCastActive
+                && hand == continuousCastHand
+                && equals(spellId, continuousSpellId)) {
+            return;
+        }
+        continuousCastActive = true;
+        continuousCastSuccessful = false;
+        continuousCastInterrupted = false;
+        continuousCastHand = hand;
+        continuousSpellId = spellId;
+    }
+
+    public void blockContinuousCastRetry(EnumHand hand, ResourceLocation spellId) {
+        if (hand == null) {
+            throw new NullPointerException("hand");
+        }
+        if (spellId == null) {
+            throw new NullPointerException("spellId");
+        }
+        blockedContinuousCastHand = hand;
+        blockedContinuousSpellId = spellId;
+    }
+
+    public boolean isContinuousCastRetryBlocked(EnumHand hand, ResourceLocation spellId) {
+        return hand == blockedContinuousCastHand
+                && equals(spellId, blockedContinuousSpellId);
+    }
+
+    public void releaseContinuousCastRetryBlock(EnumHand hand, ResourceLocation spellId) {
+        if (isContinuousCastRetryBlocked(hand, spellId)) {
+            blockedContinuousCastHand = null;
+            blockedContinuousSpellId = null;
+        }
+    }
+
+    public void markContinuousCastSuccessful(EnumHand hand, ResourceLocation spellId) {
+        if (matchesContinuousCast(hand, spellId)) {
+            continuousCastSuccessful = true;
+        }
+    }
+
+    public void interruptContinuousCast(EnumHand hand, ResourceLocation spellId) {
+        if (matchesContinuousCast(hand, spellId)) {
+            continuousCastInterrupted = true;
+            blockContinuousCastRetry(hand, spellId);
+        }
+    }
+
+    public void exhaustContinuousCastMana(EnumHand hand, ResourceLocation spellId) {
+        if (matchesContinuousCast(hand, spellId)) {
+            continuousCastManaExhausted = true;
+            blockContinuousCastRetry(hand, spellId);
+        }
+    }
+
+    public boolean finishContinuousCast(long lockoutTicks) {
+        if (lockoutTicks < 0L) {
+            throw new IllegalArgumentException("Lockout duration must be non-negative.");
+        }
+        boolean shouldStartLockout = continuousCastActive && continuousCastSuccessful;
+        resetContinuousCastingState();
+        if (shouldStartLockout) {
+            startRegenerationLockout(lockoutTicks);
+        }
+        return shouldStartLockout;
+    }
+
+    public boolean isContinuousCastActive() {
+        return continuousCastActive;
+    }
+
+    public boolean wasContinuousCastSuccessful() {
+        return continuousCastSuccessful;
+    }
+
+    public boolean wasContinuousCastInterrupted() {
+        return continuousCastInterrupted;
+    }
+
+    public boolean wasContinuousCastManaExhausted() {
+        return continuousCastManaExhausted;
+    }
+
+    public boolean matchesContinuousCast(EnumHand hand, ResourceLocation spellId) {
+        return continuousCastActive
+                && hand == continuousCastHand
+                && equals(spellId, continuousSpellId);
+    }
+
+    public void clearTransientLifecycleState() {
+        regenerationRemainder = 0.0D;
+        remainingLockoutTicks = 0L;
+        resetTransientCastingState();
     }
 
     public boolean applyEffectiveStats(int maximumMana, double regenerationPerSecond) {
@@ -238,5 +348,21 @@ public final class ManaState {
         lastInsufficientNoticeTick = Long.MIN_VALUE;
         lastInsufficientRequired = -1;
         lastInsufficientAvailable = -1;
+        resetContinuousCastingState();
+        blockedContinuousCastHand = null;
+        blockedContinuousSpellId = null;
+    }
+
+    private void resetContinuousCastingState() {
+        continuousCastActive = false;
+        continuousCastSuccessful = false;
+        continuousCastInterrupted = false;
+        continuousCastManaExhausted = false;
+        continuousCastHand = null;
+        continuousSpellId = null;
+    }
+
+    private static boolean equals(Object first, Object second) {
+        return first == null ? second == null : first.equals(second);
     }
 }

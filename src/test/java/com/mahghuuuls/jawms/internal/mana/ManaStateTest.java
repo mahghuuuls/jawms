@@ -1,6 +1,8 @@
 package com.mahghuuuls.jawms.internal.mana;
 
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.EnumHand;
+import net.minecraft.util.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -223,5 +225,129 @@ class ManaStateTest {
         restored.startRegenerationLockout(40L);
         restored.deserializeIntrinsicState(original.serializeIntrinsicState());
         assertFalse(restored.isRegenerationBlocked());
+    }
+
+    @Test
+    void activeContinuousCastBlocksRegenerationWhileOlderLockoutCountsDown() {
+        ManaState state = new ManaState();
+        ResourceLocation spellId = new ResourceLocation("ebwizardry", "test_continuous");
+        state.startRegenerationLockout(2L);
+        state.beginContinuousCast(EnumHand.MAIN_HAND, spellId);
+
+        assertFalse(state.advanceRegenerationGate());
+        assertEquals(1L, state.getRemainingLockoutTicks());
+        assertFalse(state.advanceRegenerationGate());
+        assertEquals(0L, state.getRemainingLockoutTicks());
+        assertFalse(state.advanceRegenerationGate());
+        assertTrue(state.isRegenerationBlocked());
+    }
+
+    @Test
+    void successfulContinuousCastStartsFullLockoutOnlyWhenItEnds() {
+        ManaState state = new ManaState();
+        ResourceLocation spellId = new ResourceLocation("ebwizardry", "test_continuous");
+        state.beginContinuousCast(EnumHand.OFF_HAND, spellId);
+        state.markContinuousCastSuccessful(EnumHand.OFF_HAND, spellId);
+
+        assertEquals(0L, state.getRemainingLockoutTicks());
+        assertTrue(state.finishContinuousCast(40L));
+        assertEquals(40L, state.getRemainingLockoutTicks());
+        assertFalse(state.isContinuousCastActive());
+    }
+
+    @Test
+    void failedContinuousStartDoesNotCreateLockout() {
+        ManaState state = new ManaState();
+        ResourceLocation spellId = new ResourceLocation("ebwizardry", "test_continuous");
+        state.beginContinuousCast(EnumHand.MAIN_HAND, spellId);
+
+        assertFalse(state.finishContinuousCast(40L));
+        assertEquals(0L, state.getRemainingLockoutTicks());
+        assertFalse(state.isRegenerationBlocked());
+    }
+
+    @Test
+    void interruptionIsScopedToTheTrackedHandAndSpell() {
+        ManaState state = new ManaState();
+        ResourceLocation spellId = new ResourceLocation("ebwizardry", "test_continuous");
+        state.beginContinuousCast(EnumHand.OFF_HAND, spellId);
+
+        state.interruptContinuousCast(EnumHand.MAIN_HAND, spellId);
+        assertFalse(state.wasContinuousCastInterrupted());
+        assertFalse(state.isContinuousCastRetryBlocked(EnumHand.MAIN_HAND, spellId));
+        state.interruptContinuousCast(EnumHand.OFF_HAND, new ResourceLocation("ebwizardry", "other"));
+        assertFalse(state.wasContinuousCastInterrupted());
+        state.interruptContinuousCast(EnumHand.OFF_HAND, spellId);
+        assertTrue(state.wasContinuousCastInterrupted());
+        assertTrue(state.isContinuousCastRetryBlocked(EnumHand.OFF_HAND, spellId));
+    }
+
+    @Test
+    void manaExhaustionIsDistinctFromOtherInterruptionsAndScopedToTheCast() {
+        ManaState state = new ManaState();
+        ResourceLocation spellId = new ResourceLocation("ebwizardry", "test_continuous");
+        state.beginContinuousCast(EnumHand.MAIN_HAND, spellId);
+
+        state.exhaustContinuousCastMana(EnumHand.OFF_HAND, spellId);
+        assertFalse(state.wasContinuousCastManaExhausted());
+        assertFalse(state.isContinuousCastRetryBlocked(EnumHand.OFF_HAND, spellId));
+        state.interruptContinuousCast(EnumHand.MAIN_HAND, spellId);
+        assertTrue(state.wasContinuousCastInterrupted());
+        assertFalse(state.wasContinuousCastManaExhausted());
+        state.exhaustContinuousCastMana(EnumHand.MAIN_HAND, spellId);
+        assertTrue(state.wasContinuousCastManaExhausted());
+        assertTrue(state.isContinuousCastRetryBlocked(EnumHand.MAIN_HAND, spellId));
+    }
+
+    @Test
+    void continuousRetryBlockRequiresMatchingClientRelease() {
+        ManaState state = new ManaState();
+        ResourceLocation flameRay = new ResourceLocation("ebwizardry", "flame_ray");
+        ResourceLocation grapple = new ResourceLocation("ebwizardry", "grapple");
+
+        state.blockContinuousCastRetry(EnumHand.MAIN_HAND, flameRay);
+
+        assertTrue(state.isContinuousCastRetryBlocked(EnumHand.MAIN_HAND, flameRay));
+        assertFalse(state.isContinuousCastRetryBlocked(EnumHand.OFF_HAND, flameRay));
+        assertFalse(state.isContinuousCastRetryBlocked(EnumHand.MAIN_HAND, grapple));
+
+        state.releaseContinuousCastRetryBlock(EnumHand.OFF_HAND, flameRay);
+        assertTrue(state.isContinuousCastRetryBlocked(EnumHand.MAIN_HAND, flameRay));
+
+        state.releaseContinuousCastRetryBlock(EnumHand.MAIN_HAND, flameRay);
+        assertFalse(state.isContinuousCastRetryBlocked(EnumHand.MAIN_HAND, flameRay));
+    }
+
+    @Test
+    void zeroDurationStillBlocksWhileActiveButNotAfterSuccessfulStop() {
+        ManaState state = new ManaState();
+        ResourceLocation spellId = new ResourceLocation("ebwizardry", "test_continuous");
+        state.beginContinuousCast(EnumHand.MAIN_HAND, spellId);
+        state.markContinuousCastSuccessful(EnumHand.MAIN_HAND, spellId);
+
+        assertFalse(state.advanceRegenerationGate());
+        assertTrue(state.finishContinuousCast(0L));
+        assertTrue(state.advanceRegenerationGate());
+    }
+
+    @Test
+    void continuousStateIsTransientAcrossLifecycleResetCloneAndPersistence() {
+        ResourceLocation spellId = new ResourceLocation("ebwizardry", "test_continuous");
+        ManaState original = new ManaState();
+        original.beginContinuousCast(EnumHand.MAIN_HAND, spellId);
+        original.markContinuousCastSuccessful(EnumHand.MAIN_HAND, spellId);
+
+        ManaState clone = new ManaState();
+        clone.copyFrom(original);
+        assertFalse(clone.isContinuousCastActive());
+
+        ManaState restored = new ManaState();
+        restored.beginContinuousCast(EnumHand.MAIN_HAND, spellId);
+        restored.deserializeIntrinsicState(original.serializeIntrinsicState());
+        assertFalse(restored.isContinuousCastActive());
+
+        original.clearTransientLifecycleState();
+        assertFalse(original.isContinuousCastActive());
+        assertFalse(original.isRegenerationBlocked());
     }
 }

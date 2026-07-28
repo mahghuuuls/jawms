@@ -9,6 +9,7 @@ import electroblob.wizardry.util.SpellModifiers;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.EnumHand;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
@@ -33,6 +34,17 @@ public abstract class ItemWandMixin {
                     + "Lnet/minecraft/entity/player/EntityPlayer;"
                     + "Lnet/minecraft/util/EnumHand;"
                     + "ILelectroblob/wizardry/util/SpellModifiers;)Z";
+    private static final String RIGHT_CLICK =
+            "onItemRightClick(Lnet/minecraft/world/World;"
+                    + "Lnet/minecraft/entity/player/EntityPlayer;"
+                    + "Lnet/minecraft/util/EnumHand;)Lnet/minecraft/util/ActionResult;";
+    private static final String USING_TICK =
+            "onUsingTick(Lnet/minecraft/item/ItemStack;"
+                    + "Lnet/minecraft/entity/EntityLivingBase;I)V";
+    private static final String STOPPED_USING =
+            "onPlayerStoppedUsing(Lnet/minecraft/item/ItemStack;"
+                    + "Lnet/minecraft/world/World;"
+                    + "Lnet/minecraft/entity/EntityLivingBase;I)V";
 
     @ModifyVariable(
             method = CAN_CAST,
@@ -87,6 +99,7 @@ public abstract class ItemWandMixin {
                 spell,
                 caster,
                 hand,
+                castingTick,
                 modifiers
         );
     }
@@ -231,6 +244,108 @@ public abstract class ItemWandMixin {
             );
         } finally {
             WizardryWandBridge.cleanupToDepth(caster, initialDepth);
+        }
+    }
+
+    @Inject(
+            method = RIGHT_CLICK,
+            at = @At("RETURN"),
+            require = 4,
+            expect = 4,
+            remap = false
+    )
+    private void jawms$beginContinuousCast(
+            World world,
+            EntityPlayer player,
+            EnumHand hand,
+            CallbackInfoReturnable<ActionResult<ItemStack>> callback
+    ) {
+        WizardryWandBridge.beginContinuousCast(
+                player,
+                hand,
+                player.getHeldItem(hand),
+                callback.getReturnValue()
+        );
+    }
+
+    @Redirect(
+            method = USING_TICK,
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/entity/player/EntityPlayer;stopActiveHand()V",
+                    ordinal = 0
+            ),
+            require = 1,
+            expect = 1,
+            remap = false
+    )
+    private void jawms$interruptContinuousCast(
+            EntityPlayer player,
+            ItemStack stack,
+            EntityLivingBase user,
+            int count
+    ) {
+        Spell spell = electroblob.wizardry.util.WandHelper.getCurrentSpell(stack);
+        WizardryWandBridge.interruptContinuousCast(
+                player,
+                spell,
+                player.getActiveHand()
+        );
+        player.stopActiveHand();
+    }
+
+    @Redirect(
+            method = STOPPED_USING,
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lelectroblob/wizardry/item/ItemWand;"
+                            + "getMana(Lnet/minecraft/item/ItemStack;)I",
+                    ordinal = 0,
+                    remap = false
+            ),
+            require = 1,
+            expect = 1,
+            remap = false
+    )
+    private int jawms$replaceContinuousFinishAffordability(
+            ItemWand wand,
+            ItemStack queriedStack,
+            ItemStack stack,
+            World world,
+            EntityLivingBase user,
+            int timeLeft
+    ) {
+        if (!(user instanceof EntityPlayer)) {
+            return wand.getMana(queriedStack);
+        }
+        Spell spell = electroblob.wizardry.util.WandHelper.getCurrentSpell(stack);
+        return WizardryWandBridge.getManaForContinuousFinish(
+                wand.getMana(queriedStack),
+                (EntityPlayer) user,
+                spell,
+                user.getActiveHand()
+        );
+    }
+
+    @WrapMethod(method = STOPPED_USING, require = 1, expect = 1, remap = false)
+    private void jawms$finishContinuousCast(
+            ItemStack stack,
+            World world,
+            EntityLivingBase user,
+            int timeLeft,
+            Operation<Void> original
+    ) {
+        if (!(user instanceof EntityPlayer)) {
+            original.call(stack, world, user, timeLeft);
+            return;
+        }
+        EntityPlayer player = (EntityPlayer) user;
+        Spell spell = electroblob.wizardry.util.WandHelper.getCurrentSpell(stack);
+        EnumHand hand = player.getActiveHand();
+        try {
+            original.call(stack, world, user, timeLeft);
+        } finally {
+            WizardryWandBridge.finishContinuousCast(player, spell, hand);
         }
     }
 }

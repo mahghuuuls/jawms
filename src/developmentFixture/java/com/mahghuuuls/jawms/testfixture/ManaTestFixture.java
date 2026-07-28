@@ -63,6 +63,7 @@ public final class ManaTestFixture {
             return "/jawms-test mana set <amount> | mana inspect | rules inspect"
                     + " | cost get <namespace:spell> | casting debug <true|false>"
                     + " | casting cancel <true|false>"
+                    + " | casting cancel-tick <true|false>"
                     + " | wand set <main|off> <namespace:spell> | wand inspect <main|off>";
         }
 
@@ -98,6 +99,12 @@ public final class ManaTestFixture {
                 inspectCastingCancellation(sender);
                 return;
             }
+            if (arguments.length == 2
+                    && "casting".equalsIgnoreCase(arguments[0])
+                    && "cancel-tick".equalsIgnoreCase(arguments[1])) {
+                inspectCastingTickCancellation(sender);
+                return;
+            }
             if (arguments.length == 3
                     && "cost".equalsIgnoreCase(arguments[0])
                     && "get".equalsIgnoreCase(arguments[1])) {
@@ -114,6 +121,12 @@ public final class ManaTestFixture {
                     && "casting".equalsIgnoreCase(arguments[0])
                     && "cancel".equalsIgnoreCase(arguments[1])) {
                 setCastingCancellation(sender, arguments[2]);
+                return;
+            }
+            if (arguments.length == 3
+                    && "casting".equalsIgnoreCase(arguments[0])
+                    && "cancel-tick".equalsIgnoreCase(arguments[1])) {
+                setCastingTickCancellation(sender, arguments[2]);
                 return;
             }
             if (arguments.length == 3
@@ -219,6 +232,31 @@ public final class ManaTestFixture {
             inspectCastingCancellation(sender);
         }
 
+        private static void inspectCastingTickCancellation(ICommandSender sender)
+                throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS deterministic wand tick-cancellation enabled="
+                            + CAST_CANCELLATION.tickAppliesTo(player) + "."
+            ));
+        }
+
+        private static void setCastingTickCancellation(
+                ICommandSender sender,
+                String value
+        ) throws CommandException {
+            if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
+                throw new CommandException("Expected true or false.");
+            }
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            if (Boolean.parseBoolean(value)) {
+                CAST_CANCELLATION.enableTickFor(player);
+            } else {
+                CAST_CANCELLATION.clearTickFor(player);
+            }
+            inspectCastingTickCancellation(sender);
+        }
+
         private static void inspectCost(ICommandSender sender, String identifier) throws CommandException {
             ResourceLocation id = parseIdentifier(identifier);
             Spell spell = getSpell(id);
@@ -314,6 +352,7 @@ public final class ManaTestFixture {
     private static final class CastCancellationFixture {
 
         private UUID playerId;
+        private UUID tickPlayerId;
 
         @SubscribeEvent(priority = EventPriority.HIGHEST)
         public void cancelWandPreCast(SpellCastEvent.Pre event) {
@@ -330,6 +369,37 @@ public final class ManaTestFixture {
             );
         }
 
+        @SubscribeEvent(priority = EventPriority.HIGHEST)
+        public void cancelWandTick(SpellCastEvent.Tick event) {
+            if (event.getSource() != SpellCastEvent.Source.WAND
+                    || !(event.getCaster() instanceof EntityPlayerMP)
+                    || !tickAppliesTo((EntityPlayerMP) event.getCaster())) {
+                return;
+            }
+            event.setCanceled(true);
+            JustAnotherWizardryManaSystemMod.LOGGER.info(
+                    "JAWMS test cast event: event=tick_cancelled, player={}, spell={}, tick={}.",
+                    tickPlayerId,
+                    event.getSpell().getRegistryName(),
+                    event.getCount()
+            );
+        }
+
+        @SubscribeEvent(priority = EventPriority.LOWEST)
+        public void observeWandFinish(SpellCastEvent.Finish event) {
+            if (event.getSource() != SpellCastEvent.Source.WAND
+                    || !(event.getCaster() instanceof EntityPlayerMP)
+                    || !tickAppliesTo((EntityPlayerMP) event.getCaster())) {
+                return;
+            }
+            JustAnotherWizardryManaSystemMod.LOGGER.info(
+                    "JAWMS test cast event: event=finish_observed, player={}, spell={}, tick={}.",
+                    tickPlayerId,
+                    event.getSpell().getRegistryName(),
+                    event.getCount()
+            );
+        }
+
         private void enableFor(EntityPlayerMP player) {
             playerId = player.getUniqueID();
         }
@@ -340,12 +410,27 @@ public final class ManaTestFixture {
             }
         }
 
+        private void enableTickFor(EntityPlayerMP player) {
+            tickPlayerId = player.getUniqueID();
+        }
+
+        private void clearTickFor(EntityPlayerMP player) {
+            if (tickAppliesTo(player)) {
+                tickPlayerId = null;
+            }
+        }
+
+        private boolean tickAppliesTo(EntityPlayerMP player) {
+            return tickPlayerId != null && tickPlayerId.equals(player.getUniqueID());
+        }
+
         private boolean appliesTo(EntityPlayerMP player) {
             return playerId != null && playerId.equals(player.getUniqueID());
         }
 
         private void clear() {
             playerId = null;
+            tickPlayerId = null;
         }
     }
 }

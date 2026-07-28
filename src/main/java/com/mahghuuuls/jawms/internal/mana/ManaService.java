@@ -3,6 +3,8 @@ package com.mahghuuuls.jawms.internal.mana;
 import com.mahghuuuls.jawms.api.IManaService;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.EnumHand;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.WorldServer;
 
 public final class ManaService implements IManaService {
@@ -82,6 +84,85 @@ public final class ManaService implements IManaService {
         if (reservation.getAmount() > 0) {
             ManaNetwork.synchronize(player, state);
         }
+    }
+
+    public static void completeSuccessfulContinuousPortion(
+            EntityPlayer player,
+            ManaReservation reservation,
+            EnumHand hand,
+            ResourceLocation spellId
+    ) {
+        ManaState state = requireState(player);
+        if (reservation == null || !reservation.belongsTo(state)) {
+            throw new IllegalStateException(
+                    "Successful continuous cast has no matching mana reservation."
+            );
+        }
+        state.commit(reservation);
+        state.markContinuousCastSuccessful(hand, spellId);
+        if (reservation.getAmount() > 0) {
+            ManaNetwork.synchronize(player, state);
+        }
+    }
+
+    public static void beginContinuousCast(
+            EntityPlayer player,
+            EnumHand hand,
+            ResourceLocation spellId
+    ) {
+        requireState(player).beginContinuousCast(hand, spellId);
+    }
+
+    public static void interruptContinuousCast(
+            EntityPlayer player,
+            EnumHand hand,
+            ResourceLocation spellId
+    ) {
+        ManaState state = requireState(player);
+        state.interruptContinuousCast(hand, spellId);
+    }
+
+    public static void exhaustContinuousCastMana(
+            EntityPlayer player,
+            EnumHand hand,
+            ResourceLocation spellId
+    ) {
+        ManaState state = requireState(player);
+        state.exhaustContinuousCastMana(hand, spellId);
+    }
+
+    public static void blockContinuousCastRetry(
+            EntityPlayer player,
+            EnumHand hand,
+            ResourceLocation spellId
+    ) {
+        requireState(player).blockContinuousCastRetry(hand, spellId);
+    }
+
+    public static boolean isContinuousCastRetryBlocked(
+            EntityPlayer player,
+            EnumHand hand,
+            ResourceLocation spellId
+    ) {
+        return requireState(player).isContinuousCastRetryBlocked(hand, spellId);
+    }
+
+    public static void releaseContinuousCastRetryBlock(
+            EntityPlayer player,
+            EnumHand hand,
+            ResourceLocation spellId
+    ) {
+        requireState(player).releaseContinuousCastRetryBlock(hand, spellId);
+    }
+
+    public static boolean finishContinuousCast(EntityPlayer player) {
+        return requireState(player).finishContinuousCast(
+                GameplayRulesManager.current().getRegenerationLockoutTicks()
+        );
+    }
+
+    public static void clearTransientLifecycleState(EntityPlayer player) {
+        requireState(player).clearTransientLifecycleState();
     }
 
     public static boolean shouldNotifyInsufficient(

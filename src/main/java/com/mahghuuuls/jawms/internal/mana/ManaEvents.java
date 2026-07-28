@@ -1,6 +1,7 @@
 package com.mahghuuuls.jawms.internal.mana;
 
 import com.mahghuuuls.jawms.Tags;
+import com.mahghuuuls.jawms.internal.casting.WizardryWandBridge;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import net.minecraft.entity.Entity;
@@ -40,6 +41,7 @@ public final class ManaEvents {
         ManaState state = event.player.getCapability(ManaCapability.INSTANCE, null);
         GameplayRules rules = GameplayRulesManager.current();
         if (state != null) {
+            WizardryWandBridge.reconcileContinuousCast(event.player);
             boolean statsChanged = state.applyEffectiveStats(
                     rules.getBaseMaximum(),
                     rules.getBaseRegeneration()
@@ -68,7 +70,13 @@ public final class ManaEvents {
 
     @SubscribeEvent
     public void playerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        ManaService.clearTransientLifecycleState(event.player);
         ManaNetwork.synchronizeRules(event.player, GameplayRulesManager.current());
         ManaNetwork.synchronizeLifecycle(event.player, "dimension change");
+    }
+
+    @SubscribeEvent
+    public void playerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
+        ManaService.clearTransientLifecycleState(event.player);
     }
 }

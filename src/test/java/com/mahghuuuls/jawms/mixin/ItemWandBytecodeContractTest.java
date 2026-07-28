@@ -22,6 +22,17 @@ class ItemWandBytecodeContractTest {
                     + "Lnet/minecraft/entity/player/EntityPlayer;"
                     + "Lnet/minecraft/util/EnumHand;"
                     + "ILelectroblob/wizardry/util/SpellModifiers;)Z";
+    private static final String RIGHT_CLICK_DESCRIPTOR =
+            "(Lnet/minecraft/world/World;"
+                    + "Lnet/minecraft/entity/player/EntityPlayer;"
+                    + "Lnet/minecraft/util/EnumHand;)Lnet/minecraft/util/ActionResult;";
+    private static final String USING_TICK_DESCRIPTOR =
+            "(Lnet/minecraft/item/ItemStack;"
+                    + "Lnet/minecraft/entity/EntityLivingBase;I)V";
+    private static final String STOPPED_USING_DESCRIPTOR =
+            "(Lnet/minecraft/item/ItemStack;"
+                    + "Lnet/minecraft/world/World;"
+                    + "Lnet/minecraft/entity/EntityLivingBase;I)V";
 
     @Test
     void pinnedWizardryWandContainsEveryRequiredInjectionAnchor() throws IOException {
@@ -44,6 +55,9 @@ class ItemWandBytecodeContractTest {
         assertEquals(1, visitor.castSpellCalls);
         assertEquals(1, visitor.castConsumeManaCalls);
         assertEquals(4, visitor.castContinuousFieldReads);
+        assertEquals(4, visitor.rightClickReturns);
+        assertEquals(1, visitor.usingTickStopActiveHandCalls);
+        assertEquals(1, visitor.stoppedUsingGetManaCalls);
     }
 
     private static final class ContractVisitor extends ClassVisitor {
@@ -56,6 +70,9 @@ class ItemWandBytecodeContractTest {
         private int castSpellCalls;
         private int castConsumeManaCalls;
         private int castContinuousFieldReads;
+        private int rightClickReturns;
+        private int usingTickStopActiveHandCalls;
+        private int stoppedUsingGetManaCalls;
 
         private ContractVisitor() {
             super(Opcodes.ASM5);
@@ -135,6 +152,53 @@ class ItemWandBytecodeContractTest {
                                 && "isContinuous".equals(fieldName)
                                 && "Z".equals(fieldDescriptor)) {
                             castContinuousFieldReads++;
+                        }
+                    }
+                };
+            }
+            if ("onItemRightClick".equals(name) && RIGHT_CLICK_DESCRIPTOR.equals(descriptor)) {
+                return new MethodVisitor(Opcodes.ASM5) {
+                    @Override
+                    public void visitInsn(int opcode) {
+                        if (opcode == Opcodes.ARETURN) {
+                            rightClickReturns++;
+                        }
+                    }
+                };
+            }
+            if ("onUsingTick".equals(name) && USING_TICK_DESCRIPTOR.equals(descriptor)) {
+                return new MethodVisitor(Opcodes.ASM5) {
+                    @Override
+                    public void visitMethodInsn(
+                            int opcode,
+                            String owner,
+                            String invokedName,
+                            String invokedDescriptor,
+                            boolean isInterface
+                    ) {
+                        if ("net/minecraft/entity/player/EntityPlayer".equals(owner)
+                                && "stopActiveHand".equals(invokedName)
+                                && "()V".equals(invokedDescriptor)) {
+                            usingTickStopActiveHandCalls++;
+                        }
+                    }
+                };
+            }
+            if ("onPlayerStoppedUsing".equals(name)
+                    && STOPPED_USING_DESCRIPTOR.equals(descriptor)) {
+                return new MethodVisitor(Opcodes.ASM5) {
+                    @Override
+                    public void visitMethodInsn(
+                            int opcode,
+                            String owner,
+                            String invokedName,
+                            String invokedDescriptor,
+                            boolean isInterface
+                    ) {
+                        if ("electroblob/wizardry/item/ItemWand".equals(owner)
+                                && "getMana".equals(invokedName)
+                                && "(Lnet/minecraft/item/ItemStack;)I".equals(invokedDescriptor)) {
+                            stoppedUsingGetManaCalls++;
                         }
                     }
                 };

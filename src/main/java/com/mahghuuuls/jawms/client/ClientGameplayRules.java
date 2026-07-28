@@ -76,6 +76,14 @@ public final class ClientGameplayRules {
         return spellCosts;
     }
 
+    public static double getSpellCost(ResourceLocation spellId, double fallback) {
+        if (spellId == null) {
+            return fallback;
+        }
+        Double configured = spellCosts.get(spellId);
+        return configured == null ? fallback : configured;
+    }
+
     public static List<ConfiguredItemRule> getItemRules() {
         return itemRules;
     }
