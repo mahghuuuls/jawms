@@ -14,19 +14,20 @@ class ManaStateTest {
     void newStateStartsFull() {
         ManaState state = new ManaState();
 
-        assertEquals(1000, state.getCurrentMana());
-        assertEquals(1000, state.getMaximumMana());
+        assertEquals(50, state.getCurrentMana());
+        assertEquals(50, state.getMaximumMana());
+        assertEquals(2.0D, state.getEffectiveRegeneration());
     }
 
     @Test
     void consumptionIsAtomicAndRestorationClamps() {
         ManaState state = new ManaState();
 
-        assertTrue(state.tryConsume(980));
+        assertTrue(state.tryConsume(30));
         assertFalse(state.tryConsume(30));
         assertEquals(20, state.getCurrentMana());
-        assertEquals(980, state.restore(5000));
-        assertEquals(1000, state.getCurrentMana());
+        assertEquals(30, state.restore(5000));
+        assertEquals(50, state.getCurrentMana());
     }
 
     @Test
@@ -35,7 +36,7 @@ class ManaStateTest {
 
         assertThrows(IllegalArgumentException.class, () -> state.restore(-1));
         assertThrows(IllegalArgumentException.class, () -> state.tryConsume(-1));
-        assertEquals(1000, state.getCurrentMana());
+        assertEquals(50, state.getCurrentMana());
     }
 
     @Test
@@ -46,28 +47,32 @@ class ManaStateTest {
         for (int tick = 0; tick < 39; tick++) {
             state.regenerateTick(0.5D);
         }
-        assertEquals(998, state.getCurrentMana());
+        assertEquals(48, state.getCurrentMana());
 
         state.regenerateTick(0.5D);
-        assertEquals(999, state.getCurrentMana());
+        assertEquals(49, state.getCurrentMana());
     }
 
     @Test
-    void defaultRegenerationRestoresOneManaAfterTwentyTicks() {
+    void defaultRegenerationRestoresTwoManaAfterTwentyTicks() {
         ManaState state = new ManaState();
         state.tryConsume(2);
 
-        for (int tick = 0; tick < 19; tick++) {
-            assertEquals(0, state.regenerateTick(1.0D));
+        for (int tick = 0; tick < 9; tick++) {
+            assertEquals(0, state.regenerateTick(state.getEffectiveRegeneration()));
         }
-        assertEquals(1, state.regenerateTick(1.0D));
-        assertEquals(999, state.getCurrentMana());
+        assertEquals(1, state.regenerateTick(state.getEffectiveRegeneration()));
+        for (int tick = 0; tick < 9; tick++) {
+            assertEquals(0, state.regenerateTick(state.getEffectiveRegeneration()));
+        }
+        assertEquals(1, state.regenerateTick(state.getEffectiveRegeneration()));
+        assertEquals(50, state.getCurrentMana());
     }
 
     @Test
     void persistenceStoresOnlyBoundedCurrentMana() {
         ManaState original = new ManaState();
-        original.tryConsume(400);
+        original.tryConsume(20);
         original.regenerateTick(0.5D);
 
         NBTTagCompound saved = original.serializeIntrinsicState();
@@ -76,22 +81,22 @@ class ManaStateTest {
 
         ManaState restored = new ManaState();
         restored.deserializeIntrinsicState(saved);
-        assertEquals(600, restored.getCurrentMana());
+        assertEquals(30, restored.getCurrentMana());
 
         saved.setInteger("currentMana", 5000);
         restored.deserializeIntrinsicState(saved);
-        assertEquals(1000, restored.getCurrentMana());
+        assertEquals(50, restored.getCurrentMana());
     }
 
     @Test
     void cloneCopiesOnlyBoundedCurrentManaAndAdvancesRevision() {
         ManaState original = new ManaState();
-        original.tryConsume(250);
+        original.tryConsume(25);
         ManaState clone = new ManaState();
 
         clone.copyFrom(original);
 
-        assertEquals(750, clone.getCurrentMana());
+        assertEquals(25, clone.getCurrentMana());
         assertTrue(clone.getRevision() > original.getRevision());
     }
 
@@ -102,5 +107,50 @@ class ManaStateTest {
         assertThrows(IllegalArgumentException.class, () -> state.regenerateTick(-0.1D));
         assertThrows(IllegalArgumentException.class, () -> state.regenerateTick(Double.NaN));
         assertThrows(IllegalArgumentException.class, () -> state.regenerateTick(Double.POSITIVE_INFINITY));
+    }
+
+    @Test
+    void applyingLowerEffectiveMaximumClampsCurrentAndResetsRate() {
+        ManaState state = new ManaState();
+
+        assertTrue(state.applyEffectiveStats(20, 0.5D));
+
+        assertEquals(20, state.getCurrentMana());
+        assertEquals(20, state.getMaximumMana());
+        assertEquals(0.5D, state.getEffectiveRegeneration());
+        assertFalse(state.applyEffectiveStats(20, 0.5D));
+    }
+
+    @Test
+    void lockoutRestartsCountsDownAndShorterReloadClampsWithoutLongerExtension() {
+        ManaState state = new ManaState();
+        state.startRegenerationLockout(40L);
+        assertTrue(state.isRegenerationBlocked());
+
+        state.advanceRegenerationGate();
+        assertEquals(39L, state.getRemainingLockoutTicks());
+        state.startRegenerationLockout(40L);
+        assertEquals(40L, state.getRemainingLockoutTicks());
+
+        state.clampLockoutAfterReload(20L);
+        assertEquals(20L, state.getRemainingLockoutTicks());
+        state.clampLockoutAfterReload(80L);
+        assertEquals(20L, state.getRemainingLockoutTicks());
+        state.clampLockoutAfterReload(0L);
+        assertFalse(state.isRegenerationBlocked());
+    }
+
+    @Test
+    void lockoutStateIsTransientAcrossCloneAndPersistence() {
+        ManaState original = new ManaState();
+        original.startRegenerationLockout(40L);
+        ManaState clone = new ManaState();
+        clone.copyFrom(original);
+        assertFalse(clone.isRegenerationBlocked());
+
+        ManaState restored = new ManaState();
+        restored.startRegenerationLockout(40L);
+        restored.deserializeIntrinsicState(original.serializeIntrinsicState());
+        assertFalse(restored.isRegenerationBlocked());
     }
 }

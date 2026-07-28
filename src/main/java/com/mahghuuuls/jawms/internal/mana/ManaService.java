@@ -36,7 +36,7 @@ public final class ManaService implements IManaService {
         return consumed;
     }
 
-    static ManaState requireState(EntityPlayer player) {
+    public static ManaState requireState(EntityPlayer player) {
         if (player == null) {
             throw new NullPointerException("Player must not be null.");
         }

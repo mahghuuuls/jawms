@@ -12,14 +12,21 @@ public final class ManaStateMessage implements IMessage {
 
     private int currentMana;
     private int maximumMana;
+    private double effectiveRegeneration;
     private long revision;
 
     public ManaStateMessage() {
     }
 
-    public ManaStateMessage(int currentMana, int maximumMana, long revision) {
+    public ManaStateMessage(
+            int currentMana,
+            int maximumMana,
+            double effectiveRegeneration,
+            long revision
+    ) {
         this.currentMana = currentMana;
         this.maximumMana = maximumMana;
+        this.effectiveRegeneration = effectiveRegeneration;
         this.revision = revision;
     }
 
@@ -27,6 +34,7 @@ public final class ManaStateMessage implements IMessage {
     public void fromBytes(ByteBuf buffer) {
         currentMana = buffer.readInt();
         maximumMana = buffer.readInt();
+        effectiveRegeneration = buffer.readDouble();
         revision = buffer.readLong();
     }
 
@@ -34,6 +42,7 @@ public final class ManaStateMessage implements IMessage {
     public void toBytes(ByteBuf buffer) {
         buffer.writeInt(currentMana);
         buffer.writeInt(maximumMana);
+        buffer.writeDouble(effectiveRegeneration);
         buffer.writeLong(revision);
     }
 
@@ -41,6 +50,8 @@ public final class ManaStateMessage implements IMessage {
         return maximumMana > 0
                 && currentMana >= 0
                 && currentMana <= maximumMana
+                && Double.isFinite(effectiveRegeneration)
+                && effectiveRegeneration >= 0.0D
                 && revision >= 0L;
     }
 
@@ -50,6 +61,10 @@ public final class ManaStateMessage implements IMessage {
 
     int getMaximumMana() {
         return maximumMana;
+    }
+
+    double getEffectiveRegeneration() {
+        return effectiveRegeneration;
     }
 
     long getRevision() {
@@ -62,9 +77,10 @@ public final class ManaStateMessage implements IMessage {
         public IMessage onMessage(ManaStateMessage message, MessageContext context) {
             if (!message.isValid()) {
                 JustAnotherWizardryManaSystemMod.LOGGER.warn(
-                        "Discarded invalid player mana packet: current={}, maximum={}, revision={}.",
+                        "Discarded invalid player mana packet: current={}, maximum={}, regeneration={}, revision={}.",
                         message.currentMana,
                         message.maximumMana,
+                        message.effectiveRegeneration,
                         message.revision
                 );
                 return null;
@@ -74,6 +90,7 @@ public final class ManaStateMessage implements IMessage {
             thread.addScheduledTask(() -> JustAnotherWizardryManaSystemMod.proxy.acceptManaState(
                     message.currentMana,
                     message.maximumMana,
+                    message.effectiveRegeneration,
                     message.revision
             ));
             return null;

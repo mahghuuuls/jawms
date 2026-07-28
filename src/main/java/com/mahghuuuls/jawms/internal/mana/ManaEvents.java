@@ -1,6 +1,8 @@
 package com.mahghuuuls.jawms.internal.mana;
 
 import com.mahghuuuls.jawms.Tags;
+import com.mahghuuuls.jawms.internal.rules.GameplayRules;
+import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.ResourceLocation;
@@ -36,23 +38,37 @@ public final class ManaEvents {
             return;
         }
         ManaState state = event.player.getCapability(ManaCapability.INSTANCE, null);
-        if (state != null && state.regenerateTick(ManaState.DEFAULT_REGENERATION_PER_SECOND) > 0) {
-            ManaNetwork.synchronize(event.player, state);
+        GameplayRules rules = GameplayRulesManager.current();
+        if (state != null) {
+            boolean statsChanged = state.applyEffectiveStats(
+                    rules.getBaseMaximum(),
+                    rules.getBaseRegeneration()
+            );
+            boolean gateOpen = state.advanceRegenerationGate();
+            int restored = gateOpen
+                    ? state.regenerateTick(state.getEffectiveRegeneration())
+                    : 0;
+            if (statsChanged || restored > 0) {
+                ManaNetwork.synchronize(event.player, state);
+            }
         }
     }
 
     @SubscribeEvent
     public void playerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        ManaNetwork.synchronizeRules(event.player, GameplayRulesManager.current());
         ManaNetwork.synchronizeLifecycle(event.player, "login");
     }
 
     @SubscribeEvent
     public void playerRespawned(PlayerEvent.PlayerRespawnEvent event) {
+        ManaNetwork.synchronizeRules(event.player, GameplayRulesManager.current());
         ManaNetwork.synchronizeLifecycle(event.player, "respawn");
     }
 
     @SubscribeEvent
     public void playerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        ManaNetwork.synchronizeRules(event.player, GameplayRulesManager.current());
         ManaNetwork.synchronizeLifecycle(event.player, "dimension change");
     }
 }

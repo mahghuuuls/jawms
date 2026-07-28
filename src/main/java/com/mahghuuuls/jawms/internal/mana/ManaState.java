@@ -1,22 +1,35 @@
 package com.mahghuuuls.jawms.internal.mana;
 
+import com.mahghuuuls.jawms.internal.rules.GameplayRules;
+import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import net.minecraft.nbt.NBTTagCompound;
 
 public final class ManaState {
 
-    public static final int DEFAULT_MAXIMUM = 1000;
-    public static final double DEFAULT_REGENERATION_PER_SECOND = 1.0D;
-
-    private int currentMana = DEFAULT_MAXIMUM;
+    private int currentMana;
+    private int effectiveMaximum;
+    private double effectiveRegeneration;
     private double regenerationRemainder;
+    private long remainingLockoutTicks;
     private long revision;
+
+    public ManaState() {
+        GameplayRules rules = GameplayRulesManager.current();
+        effectiveMaximum = rules.getBaseMaximum();
+        effectiveRegeneration = rules.getBaseRegeneration();
+        currentMana = effectiveMaximum;
+    }
 
     public int getCurrentMana() {
         return currentMana;
     }
 
     public int getMaximumMana() {
-        return DEFAULT_MAXIMUM;
+        return effectiveMaximum;
+    }
+
+    public double getEffectiveRegeneration() {
+        return effectiveRegeneration;
     }
 
     public long getRevision() {
@@ -70,6 +83,57 @@ public final class ManaState {
         return restored;
     }
 
+    public void startRegenerationLockout(long durationTicks) {
+        if (durationTicks < 0L) {
+            throw new IllegalArgumentException("Lockout duration must be non-negative.");
+        }
+        remainingLockoutTicks = durationTicks;
+    }
+
+    public void clampLockoutAfterReload(long newDurationTicks) {
+        if (newDurationTicks < 0L) {
+            throw new IllegalArgumentException("Lockout duration must be non-negative.");
+        }
+        if (remainingLockoutTicks > newDurationTicks) {
+            remainingLockoutTicks = newDurationTicks;
+        }
+    }
+
+    public boolean advanceRegenerationGate() {
+        if (remainingLockoutTicks > 0L) {
+            remainingLockoutTicks--;
+        }
+        return remainingLockoutTicks == 0L;
+    }
+
+    public boolean isRegenerationBlocked() {
+        return remainingLockoutTicks > 0L;
+    }
+
+    long getRemainingLockoutTicks() {
+        return remainingLockoutTicks;
+    }
+
+    public boolean applyEffectiveStats(int maximumMana, double regenerationPerSecond) {
+        if (maximumMana < 1) {
+            throw new IllegalArgumentException("Effective maximum must be positive.");
+        }
+        if (!Double.isFinite(regenerationPerSecond) || regenerationPerSecond < 0.0D) {
+            throw new IllegalArgumentException("Effective regeneration must be finite and non-negative.");
+        }
+        boolean changed = maximumMana != effectiveMaximum
+                || Double.compare(regenerationPerSecond, effectiveRegeneration) != 0;
+        if (!changed) {
+            return false;
+        }
+        effectiveMaximum = maximumMana;
+        effectiveRegeneration = regenerationPerSecond;
+        currentMana = clamp(currentMana);
+        regenerationRemainder = 0.0D;
+        revision++;
+        return true;
+    }
+
     public void advanceRevision() {
         revision++;
     }
@@ -77,6 +141,7 @@ public final class ManaState {
     public void copyFrom(ManaState original) {
         currentMana = clamp(original.currentMana);
         regenerationRemainder = 0.0D;
+        remainingLockoutTicks = 0L;
         revision = original.revision + 1L;
     }
 
@@ -93,6 +158,7 @@ public final class ManaState {
             currentMana = getMaximumMana();
         }
         regenerationRemainder = 0.0D;
+        remainingLockoutTicks = 0L;
         revision++;
     }
 

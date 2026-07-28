@@ -1,10 +1,13 @@
 package com.mahghuuuls.jawms;
 
 import com.mahghuuuls.jawms.internal.mana.ManaBootstrap;
+import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
+import com.mahghuuuls.jawms.internal.rules.JawmsCommand;
 import com.mahghuuuls.jawms.proxy.CommonProxy;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.SidedProxy;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -38,12 +41,19 @@ public final class JustAnotherWizardryManaSystemMod {
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         LOGGER.info("Initializing {}.", Tags.MOD_NAME);
+        GameplayRulesManager.configure(event.getSuggestedConfigurationFile());
         ManaBootstrap.initialize();
         proxy.preInit();
     }
 
     @Mod.EventHandler
+    public void init(FMLInitializationEvent event) {
+        GameplayRulesManager.initialize();
+    }
+
+    @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
+        event.registerServerCommand(new JawmsCommand());
         if (!Boolean.getBoolean("jawms.enableTestCommands")) {
             return;
         }

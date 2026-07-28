@@ -16,30 +16,32 @@ class ClientManaStateTest {
 
     @Test
     void acceptsOnlyNewerRevisionsWithinASession() {
-        ClientManaState.accept(900, 1000, 4);
-        ClientManaState.accept(800, 1000, 3);
+        ClientManaState.accept(40, 50, 2.0D, 4);
+        ClientManaState.accept(30, 50, 3.0D, 3);
 
         assertTrue(ClientManaState.isAvailable());
-        assertEquals(900, ClientManaState.getCurrentMana());
+        assertEquals(40, ClientManaState.getCurrentMana());
+        assertEquals(2.0D, ClientManaState.getEffectiveRegeneration());
 
-        ClientManaState.accept(700, 1000, 5);
-        assertEquals(700, ClientManaState.getCurrentMana());
+        ClientManaState.accept(20, 50, 3.0D, 5);
+        assertEquals(20, ClientManaState.getCurrentMana());
+        assertEquals(3.0D, ClientManaState.getEffectiveRegeneration());
     }
 
     @Test
     void clearingAllowsARevisionResetOnReconnect() {
-        ClientManaState.accept(900, 1000, 20);
+        ClientManaState.accept(40, 50, 2.0D, 20);
         ClientManaState.clear();
-        ClientManaState.accept(600, 1000, 1);
+        ClientManaState.accept(30, 50, 2.0D, 1);
 
         assertTrue(ClientManaState.isAvailable());
-        assertEquals(600, ClientManaState.getCurrentMana());
-        assertEquals(1000, ClientManaState.getMaximumMana());
+        assertEquals(30, ClientManaState.getCurrentMana());
+        assertEquals(50, ClientManaState.getMaximumMana());
     }
 
     @Test
     void clearRemovesDisplayState() {
-        ClientManaState.accept(900, 1000, 1);
+        ClientManaState.accept(40, 50, 2.0D, 1);
 
         ClientManaState.clear();
 

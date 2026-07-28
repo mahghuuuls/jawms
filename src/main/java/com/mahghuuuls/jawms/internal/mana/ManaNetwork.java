@@ -1,6 +1,8 @@
 package com.mahghuuuls.jawms.internal.mana;
 
 import com.mahghuuuls.jawms.Tags;
+import com.mahghuuuls.jawms.internal.rules.GameplayRules;
+import com.mahghuuuls.jawms.internal.rules.GameplayRulesMessage;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraftforge.fml.common.network.NetworkRegistry;
@@ -16,14 +18,26 @@ public final class ManaNetwork {
 
     public static void register() {
         CHANNEL.registerMessage(ManaStateMessage.Handler.class, ManaStateMessage.class, 0, Side.CLIENT);
+        CHANNEL.registerMessage(GameplayRulesMessage.Handler.class, GameplayRulesMessage.class, 1, Side.CLIENT);
     }
 
     public static void synchronize(EntityPlayer player, ManaState state) {
         if (player instanceof EntityPlayerMP) {
             CHANNEL.sendTo(
-                    new ManaStateMessage(state.getCurrentMana(), state.getMaximumMana(), state.getRevision()),
+                    new ManaStateMessage(
+                            state.getCurrentMana(),
+                            state.getMaximumMana(),
+                            state.getEffectiveRegeneration(),
+                            state.getRevision()
+                    ),
                     (EntityPlayerMP) player
             );
+        }
+    }
+
+    public static void synchronizeRules(EntityPlayer player, GameplayRules rules) {
+        if (player instanceof EntityPlayerMP) {
+            CHANNEL.sendTo(new GameplayRulesMessage(rules), (EntityPlayerMP) player);
         }
     }
 
@@ -32,11 +46,12 @@ public final class ManaNetwork {
         state.advanceRevision();
         synchronize(player, state);
         com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod.LOGGER.info(
-                "Synchronized player mana after {}: player={}, current={}, maximum={}, revision={}.",
+                "Synchronized player mana after {}: player={}, current={}, maximum={}, regeneration={}, revision={}.",
                 reason,
                 player.getUniqueID(),
                 state.getCurrentMana(),
                 state.getMaximumMana(),
+                state.getEffectiveRegeneration(),
                 state.getRevision()
         );
     }

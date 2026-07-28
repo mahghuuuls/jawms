@@ -12,7 +12,7 @@ class ManaStateMessageTest {
 
     @Test
     void codecPreservesAValidState() {
-        ManaStateMessage encoded = new ManaStateMessage(123, 1000, 42);
+        ManaStateMessage encoded = new ManaStateMessage(23, 50, 2.5D, 42);
         ByteBuf buffer = Unpooled.buffer();
         encoded.toBytes(buffer);
         ManaStateMessage decoded = new ManaStateMessage();
@@ -20,16 +20,19 @@ class ManaStateMessageTest {
         decoded.fromBytes(buffer);
 
         assertTrue(decoded.isValid());
-        assertEquals(123, decoded.getCurrentMana());
-        assertEquals(1000, decoded.getMaximumMana());
+        assertEquals(23, decoded.getCurrentMana());
+        assertEquals(50, decoded.getMaximumMana());
+        assertEquals(2.5D, decoded.getEffectiveRegeneration());
         assertEquals(42L, decoded.getRevision());
     }
 
     @Test
     void rejectsImpossibleStates() {
-        assertFalse(new ManaStateMessage(-1, 1000, 1).isValid());
-        assertFalse(new ManaStateMessage(1001, 1000, 1).isValid());
-        assertFalse(new ManaStateMessage(0, 0, 1).isValid());
-        assertFalse(new ManaStateMessage(0, 1000, -1).isValid());
+        assertFalse(new ManaStateMessage(-1, 50, 2.0D, 1).isValid());
+        assertFalse(new ManaStateMessage(51, 50, 2.0D, 1).isValid());
+        assertFalse(new ManaStateMessage(0, 0, 2.0D, 1).isValid());
+        assertFalse(new ManaStateMessage(0, 50, -1.0D, 1).isValid());
+        assertFalse(new ManaStateMessage(0, 50, Double.NaN, 1).isValid());
+        assertFalse(new ManaStateMessage(0, 50, 2.0D, -1).isValid());
     }
 }
