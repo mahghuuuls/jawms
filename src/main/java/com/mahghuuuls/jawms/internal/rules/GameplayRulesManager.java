@@ -3,7 +3,6 @@ package com.mahghuuuls.jawms.internal.rules;
 import com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod;
 import com.mahghuuuls.jawms.internal.mana.ManaNetwork;
 import com.mahghuuuls.jawms.internal.mana.ManaService;
-import com.mahghuuuls.jawms.internal.mana.ManaState;
 import electroblob.wizardry.spell.Spell;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
@@ -75,14 +74,8 @@ public final class GameplayRulesManager {
 
         current = result.rules;
         for (EntityPlayerMP player : server.getPlayerList().getPlayers()) {
-            ManaState state = ManaService.requireState(player);
-            state.clampLockoutAfterReload(result.rules.getRegenerationLockoutTicks());
-            state.applyEffectiveStats(
-                    result.rules.getBaseMaximum(),
-                    result.rules.getBaseRegeneration()
-            );
+            ManaService.applyRulesReload(player, previous, result.rules);
             ManaNetwork.synchronizeRules(player, result.rules);
-            ManaNetwork.synchronize(player, state);
         }
         JustAnotherWizardryManaSystemMod.LOGGER.info(
                 "Published JAWMS gameplay rules reload: oldRevision={}, newRevision={}, warnings={}, players={}.",

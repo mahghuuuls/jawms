@@ -1,31 +1,86 @@
 package com.mahghuuuls.jawms.api;
 
+import electroblob.wizardry.spell.Spell;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.ResourceLocation;
 
 /**
  * Server-authoritative access to JAWMS player mana.
  *
  * <p>Every method must be called for a logical-server player on the Minecraft
  * server thread. Mutation amounts are whole mana points and must not be
- * negative.</p>
+ * negative. Every mutation requires a namespaced cause, applies to creative
+ * players, synchronizes automatically, and does not start cast lockout.</p>
  */
 public interface IManaService {
+
+    /** Returns one immutable snapshot of all scalar and gate state. */
+    ManaPublicState getState(EntityPlayer player);
 
     int getCurrentMana(EntityPlayer player);
 
     int getMaximumMana(EntityPlayer player);
 
-    /**
-     * Restores mana up to the player's effective maximum.
-     *
-     * @return the number of mana points actually restored
-     */
-    int restoreMana(EntityPlayer player, int amount);
+    double getEffectiveRegeneration(EntityPlayer player);
+
+    /** Returns the lockout duration a successful cast would start now. */
+    long getEffectiveRegenerationLockoutTicks(EntityPlayer player);
+
+    /** Returns the countdown sampled by the most recent successful cast. */
+    long getRemainingRegenerationLockoutTicks(EntityPlayer player);
+
+    default double getEffectiveRegenerationLockoutSeconds(EntityPlayer player) {
+        return getEffectiveRegenerationLockoutTicks(player) / 20.0D;
+    }
+
+    default double getRemainingRegenerationLockoutSeconds(EntityPlayer player) {
+        return getRemainingRegenerationLockoutTicks(player) / 20.0D;
+    }
+
+    boolean isRegenerationEligible(EntityPlayer player);
+
+    boolean canRegenerateDuringPostCastLockout(EntityPlayer player);
+
+    boolean canRegenerateDuringContinuousCasting(EntityPlayer player);
 
     /**
-     * Atomically consumes mana when the complete amount is available.
-     *
-     * @return true when the amount was consumed
+     * Returns the efficiency points applicable to this registered spell.
+     * The spell's element is part of the result.
      */
-    boolean tryConsumeMana(EntityPlayer player, int amount);
+    double getApplicableSpellEfficiency(EntityPlayer player, Spell spell);
+
+    /**
+     * Sets current mana, clamping the target to the effective maximum. A
+     * target below mana reserved by an in-progress cast is rejected so that
+     * the already-authorized cast can still commit its exact cost.
+     */
+    ManaMutationResult setCurrentMana(
+            EntityPlayer player,
+            int target,
+            ResourceLocation cause
+    );
+
+    /** Restores up to {@code amount}; the result reports the actual restoration. */
+    ManaMutationResult restoreMana(
+            EntityPlayer player,
+            int amount,
+            ResourceLocation cause
+    );
+
+    /**
+     * Consumes exactly {@code amount}. An unaffordable request returns an
+     * unsuccessful result and changes nothing.
+     */
+    ManaMutationResult consumeMana(
+            EntityPlayer player,
+            int amount,
+            ResourceLocation cause
+    );
+
+    /** Drains up to {@code maximumAmount}; the result reports the actual drain. */
+    ManaMutationResult drainMana(
+            EntityPlayer player,
+            int maximumAmount,
+            ResourceLocation cause
+    );
 }

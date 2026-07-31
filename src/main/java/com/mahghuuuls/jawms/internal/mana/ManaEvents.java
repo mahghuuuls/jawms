@@ -26,10 +26,13 @@ public final class ManaEvents {
 
     @SubscribeEvent
     public void clonePlayer(Clone event) {
+        if (event.getEntityPlayer().world.isRemote) {
+            return;
+        }
         ManaState original = event.getOriginal().getCapability(ManaCapability.INSTANCE, null);
         ManaState replacement = event.getEntityPlayer().getCapability(ManaCapability.INSTANCE, null);
         if (original != null && replacement != null) {
-            replacement.copyFrom(original);
+            ManaService.copyForClone(event.getEntityPlayer(), original);
         }
     }
 
@@ -42,17 +45,7 @@ public final class ManaEvents {
         GameplayRules rules = GameplayRulesManager.current();
         if (state != null) {
             WizardryWandBridge.reconcileContinuousCast(event.player);
-            boolean statsChanged = state.applyEffectiveStats(
-                    rules.getBaseMaximum(),
-                    rules.getBaseRegeneration()
-            );
-            boolean gateOpen = state.advanceRegenerationGate();
-            int restored = gateOpen
-                    ? state.regenerateTick(state.getEffectiveRegeneration())
-                    : 0;
-            if (statsChanged || restored > 0) {
-                ManaNetwork.synchronize(event.player, state);
-            }
+            ManaService.tickPlayer(event.player, rules);
         }
     }
 

@@ -7,7 +7,7 @@ import com.mahghuuuls.jawms.internal.mana.ManaService;
  */
 public final class ManaApi {
 
-    public static final String API_VERSION = "1";
+    public static final String API_VERSION = ManaApiVersion.CURRENT;
 
     private static final IManaService SERVICE = new ManaService();
 

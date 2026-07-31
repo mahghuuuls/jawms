@@ -160,11 +160,17 @@ sourceSets {
         java.srcDir 'src/developmentFixture/java'
         runtimeClasspath += output + sourceSets.main.runtimeClasspath
     }
+    apiCompatibilityFixture {
+        java.srcDir 'src/apiCompatibilityFixture/java'
+        runtimeClasspath += output + sourceSets.main.runtimeClasspath
+    }
 }
 
 configurations {
     developmentFixtureImplementation.extendsFrom implementation
     developmentFixtureCompileOnly.extendsFrom compileOnly
+    apiCompatibilityFixtureImplementation.extendsFrom implementation
+    apiCompatibilityFixtureCompileOnly.extendsFrom compileOnly
 }
 
 tasks.named(sourceSets.developmentFixture.compileJavaTaskName, JavaCompile).configure {
@@ -172,11 +178,56 @@ tasks.named(sourceSets.developmentFixture.compileJavaTaskName, JavaCompile).conf
     classpath = tasks.named('compileJava', JavaCompile).get().classpath + sourceSets.main.output
 }
 
+tasks.named(sourceSets.apiCompatibilityFixture.compileJavaTaskName, JavaCompile).configure {
+    dependsOn tasks.named(sourceSets.main.classesTaskName)
+    classpath = tasks.named('compileJava', JavaCompile).get().classpath + sourceSets.main.output
+    sourceCompatibility = targetCompatibility = 8
+}
+
+tasks.register('verifyApiCompatibilityFixture') {
+    group = 'verification'
+    dependsOn sourceSets.apiCompatibilityFixture.classesTaskName, tasks.named('jar')
+    doLast {
+        def forbiddenImports = sourceSets.apiCompatibilityFixture.allJava.files.findAll { source ->
+            def text = source.getText('UTF-8')
+            text.contains('com.mahghuuuls.jawms.internal.')
+                    || text.contains('com.mahghuuuls.jawms.client.')
+        }
+        if (!forbiddenImports.empty) {
+            throw new GradleException("API compatibility fixture imports non-public JAWMS code: ${forbiddenImports}")
+        }
+
+        def nonJava8Classes = sourceSets.apiCompatibilityFixture.output.classesDirs.asFileTree.matching {
+            include '**/*.class'
+        }.files.findAll { classFile ->
+            byte[] bytes = classFile.bytes
+            bytes.length < 8 || (((bytes[6] & 0xff) << 8) | (bytes[7] & 0xff)) != 52
+        }
+        if (!nonJava8Classes.empty) {
+            throw new GradleException("API compatibility fixture is not Java 8 bytecode: ${nonJava8Classes}")
+        }
+
+        def packagedFixtures = zipTree(tasks.named('jar').get().archiveFile.get().asFile).matching {
+            include 'com/mahghuuuls/jawms/testfixture/**'
+            include 'example/jawmsaddon/**'
+        }.files
+        if (!packagedFixtures.empty) {
+            throw new GradleException("Development/API fixture leaked into the production jar: ${packagedFixtures}")
+        }
+    }
+}
+
+tasks.named('check').configure {
+    dependsOn tasks.named('verifyApiCompatibilityFixture')
+}
+
 ['runClient', 'runServer'].each { runTaskName ->
     tasks.named(runTaskName).configure {
-        dependsOn sourceSets.developmentFixture.classesTaskName
+        dependsOn sourceSets.developmentFixture.classesTaskName,
+                sourceSets.apiCompatibilityFixture.classesTaskName
         doFirst {
             classpath += sourceSets.developmentFixture.output
+            classpath += sourceSets.apiCompatibilityFixture.output
         }
     }
 }

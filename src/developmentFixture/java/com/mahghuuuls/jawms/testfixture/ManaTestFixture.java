@@ -3,6 +3,10 @@ package com.mahghuuuls.jawms.testfixture;
 import com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod;
 import com.mahghuuuls.jawms.api.IManaService;
 import com.mahghuuuls.jawms.api.ManaApi;
+import com.mahghuuuls.jawms.api.ManaCauses;
+import com.mahghuuuls.jawms.api.ManaMutationResult;
+import com.mahghuuuls.jawms.api.ManaPublicState;
+import com.mahghuuuls.jawms.api.ManaStateChangeEvent;
 import com.mahghuuuls.jawms.internal.casting.CastingDiagnostics;
 import com.mahghuuuls.jawms.internal.casting.SpellCostService;
 import com.mahghuuuls.jawms.internal.mana.ManaService;
@@ -38,6 +42,8 @@ public final class ManaTestFixture {
     private static final CastCancellationFixture CAST_CANCELLATION =
             new CastCancellationFixture();
     private static boolean cancellationFixtureRegistered;
+    private static final ManaEventProbe MANA_EVENT_PROBE = new ManaEventProbe();
+    private static boolean manaEventProbeRegistered;
 
     private ManaTestFixture() {
     }
@@ -47,6 +53,11 @@ public final class ManaTestFixture {
         if (!cancellationFixtureRegistered) {
             MinecraftForge.EVENT_BUS.register(CAST_CANCELLATION);
             cancellationFixtureRegistered = true;
+        }
+        MANA_EVENT_PROBE.clear();
+        if (!manaEventProbeRegistered) {
+            MinecraftForge.EVENT_BUS.register(MANA_EVENT_PROBE);
+            manaEventProbeRegistered = true;
         }
         event.registerServerCommand(new SetManaCommand());
     }
@@ -61,6 +72,8 @@ public final class ManaTestFixture {
         @Override
         public String getUsage(ICommandSender sender) {
             return "/jawms-test mana set <amount> | mana inspect | rules inspect"
+                    + " | mana restore <amount> | mana consume <amount> | mana drain <amount>"
+                    + " | mana events <true|false> | mana event-inspect"
                     + " | cost get <namespace:spell> | casting debug <true|false>"
                     + " | casting cancel <true|false>"
                     + " | casting cancel-tick <true|false>"
@@ -79,6 +92,12 @@ public final class ManaTestFixture {
                     && "rules".equalsIgnoreCase(arguments[0])
                     && "inspect".equalsIgnoreCase(arguments[1])) {
                 inspectRules(sender);
+                return;
+            }
+            if (arguments.length == 2
+                    && "mana".equalsIgnoreCase(arguments[0])
+                    && "event-inspect".equalsIgnoreCase(arguments[1])) {
+                inspectManaEvent(sender);
                 return;
             }
             if (arguments.length == 2
@@ -109,6 +128,30 @@ public final class ManaTestFixture {
                     && "cost".equalsIgnoreCase(arguments[0])
                     && "get".equalsIgnoreCase(arguments[1])) {
                 inspectCost(sender, arguments[2]);
+                return;
+            }
+            if (arguments.length == 3
+                    && "mana".equalsIgnoreCase(arguments[0])
+                    && "restore".equalsIgnoreCase(arguments[1])) {
+                mutateMana(sender, arguments[2], "restore");
+                return;
+            }
+            if (arguments.length == 3
+                    && "mana".equalsIgnoreCase(arguments[0])
+                    && "consume".equalsIgnoreCase(arguments[1])) {
+                mutateMana(sender, arguments[2], "consume");
+                return;
+            }
+            if (arguments.length == 3
+                    && "mana".equalsIgnoreCase(arguments[0])
+                    && "drain".equalsIgnoreCase(arguments[1])) {
+                mutateMana(sender, arguments[2], "drain");
+                return;
+            }
+            if (arguments.length == 3
+                    && "mana".equalsIgnoreCase(arguments[0])
+                    && "events".equalsIgnoreCase(arguments[1])) {
+                setManaEvents(sender, arguments[2]);
                 return;
             }
             if (arguments.length == 3
@@ -154,12 +197,7 @@ public final class ManaTestFixture {
             EntityPlayerMP player = getCommandSenderAsPlayer(sender);
             IManaService service = ManaApi.getManaService();
             int target = parseInt(amount, 0, service.getMaximumMana(player));
-            int current = service.getCurrentMana(player);
-            if (target < current) {
-                service.tryConsumeMana(player, current - target);
-            } else {
-                service.restoreMana(player, target - current);
-            }
+            service.setCurrentMana(player, target, ManaCauses.DEVELOPMENT_COMMAND);
 
             sender.sendMessage(new TextComponentString(
                     "JAWMS mana set to " + service.getCurrentMana(player)
@@ -183,15 +221,64 @@ public final class ManaTestFixture {
 
         private static void inspectMana(ICommandSender sender) throws CommandException {
             EntityPlayerMP player = getCommandSenderAsPlayer(sender);
-            ManaState state = ManaService.requireState(player);
+            IManaService service = ManaApi.getManaService();
+            ManaPublicState state = service.getState(player);
             sender.sendMessage(new TextComponentString(
                     "JAWMS mana current=" + state.getCurrentMana()
                             + ", maximum=" + state.getMaximumMana()
-                            + ", available=" + state.getAvailableMana()
                             + ", regeneration=" + state.getEffectiveRegeneration()
-                            + ", lockoutTicks=" + state.getRemainingLockoutTicks()
-                            + ", revision=" + state.getRevision() + "."
+                            + ", effectiveLockoutTicks=" + state.getEffectiveLockoutTicks()
+                            + ", remainingLockoutTicks=" + state.getRemainingLockoutTicks()
+                            + ", postCastPermission="
+                            + state.canRegenerateDuringPostCastLockout()
+                            + ", continuousPermission="
+                            + state.canRegenerateDuringContinuousCasting()
+                            + ", continuousActive=" + state.isContinuousCastActive()
+                            + ", regenerationEligible=" + state.isRegenerationEligible() + "."
             ));
+        }
+
+        private static void mutateMana(
+                ICommandSender sender,
+                String value,
+                String operation
+        ) throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            int amount = parseInt(value, 0);
+            IManaService service = ManaApi.getManaService();
+            ManaMutationResult result;
+            if ("restore".equals(operation)) {
+                result = service.restoreMana(player, amount, ManaCauses.DEVELOPMENT_COMMAND);
+            } else if ("consume".equals(operation)) {
+                result = service.consumeMana(player, amount, ManaCauses.DEVELOPMENT_COMMAND);
+            } else {
+                result = service.drainMana(player, amount, ManaCauses.DEVELOPMENT_COMMAND);
+            }
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS mana mutation operation=" + operation
+                            + ", successful=" + result.isSuccessful()
+                            + ", requested=" + result.getRequestedAmount()
+                            + ", actualDelta=" + result.getActualDelta()
+                            + ", current=" + result.getNewState().getCurrentMana()
+                            + ", cause=" + result.getCause() + "."
+            ));
+        }
+
+        private static void setManaEvents(ICommandSender sender, String value)
+                throws CommandException {
+            if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
+                throw new CommandException("Expected true or false.");
+            }
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            MANA_EVENT_PROBE.setEnabled(player, Boolean.parseBoolean(value));
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS mana event probe enabled=" + MANA_EVENT_PROBE.appliesTo(player) + "."
+            ));
+        }
+
+        private static void inspectManaEvent(ICommandSender sender) throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            sender.sendMessage(new TextComponentString(MANA_EVENT_PROBE.describe(player)));
         }
 
         private static void inspectCastingDebug(ICommandSender sender) {
@@ -346,6 +433,65 @@ public final class ManaTestFixture {
                 throw new CommandException("Unknown spell: " + id);
             }
             return spell;
+        }
+    }
+
+    private static final class ManaEventProbe {
+
+        private UUID playerId;
+        private int count;
+        private ManaStateChangeEvent lastEvent;
+
+        @SubscribeEvent
+        public void observe(ManaStateChangeEvent event) {
+            if (!(event.getPlayer() instanceof EntityPlayerMP)
+                    || !appliesTo((EntityPlayerMP) event.getPlayer())) {
+                return;
+            }
+            count++;
+            lastEvent = event;
+            JustAnotherWizardryManaSystemMod.LOGGER.info(
+                    "JAWMS mana event probe: count={}, player={}, cause={}, delta={}, old={}, new={}.",
+                    count,
+                    playerId,
+                    event.getCause(),
+                    event.getActualManaDelta(),
+                    event.getOldState(),
+                    event.getNewState()
+            );
+        }
+
+        private void setEnabled(EntityPlayerMP player, boolean enabled) {
+            if (enabled) {
+                playerId = player.getUniqueID();
+                count = 0;
+                lastEvent = null;
+            } else if (appliesTo(player)) {
+                clear();
+            }
+        }
+
+        private boolean appliesTo(EntityPlayerMP player) {
+            return playerId != null && playerId.equals(player.getUniqueID());
+        }
+
+        private String describe(EntityPlayerMP player) {
+            if (!appliesTo(player)) {
+                return "JAWMS mana event probe enabled=false.";
+            }
+            if (lastEvent == null) {
+                return "JAWMS mana event probe enabled=true, count=0.";
+            }
+            return "JAWMS mana event probe enabled=true, count=" + count
+                    + ", lastCause=" + lastEvent.getCause()
+                    + ", lastDelta=" + lastEvent.getActualManaDelta()
+                    + ", lastCurrent=" + lastEvent.getNewState().getCurrentMana() + ".";
+        }
+
+        private void clear() {
+            playerId = null;
+            count = 0;
+            lastEvent = null;
         }
     }
 

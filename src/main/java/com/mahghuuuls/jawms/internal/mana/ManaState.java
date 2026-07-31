@@ -18,6 +18,8 @@ public final class ManaState {
     private boolean continuousCastSuccessful;
     private boolean continuousCastInterrupted;
     private boolean continuousCastManaExhausted;
+    private boolean regenerateDuringPostCastLockout;
+    private boolean regenerateDuringContinuousCasting;
     private EnumHand continuousCastHand;
     private ResourceLocation continuousSpellId;
     private EnumHand blockedContinuousCastHand;
@@ -62,6 +64,33 @@ public final class ManaState {
             revision++;
         }
         return restored;
+    }
+
+    public int setCurrentMana(int target) {
+        requireNonNegative(target);
+        int boundedTarget = clamp(target);
+        if (boundedTarget < reservedMana) {
+            throw new IllegalStateException(
+                    "Current mana cannot be set below mana reserved by an active cast."
+            );
+        }
+        int previous = currentMana;
+        currentMana = boundedTarget;
+        if (currentMana != previous) {
+            regenerationRemainder = 0.0D;
+            revision++;
+        }
+        return currentMana - previous;
+    }
+
+    public int drainUpTo(int amount) {
+        requireNonNegative(amount);
+        int drained = Math.min(amount, getAvailableMana());
+        if (drained > 0) {
+            currentMana -= drained;
+            revision++;
+        }
+        return drained;
     }
 
     public boolean tryConsume(int amount) {
@@ -171,6 +200,24 @@ public final class ManaState {
         return remainingLockoutTicks > 0L || continuousCastActive;
     }
 
+    public boolean isRegenerationEligible() {
+        if (currentMana >= getMaximumMana() || effectiveRegeneration <= 0.0D) {
+            return false;
+        }
+        if (remainingLockoutTicks > 0L && !regenerateDuringPostCastLockout) {
+            return false;
+        }
+        return !continuousCastActive || regenerateDuringContinuousCasting;
+    }
+
+    public boolean canRegenerateDuringPostCastLockout() {
+        return regenerateDuringPostCastLockout;
+    }
+
+    public boolean canRegenerateDuringContinuousCasting() {
+        return regenerateDuringContinuousCasting;
+    }
+
     public long getRemainingLockoutTicks() {
         return remainingLockoutTicks;
     }
@@ -238,11 +285,16 @@ public final class ManaState {
         if (lockoutTicks < 0L) {
             throw new IllegalArgumentException("Lockout duration must be non-negative.");
         }
-        boolean shouldStartLockout = continuousCastActive && continuousCastSuccessful;
-        resetContinuousCastingState();
+        boolean shouldStartLockout = finishContinuousCast();
         if (shouldStartLockout) {
             startRegenerationLockout(lockoutTicks);
         }
+        return shouldStartLockout;
+    }
+
+    public boolean finishContinuousCast() {
+        boolean shouldStartLockout = continuousCastActive && continuousCastSuccessful;
+        resetContinuousCastingState();
         return shouldStartLockout;
     }
 
