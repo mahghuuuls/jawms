@@ -20,7 +20,8 @@ import java.lang.reflect.Method;
         name = Tags.MOD_NAME,
         version = Tags.VERSION,
         acceptedMinecraftVersions = "[1.12.2]",
-        dependencies = JustAnotherWizardryManaSystemMod.DEPENDENCIES
+        dependencies = JustAnotherWizardryManaSystemMod.DEPENDENCIES,
+        guiFactory = "com.mahghuuuls.jawms.client.JawmsGuiFactory"
 )
 public final class JustAnotherWizardryManaSystemMod {
 
@@ -43,7 +44,7 @@ public final class JustAnotherWizardryManaSystemMod {
         LOGGER.info("Initializing {}.", Tags.MOD_NAME);
         GameplayRulesManager.configure(event.getSuggestedConfigurationFile());
         ManaBootstrap.initialize();
-        proxy.preInit();
+        proxy.preInit(event.getModConfigurationDirectory());
     }
 
     @Mod.EventHandler

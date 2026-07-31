@@ -6,9 +6,11 @@ import electroblob.wizardry.util.SpellModifiers;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.ResourceLocation;
 
+import java.io.File;
+
 public class CommonProxy {
 
-    public void preInit() {
+    public void preInit(File configurationDirectory) {
         // Common initialization is performed without referencing client classes.
     }
 

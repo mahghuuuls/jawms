@@ -1,1 +1,4 @@
 message.jawms.insufficient_mana=Requires %s mana; %s available
+gui.jawms.spell_book.base_mana_cost=Base mana cost: %s
+gui.jawms.spell_book.base_mana_cost_continuous=Base mana cost: %s per second
+config.jawms.hud.category=Mana HUD

@@ -8,7 +8,9 @@
 		"ItemWandMixin"
 	],
 	"server": [],
-	"client": [],
+	"client": [
+		"GuiSpellInfoMixin"
+	],
 	"injectors": {
 		"defaultRequire": 1
 	}

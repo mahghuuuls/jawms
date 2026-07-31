@@ -3,6 +3,7 @@ package com.mahghuuuls.jawms.proxy;
 import com.mahghuuuls.jawms.client.ClientManaState;
 import com.mahghuuuls.jawms.client.ClientGameplayRules;
 import com.mahghuuuls.jawms.client.ClientContinuousCastGuard;
+import com.mahghuuuls.jawms.client.ClientHudConfigManager;
 import com.mahghuuuls.jawms.client.ManaHudRenderer;
 import com.mahghuuuls.jawms.internal.casting.SpellCostService;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesMessage;
@@ -18,14 +19,18 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 
+import java.io.File;
+
 public final class ClientProxy extends CommonProxy {
 
     @Override
-    public void preInit() {
+    public void preInit(File configurationDirectory) {
+        ClientHudConfigManager.configure(configurationDirectory);
         MinecraftForge.EVENT_BUS.register(new ManaHudRenderer());
         FMLCommonHandler.instance().bus().register(new ClientManaState());
         FMLCommonHandler.instance().bus().register(new ClientGameplayRules());
         FMLCommonHandler.instance().bus().register(new ClientContinuousCastGuard());
+        FMLCommonHandler.instance().bus().register(new ClientHudConfigManager());
     }
 
     @Override
