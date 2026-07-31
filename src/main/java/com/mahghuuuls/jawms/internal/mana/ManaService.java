@@ -8,6 +8,9 @@ import com.mahghuuuls.jawms.api.ManaPublicState;
 import com.mahghuuuls.jawms.api.ManaStateChangeEvent;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
+import com.mahghuuuls.jawms.internal.modifier.ActiveStackCollector;
+import com.mahghuuuls.jawms.internal.modifier.ManaProfileResolver;
+import com.mahghuuuls.jawms.internal.modifier.ResolvedManaProfile;
 import electroblob.wizardry.spell.Spell;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -21,7 +24,7 @@ public final class ManaService implements IManaService {
     @Override
     public ManaPublicState getState(EntityPlayer player) {
         ManaState state = requireState(player);
-        return snapshot(state, GameplayRulesManager.current().getRegenerationLockoutTicks());
+        return snapshot(state);
     }
 
     @Override
@@ -66,14 +69,14 @@ public final class ManaService implements IManaService {
 
     @Override
     public double getApplicableSpellEfficiency(EntityPlayer player, Spell spell) {
-        requireState(player);
+        ManaState state = requireState(player);
         if (spell == null
                 || spell.getRegistryName() == null
                 || Spell.registry == null
                 || Spell.registry.getValue(spell.getRegistryName()) != spell) {
             throw new IllegalArgumentException("A registered Wizardry spell is required.");
         }
-        return 0.0D;
+        return state.getSpellEfficiency(spell.getElement());
     }
 
     @Override
@@ -134,15 +137,9 @@ public final class ManaService implements IManaService {
         ManaState state = requireMutableState(player);
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
-            ManaPublicState oldState = snapshot(
-                    state,
-                    GameplayRulesManager.current().getRegenerationLockoutTicks()
-            );
+            ManaPublicState oldState = snapshot(state);
             boolean successful = mutation.apply(state);
-            ManaPublicState newState = snapshot(
-                    state,
-                    GameplayRulesManager.current().getRegenerationLockoutTicks()
-            );
+            ManaPublicState newState = snapshot(state);
             if (!oldState.equals(newState)) {
                 synchronizeDisplayChange(player, oldState, newState, state);
                 publishTransition(player, oldState, newState, cause, false);
@@ -175,6 +172,9 @@ public final class ManaService implements IManaService {
         ManaState state = player.getCapability(ManaCapability.INSTANCE, null);
         if (state == null) {
             throw new IllegalStateException("The player does not have the JAWMS mana capability.");
+        }
+        if (state.hasPendingLoadedMana()) {
+            state.applyResolvedProfile(resolveProfile(player, GameplayRulesManager.current()));
         }
         return state;
     }
@@ -308,10 +308,9 @@ public final class ManaService implements IManaService {
         ManaState replacement = requireMutableState(replacementPlayer);
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(replacementPlayer.getUniqueID())) {
-            long duration = GameplayRulesManager.current().getRegenerationLockoutTicks();
-            ManaPublicState oldState = snapshot(original, duration);
+            ManaPublicState oldState = snapshot(original);
             replacement.copyFrom(original);
-            ManaPublicState newState = snapshot(replacement, duration);
+            ManaPublicState newState = snapshot(replacement);
             if (!oldState.equals(newState)) {
                 boolean transientStateReset = oldState.getRemainingLockoutTicks() > 0L
                         || oldState.isContinuousCastActive();
@@ -329,17 +328,17 @@ public final class ManaService implements IManaService {
 
     public static void tickPlayer(EntityPlayer player, GameplayRules rules) {
         ManaState state = requireMutableState(player);
-        ManaPublicState oldState = snapshot(state, rules.getRegenerationLockoutTicks());
+        ManaPublicState oldState = snapshot(state);
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
-            state.applyEffectiveStats(rules.getBaseMaximum(), rules.getBaseRegeneration());
+            state.applyResolvedProfile(resolveProfile(player, rules));
             boolean lockoutEnded = state.getRemainingLockoutTicks() > 0L;
             boolean gateOpen = state.advanceRegenerationGate();
             lockoutEnded = lockoutEnded && state.getRemainingLockoutTicks() == 0L;
             int restored = gateOpen
                     ? state.regenerateTick(state.getEffectiveRegeneration())
                     : 0;
-            ManaPublicState newState = snapshot(state, rules.getRegenerationLockoutTicks());
+            ManaPublicState newState = snapshot(state);
             if (!oldState.equals(newState)) {
                 synchronizeDisplayChange(player, oldState, newState, state);
                 ResourceLocation cause = restored > 0
@@ -358,14 +357,12 @@ public final class ManaService implements IManaService {
         ManaState state = requireMutableState(player);
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
-            ManaPublicState oldState = snapshot(state, previous.getRegenerationLockoutTicks());
+            ManaPublicState oldState = snapshot(state);
             boolean hadLockout = state.getRemainingLockoutTicks() > 0L;
-            state.clampLockoutAfterReload(replacement.getRegenerationLockoutTicks());
-            state.applyEffectiveStats(
-                    replacement.getBaseMaximum(),
-                    replacement.getBaseRegeneration()
-            );
-            ManaPublicState newState = snapshot(state, replacement.getRegenerationLockoutTicks());
+            ResolvedManaProfile replacementProfile = resolveProfile(player, replacement);
+            state.clampLockoutAfterReload(replacementProfile.getLockoutTicks());
+            state.applyResolvedProfile(replacementProfile);
+            ManaPublicState newState = snapshot(state);
             boolean lockoutEnded = hadLockout && newState.getRemainingLockoutTicks() == 0L;
             if (!oldState.equals(newState)) {
                 synchronizeDisplayChange(player, oldState, newState, state);
@@ -393,12 +390,12 @@ public final class ManaService implements IManaService {
         );
     }
 
-    static ManaPublicState snapshot(ManaState state, long effectiveLockoutTicks) {
+    static ManaPublicState snapshot(ManaState state) {
         return new ManaPublicState(
                 state.getCurrentMana(),
                 state.getMaximumMana(),
                 state.getEffectiveRegeneration(),
-                effectiveLockoutTicks,
+                state.getEffectiveLockoutTicks(),
                 state.getRemainingLockoutTicks(),
                 state.canRegenerateDuringPostCastLockout(),
                 state.canRegenerateDuringContinuousCasting(),
@@ -408,7 +405,7 @@ public final class ManaService implements IManaService {
     }
 
     private static void startRegenerationLockout(EntityPlayer player, ManaState state) {
-        long duration = GameplayRulesManager.current().getRegenerationLockoutTicks();
+        long duration = state.getEffectiveLockoutTicks();
         boolean restart = state.getRemainingLockoutTicks() > 0L;
         transition(
                 player,
@@ -427,10 +424,9 @@ public final class ManaService implements IManaService {
         ManaState state = requireMutableState(player);
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
-            long duration = GameplayRulesManager.current().getRegenerationLockoutTicks();
-            ManaPublicState oldState = snapshot(state, duration);
+            ManaPublicState oldState = snapshot(state);
             mutation.run();
-            ManaPublicState newState = snapshot(state, duration);
+            ManaPublicState newState = snapshot(state);
             if (!oldState.equals(newState) || forceEvent) {
                 synchronizeDisplayChange(player, oldState, newState, state);
                 publishTransition(player, oldState, newState, cause, forceEvent);
@@ -511,6 +507,15 @@ public final class ManaService implements IManaService {
         if (amount < 0) {
             throw new IllegalArgumentException("Mana amount must not be negative.");
         }
+    }
+
+    private static ResolvedManaProfile resolveProfile(EntityPlayer player, GameplayRules rules) {
+        return ManaProfileResolver.resolve(
+                rules.getBaseMaximum(),
+                rules.getBaseRegeneration(),
+                rules.getRegenerationLockoutSeconds(),
+                ActiveStackCollector.collect(player, rules)
+        );
     }
 
     private interface StateMutation {

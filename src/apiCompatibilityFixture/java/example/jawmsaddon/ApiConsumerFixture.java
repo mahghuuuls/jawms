@@ -3,9 +3,11 @@ package example.jawmsaddon;
 import com.mahghuuuls.jawms.api.IManaService;
 import com.mahghuuuls.jawms.api.ManaApi;
 import com.mahghuuuls.jawms.api.ManaMutationResult;
+import com.mahghuuuls.jawms.api.ManaContribution;
 import com.mahghuuuls.jawms.api.ManaPublicState;
 import com.mahghuuuls.jawms.api.ManaStateChangeEvent;
 import electroblob.wizardry.spell.Spell;
+import electroblob.wizardry.constants.Element;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.command.CommandBase;
@@ -78,6 +80,24 @@ public final class ApiConsumerFixture {
 
     public static double inspectEfficiency(EntityPlayer player, Spell spell) {
         return ManaApi.getManaService().getApplicableSpellEfficiency(player, spell);
+    }
+
+    public static ManaContribution exampleContribution() {
+        return ManaContribution.builder()
+                .flatMaximumMana(10)
+                .maximumManaIncrease(25.0D)
+                .maximumManaReduction(10.0D)
+                .flatRegeneration(0.5D)
+                .regenerationIncrease(20.0D)
+                .regenerationReduction(5.0D)
+                .flatLockoutSeconds(-0.25D)
+                .lockoutIncrease(10.0D)
+                .lockoutReduction(50.0D)
+                .globalSpellEfficiency(5.0D)
+                .elementSpellEfficiency(Element.FIRE, 10.0D)
+                .regenerateDuringPostCastLockout(true)
+                .regenerateDuringContinuousCasting(true)
+                .build();
     }
 
     @SubscribeEvent

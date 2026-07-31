@@ -1,12 +1,17 @@
 package com.mahghuuuls.jawms.internal.rules;
 
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Item;
+import electroblob.wizardry.item.ItemWizardArmour;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 public final class GameplayRules {
 
@@ -21,6 +26,7 @@ public final class GameplayRules {
     private final long revision;
     private final int baseMaximum;
     private final double baseRegeneration;
+    private final double regenerationLockoutSeconds;
     private final long regenerationLockoutTicks;
     private final String costFormula;
     private final int smallFlask;
@@ -29,12 +35,41 @@ public final class GameplayRules {
     private final Map<ResourceLocation, Double> spellCosts;
     private final List<ConfiguredItemRule> configuredItemRules;
     private final WizardryArmorProfile armorProfile;
+    private final Set<ResourceLocation> generatedWizardryArmorIds;
 
     public GameplayRules(
             long revision,
             int baseMaximum,
             double baseRegeneration,
             long regenerationLockoutTicks,
+            String costFormula,
+            int smallFlask,
+            int mediumFlask,
+            int largeFlask,
+            Map<ResourceLocation, Double> spellCosts,
+            List<ConfiguredItemRule> configuredItemRules,
+            WizardryArmorProfile armorProfile
+    ) {
+        this(
+                revision,
+                baseMaximum,
+                baseRegeneration,
+                regenerationLockoutTicks / 20.0D,
+                costFormula,
+                smallFlask,
+                mediumFlask,
+                largeFlask,
+                spellCosts,
+                configuredItemRules,
+                armorProfile
+        );
+    }
+
+    public GameplayRules(
+            long revision,
+            int baseMaximum,
+            double baseRegeneration,
+            double regenerationLockoutSeconds,
             String costFormula,
             int smallFlask,
             int mediumFlask,
@@ -52,8 +87,9 @@ public final class GameplayRules {
         if (!Double.isFinite(baseRegeneration) || baseRegeneration < 0.0D) {
             throw new IllegalArgumentException("Base regeneration must be finite and non-negative.");
         }
-        if (regenerationLockoutTicks < 0L) {
-            throw new IllegalArgumentException("Lockout ticks must be non-negative.");
+        if (!Double.isFinite(regenerationLockoutSeconds)
+                || regenerationLockoutSeconds < 0.0D) {
+            throw new IllegalArgumentException("Lockout seconds must be finite and non-negative.");
         }
         if (smallFlask < 0 || mediumFlask < 0 || largeFlask < 0) {
             throw new IllegalArgumentException("Flask values must be non-negative.");
@@ -61,7 +97,8 @@ public final class GameplayRules {
         this.revision = revision;
         this.baseMaximum = baseMaximum;
         this.baseRegeneration = baseRegeneration;
-        this.regenerationLockoutTicks = regenerationLockoutTicks;
+        this.regenerationLockoutSeconds = regenerationLockoutSeconds;
+        this.regenerationLockoutTicks = secondsToTicks(regenerationLockoutSeconds);
         this.costFormula = costFormula;
         this.smallFlask = smallFlask;
         this.mediumFlask = mediumFlask;
@@ -69,6 +106,7 @@ public final class GameplayRules {
         this.spellCosts = Collections.unmodifiableMap(new LinkedHashMap<>(spellCosts));
         this.configuredItemRules = Collections.unmodifiableList(new ArrayList<>(configuredItemRules));
         this.armorProfile = armorProfile;
+        this.generatedWizardryArmorIds = Collections.unmodifiableSet(discoverWizardryArmorIds());
     }
 
     public static GameplayRules initialDefaults() {
@@ -103,6 +141,10 @@ public final class GameplayRules {
         return regenerationLockoutTicks;
     }
 
+    public double getRegenerationLockoutSeconds() {
+        return regenerationLockoutSeconds;
+    }
+
     public String getCostFormula() {
         return costFormula;
     }
@@ -132,8 +174,44 @@ public final class GameplayRules {
         return configuredItemRules;
     }
 
+    public ConfiguredItemRule findConfiguredItemRule(ItemStack stack) {
+        ConfiguredItemRule wildcard = null;
+        for (ConfiguredItemRule rule : configuredItemRules) {
+            if (!rule.matches(stack)) {
+                continue;
+            }
+            if (rule.getMetadata() == stack.getMetadata()) {
+                return rule;
+            }
+            wildcard = rule;
+        }
+        return wildcard;
+    }
+
     public WizardryArmorProfile getArmorProfile() {
         return armorProfile;
+    }
+
+    public Set<ResourceLocation> getGeneratedWizardryArmorIds() {
+        return generatedWizardryArmorIds;
+    }
+
+    public boolean hasGeneratedWizardryArmor(ItemStack stack) {
+        return stack != null && !stack.isEmpty()
+                && stack.getItem().getRegistryName() != null
+                && generatedWizardryArmorIds.contains(stack.getItem().getRegistryName());
+    }
+
+    private static Set<ResourceLocation> discoverWizardryArmorIds() {
+        Set<ResourceLocation> ids = new LinkedHashSet<>();
+        for (Item item : Item.REGISTRY) {
+            ResourceLocation id = item.getRegistryName();
+            if (item instanceof ItemWizardArmour && id != null
+                    && "ebwizardry".equals(id.getNamespace())) {
+                ids.add(id);
+            }
+        }
+        return ids;
     }
 
     public static long secondsToTicks(double seconds) {

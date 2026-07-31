@@ -33,4 +33,5 @@ class GameplayRulesTest {
         assertThrows(IllegalArgumentException.class, () -> GameplayRules.secondsToTicks(-1.0D));
         assertThrows(IllegalArgumentException.class, () -> GameplayRules.secondsToTicks(Double.NaN));
     }
+
 }

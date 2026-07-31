@@ -1,5 +1,7 @@
 package com.mahghuuuls.jawms.internal.rules;
 
+import com.mahghuuuls.jawms.api.ManaContribution;
+import electroblob.wizardry.constants.Element;
 import net.minecraft.item.Item;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.common.config.Configuration;
@@ -48,7 +50,7 @@ public final class GameplayRulesLoader {
                 MANA + ".baseRegeneration",
                 warning
         );
-        double previousLockoutSeconds = previous.getRegenerationLockoutTicks() / 20.0D;
+        double previousLockoutSeconds = previous.getRegenerationLockoutSeconds();
         double lockoutSeconds = nonNegativeDouble(
                 string(configuration, MANA, "regenerationLockoutSeconds",
                         Double.toString(GameplayRules.DEFAULT_LOCKOUT_SECONDS),
@@ -102,7 +104,13 @@ public final class GameplayRulesLoader {
                         ITEMS,
                         "rules",
                         new String[0],
-                        "One per line: namespace:item[@metadata-or-*]=maximum,flat_regeneration,percentage_regeneration"
+                        "One per line: namespace:item[@metadata-or-*]=field:value;field:value. "
+                                + "Fields: flat_maximum, maximum_increase, maximum_reduction, "
+                                + "flat_regeneration, regeneration_increase, regeneration_reduction, "
+                                + "flat_lockout, lockout_increase, lockout_reduction, "
+                                + "global_efficiency, efficiency_<element>, "
+                                + "regenerate_during_lockout, regenerate_during_continuous. "
+                                + "Legacy maximum,flat_regeneration,signed_regeneration_percent is migrated."
                 ).getStringList(),
                 warning
         );
@@ -123,7 +131,7 @@ public final class GameplayRulesLoader {
                 revision,
                 baseMaximum,
                 baseRegeneration,
-                GameplayRules.secondsToTicks(lockoutSeconds),
+                lockoutSeconds,
                 formula,
                 smallFlask,
                 mediumFlask,
@@ -261,7 +269,7 @@ public final class GameplayRulesLoader {
             int separator = entry.indexOf('=');
             if (separator <= 0 || separator == entry.length() - 1) {
                 warning.accept("Ignored invalid item_modifiers.rules entry '" + raw
-                        + "'; expected namespace:item[@metadata-or-*]=maximum,flat,percentage.");
+                        + "'; expected namespace:item[@metadata-or-*]=field:value;field:value.");
                 continue;
             }
             try {
@@ -279,16 +287,11 @@ public final class GameplayRulesLoader {
                 if (!Item.REGISTRY.containsKey(itemId)) {
                     throw new IllegalArgumentException("unknown item '" + itemId + "'");
                 }
-                String[] values = entry.substring(separator + 1).split(",", -1);
-                if (values.length != 3) {
-                    throw new IllegalArgumentException("expected exactly three comma-separated values");
-                }
+                String contributionText = entry.substring(separator + 1).trim();
                 ConfiguredItemRule rule = new ConfiguredItemRule(
                         itemId,
                         metadata,
-                        Integer.parseInt(values[0].trim()),
-                        parseFinite(values[1].trim()),
-                        parseFinite(values[2].trim())
+                        parseContribution(contributionText)
                 );
                 if (rules.containsKey(rule.key())) {
                     warning.accept("Ignored duplicate item_modifiers.rules entry for '" + rule.key() + "'.");
@@ -301,6 +304,178 @@ public final class GameplayRulesLoader {
             }
         }
         return new ArrayList<>(rules.values());
+    }
+
+    static ManaContribution parseContribution(String value) {
+        if (value.indexOf(';') < 0 && value.indexOf(':') < 0) {
+            String[] legacy = value.split(",", -1);
+            if (legacy.length != 3) {
+                throw new IllegalArgumentException(
+                        "expected field:value pairs or three legacy comma-separated values"
+                );
+            }
+            double signedRegenerationPercentage = parseFinite(legacy[2].trim());
+            return ManaContribution.builder()
+                    .flatMaximumMana(Integer.parseInt(legacy[0].trim()))
+                    .flatRegeneration(parseFinite(legacy[1].trim()))
+                    .regenerationIncrease(Math.max(0.0D, signedRegenerationPercentage))
+                    .regenerationReduction(Math.max(0.0D, -signedRegenerationPercentage))
+                    .build();
+        }
+
+        Map<String, String> fields = new LinkedHashMap<>();
+        for (String rawField : value.split(";", -1)) {
+            String field = rawField.trim();
+            if (field.isEmpty()) {
+                continue;
+            }
+            int separator = field.indexOf(':');
+            if (separator <= 0 || separator == field.length() - 1) {
+                throw new IllegalArgumentException("invalid contribution field '" + rawField + "'");
+            }
+            String name = field.substring(0, separator).trim().toLowerCase();
+            String fieldValue = field.substring(separator + 1).trim();
+            if (fields.put(name, fieldValue) != null) {
+                throw new IllegalArgumentException("duplicate contribution field '" + name + "'");
+            }
+        }
+
+        rejectMixedLegacy(fields, "maximum_percent", "maximum_increase", "maximum_reduction");
+        rejectMixedLegacy(
+                fields,
+                "regeneration_percent",
+                "regeneration_increase",
+                "regeneration_reduction"
+        );
+        rejectMixedLegacy(fields, "lockout_percent", "lockout_increase", "lockout_reduction");
+
+        ManaContribution.Builder builder = ManaContribution.builder();
+        for (Map.Entry<String, String> field : fields.entrySet()) {
+            String name = field.getKey();
+            String fieldValue = field.getValue();
+            switch (name) {
+                case "flat_maximum":
+                    builder.flatMaximumMana(Integer.parseInt(fieldValue));
+                    break;
+                case "maximum_increase":
+                    builder.maximumManaIncrease(nonNegative(fieldValue, name));
+                    break;
+                case "maximum_reduction":
+                    builder.maximumManaReduction(reduction(fieldValue, name));
+                    break;
+                case "maximum_percent":
+                    applyLegacyMaximum(builder, parseFinite(fieldValue));
+                    break;
+                case "flat_regeneration":
+                    builder.flatRegeneration(parseFinite(fieldValue));
+                    break;
+                case "regeneration_increase":
+                    builder.regenerationIncrease(nonNegative(fieldValue, name));
+                    break;
+                case "regeneration_reduction":
+                    builder.regenerationReduction(reduction(fieldValue, name));
+                    break;
+                case "regeneration_percent":
+                    applyLegacyRegeneration(builder, parseFinite(fieldValue));
+                    break;
+                case "flat_lockout":
+                    builder.flatLockoutSeconds(parseFinite(fieldValue));
+                    break;
+                case "lockout_increase":
+                    builder.lockoutIncrease(nonNegative(fieldValue, name));
+                    break;
+                case "lockout_reduction":
+                    builder.lockoutReduction(reduction(fieldValue, name));
+                    break;
+                case "lockout_percent":
+                    applyLegacyLockout(builder, parseFinite(fieldValue));
+                    break;
+                case "global_efficiency":
+                    builder.globalSpellEfficiency(nonNegative(fieldValue, name));
+                    break;
+                case "regenerate_during_lockout":
+                    builder.regenerateDuringPostCastLockout(strictBoolean(fieldValue, name));
+                    break;
+                case "regenerate_during_continuous":
+                    builder.regenerateDuringContinuousCasting(strictBoolean(fieldValue, name));
+                    break;
+                default:
+                    if (name.startsWith("efficiency_")) {
+                        Element element = Element.fromName(name.substring("efficiency_".length()));
+                        builder.elementSpellEfficiency(
+                                element,
+                                nonNegative(fieldValue, name)
+                        );
+                    } else {
+                        throw new IllegalArgumentException("unknown contribution field '" + name + "'");
+                    }
+            }
+        }
+        return builder.build();
+    }
+
+    private static void rejectMixedLegacy(
+            Map<String, String> fields,
+            String legacy,
+            String increase,
+            String reduction
+    ) {
+        if (fields.containsKey(legacy)
+                && (fields.containsKey(increase) || fields.containsKey(reduction))) {
+            throw new IllegalArgumentException(
+                    "legacy field '" + legacy + "' cannot be mixed with replacement fields"
+            );
+        }
+    }
+
+    private static void applyLegacyMaximum(ManaContribution.Builder builder, double value) {
+        if (value >= 0.0D) {
+            builder.maximumManaIncrease(value);
+        } else {
+            builder.maximumManaReduction(-value);
+        }
+    }
+
+    private static void applyLegacyRegeneration(ManaContribution.Builder builder, double value) {
+        if (value >= 0.0D) {
+            builder.regenerationIncrease(value);
+        } else {
+            builder.regenerationReduction(-value);
+        }
+    }
+
+    private static void applyLegacyLockout(ManaContribution.Builder builder, double value) {
+        if (value >= 0.0D) {
+            builder.lockoutIncrease(value);
+        } else {
+            builder.lockoutReduction(-value);
+        }
+    }
+
+    private static double nonNegative(String value, String name) {
+        double parsed = parseFinite(value);
+        if (parsed < 0.0D) {
+            throw new IllegalArgumentException(name + " must be non-negative");
+        }
+        return parsed;
+    }
+
+    private static double reduction(String value, String name) {
+        double parsed = nonNegative(value, name);
+        if (parsed > 100.0D) {
+            throw new IllegalArgumentException(name + " must not exceed 100");
+        }
+        return parsed;
+    }
+
+    private static boolean strictBoolean(String value, String name) {
+        if ("true".equalsIgnoreCase(value)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(value)) {
+            return false;
+        }
+        throw new IllegalArgumentException(name + " must be true or false");
     }
 
     private static String string(

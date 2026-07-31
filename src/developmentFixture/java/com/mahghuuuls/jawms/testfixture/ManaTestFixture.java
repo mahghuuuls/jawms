@@ -11,6 +11,7 @@ import com.mahghuuuls.jawms.internal.casting.CastingDiagnostics;
 import com.mahghuuuls.jawms.internal.casting.SpellCostService;
 import com.mahghuuuls.jawms.internal.mana.ManaService;
 import com.mahghuuuls.jawms.internal.mana.ManaState;
+import com.mahghuuuls.jawms.internal.modifier.ActiveStackCollector;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import electroblob.wizardry.event.SpellCastEvent;
@@ -215,7 +216,9 @@ public final class ManaTestFixture {
                             + ", flasks=" + rules.getSmallFlask() + "/"
                             + rules.getMediumFlask() + "/" + rules.getLargeFlask()
                             + ", spellCosts=" + rules.getSpellCosts().size()
-                            + ", itemRules=" + rules.getConfiguredItemRules().size() + "."
+                            + ", itemRules=" + rules.getConfiguredItemRules().size()
+                            + ", generatedArmorIds="
+                            + rules.getGeneratedWizardryArmorIds().size() + "."
             ));
         }
 
@@ -223,6 +226,10 @@ public final class ManaTestFixture {
             EntityPlayerMP player = getCommandSenderAsPlayer(sender);
             IManaService service = ManaApi.getManaService();
             ManaPublicState state = service.getState(player);
+            int activeContributions = ActiveStackCollector.collect(
+                    player,
+                    GameplayRulesManager.current()
+            ).size();
             sender.sendMessage(new TextComponentString(
                     "JAWMS mana current=" + state.getCurrentMana()
                             + ", maximum=" + state.getMaximumMana()
@@ -235,6 +242,8 @@ public final class ManaTestFixture {
                             + state.canRegenerateDuringContinuousCasting()
                             + ", continuousActive=" + state.isContinuousCastActive()
                             + ", regenerationEligible=" + state.isRegenerationEligible() + "."
+                            + " activeContributions=" + activeContributions
+                            + ", rulesRevision=" + GameplayRulesManager.current().getRevision() + "."
             ));
         }
 

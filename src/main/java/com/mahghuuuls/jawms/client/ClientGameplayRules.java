@@ -11,6 +11,9 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import net.minecraft.item.ItemStack;
 
 public final class ClientGameplayRules {
 
@@ -24,6 +27,7 @@ public final class ClientGameplayRules {
     private static Map<ResourceLocation, Double> spellCosts = Collections.emptyMap();
     private static List<ConfiguredItemRule> itemRules = Collections.emptyList();
     private static WizardryArmorProfile armorProfile = WizardryArmorProfile.DEFAULT;
+    private static Set<ResourceLocation> generatedWizardryArmorIds = Collections.emptySet();
 
     public ClientGameplayRules() {
     }
@@ -42,6 +46,9 @@ public final class ClientGameplayRules {
         spellCosts = Collections.unmodifiableMap(new LinkedHashMap<>(message.getSpellCosts()));
         itemRules = Collections.unmodifiableList(message.getItemRules());
         armorProfile = message.getArmorProfile();
+        generatedWizardryArmorIds = Collections.unmodifiableSet(
+                new LinkedHashSet<>(message.getGeneratedWizardryArmorIds())
+        );
     }
 
     public static long getRevision() {
@@ -92,6 +99,12 @@ public final class ClientGameplayRules {
         return armorProfile;
     }
 
+    public static boolean isGeneratedWizardryArmor(ItemStack stack) {
+        return stack != null && !stack.isEmpty()
+                && stack.getItem().getRegistryName() != null
+                && generatedWizardryArmorIds.contains(stack.getItem().getRegistryName());
+    }
+
     @SubscribeEvent
     public void disconnected(FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
         clear();
@@ -108,5 +121,6 @@ public final class ClientGameplayRules {
         spellCosts = Collections.emptyMap();
         itemRules = Collections.emptyList();
         armorProfile = WizardryArmorProfile.DEFAULT;
+        generatedWizardryArmorIds = Collections.emptySet();
     }
 }

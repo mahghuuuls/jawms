@@ -1,9 +1,13 @@
 package com.mahghuuuls.jawms.internal.mana;
 
+import com.mahghuuuls.jawms.internal.modifier.ResolvedManaProfile;
+import electroblob.wizardry.constants.Element;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.ResourceLocation;
 import org.junit.jupiter.api.Test;
+
+import java.util.EnumMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -228,6 +232,18 @@ class ManaStateTest {
     }
 
     @Test
+    void loadedManaIsBoundedOnlyAfterEquippedProfileIsRecalculated() {
+        NBTTagCompound saved = new NBTTagCompound();
+        saved.setInteger("currentMana", 90);
+        ManaState restored = new ManaState();
+
+        restored.deserializeIntrinsicState(saved);
+        restored.applyEffectiveStats(100, 4.0D);
+
+        assertEquals(90, restored.getCurrentMana());
+    }
+
+    @Test
     void activeContinuousCastBlocksRegenerationWhileOlderLockoutCountsDown() {
         ManaState state = new ManaState();
         ResourceLocation spellId = new ResourceLocation("ebwizardry", "test_continuous");
@@ -240,6 +256,41 @@ class ManaStateTest {
         assertEquals(0L, state.getRemainingLockoutTicks());
         assertFalse(state.advanceRegenerationGate());
         assertTrue(state.isRegenerationBlocked());
+    }
+
+    @Test
+    void gatePermissionsBypassIndependentlyWhileCountdownStillAdvances() {
+        ManaState state = new ManaState();
+        state.applyResolvedProfile(new ResolvedManaProfile(
+                50,
+                2.0D,
+                0.1D,
+                2L,
+                0.0D,
+                new EnumMap<>(Element.class),
+                true,
+                false
+        ));
+        state.startRegenerationLockout(2L);
+        assertTrue(state.advanceRegenerationGate());
+        assertEquals(1L, state.getRemainingLockoutTicks());
+
+        ResourceLocation spellId = new ResourceLocation("ebwizardry", "test_continuous");
+        state.beginContinuousCast(EnumHand.MAIN_HAND, spellId);
+        assertFalse(state.advanceRegenerationGate());
+        assertEquals(0L, state.getRemainingLockoutTicks());
+
+        state.applyResolvedProfile(new ResolvedManaProfile(
+                50,
+                2.0D,
+                0.1D,
+                2L,
+                0.0D,
+                new EnumMap<>(Element.class),
+                false,
+                true
+        ));
+        assertTrue(state.advanceRegenerationGate());
     }
 
     @Test

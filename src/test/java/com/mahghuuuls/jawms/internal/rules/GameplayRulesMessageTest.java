@@ -1,5 +1,7 @@
 package com.mahghuuuls.jawms.internal.rules;
 
+import com.mahghuuuls.jawms.api.ManaContribution;
+import electroblob.wizardry.constants.Element;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.util.ResourceLocation;
@@ -32,9 +34,21 @@ class GameplayRulesMessageTest {
                 Collections.singletonList(new ConfiguredItemRule(
                         new ResourceLocation("minecraft", "stick"),
                         ConfiguredItemRule.WILDCARD_METADATA,
-                        10,
-                        0.5D,
-                        50.0D
+                        ManaContribution.builder()
+                                .flatMaximumMana(10)
+                                .maximumManaIncrease(25)
+                                .maximumManaReduction(10)
+                                .flatRegeneration(0.5D)
+                                .regenerationIncrease(50)
+                                .regenerationReduction(20)
+                                .flatLockoutSeconds(-0.25D)
+                                .lockoutIncrease(15)
+                                .lockoutReduction(30)
+                                .globalSpellEfficiency(5)
+                                .elementSpellEfficiency(Element.FIRE, 12)
+                                .regenerateDuringPostCastLockout(true)
+                                .regenerateDuringContinuousCasting(true)
+                                .build()
                 )),
                 WizardryArmorProfile.DEFAULT
         );
@@ -54,6 +68,13 @@ class GameplayRulesMessageTest {
                 new ResourceLocation("ebwizardry", "magic_missile")
         ));
         assertEquals(1, decoded.getItemRules().size());
+        ManaContribution contribution = decoded.getItemRules().get(0).getContribution();
+        assertEquals(10, contribution.getFlatMaximumMana());
+        assertEquals(25.0D, contribution.getMaximumManaIncrease());
+        assertEquals(10.0D, contribution.getMaximumManaReduction());
+        assertEquals(12.0D, contribution.getElementSpellEfficiency(Element.FIRE));
+        assertTrue(contribution.canRegenerateDuringPostCastLockout());
+        assertTrue(contribution.canRegenerateDuringContinuousCasting());
         assertEquals(15, decoded.getArmorProfile().getHelmetMaximum());
     }
 

@@ -1,6 +1,8 @@
 package com.mahghuuuls.jawms.internal.rules;
 
 import com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod;
+import com.mahghuuuls.jawms.api.ManaContribution;
+import electroblob.wizardry.constants.Element;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.util.IThreadListener;
 import net.minecraft.util.ResourceLocation;
@@ -30,6 +32,7 @@ public final class GameplayRulesMessage implements IMessage {
     private Map<ResourceLocation, Double> spellCosts = new LinkedHashMap<>();
     private List<ConfiguredItemRule> itemRules = new ArrayList<>();
     private WizardryArmorProfile armorProfile = WizardryArmorProfile.DEFAULT;
+    private List<ResourceLocation> generatedWizardryArmorIds = new ArrayList<>();
     private boolean malformed;
 
     public GameplayRulesMessage() {
@@ -46,6 +49,7 @@ public final class GameplayRulesMessage implements IMessage {
         spellCosts = new LinkedHashMap<>(rules.getSpellCosts());
         itemRules = new ArrayList<>(rules.getConfiguredItemRules());
         armorProfile = rules.getArmorProfile();
+        generatedWizardryArmorIds = new ArrayList<>(rules.getGeneratedWizardryArmorIds());
     }
 
     @Override
@@ -73,9 +77,7 @@ public final class GameplayRulesMessage implements IMessage {
                 itemRules.add(new ConfiguredItemRule(
                         readIdentifier(buffer),
                         buffer.readInt(),
-                        buffer.readInt(),
-                        buffer.readDouble(),
-                        buffer.readDouble()
+                        readContribution(buffer)
                 ));
             }
 
@@ -90,6 +92,11 @@ public final class GameplayRulesMessage implements IMessage {
                     buffer.readInt(),
                     buffer.readDouble()
             );
+            int armorCount = boundedCount(buffer.readInt());
+            generatedWizardryArmorIds = new ArrayList<>();
+            for (int index = 0; index < armorCount; index++) {
+                generatedWizardryArmorIds.add(readIdentifier(buffer));
+            }
         } catch (RuntimeException exception) {
             malformed = true;
             spellCosts.clear();
@@ -117,9 +124,7 @@ public final class GameplayRulesMessage implements IMessage {
         for (ConfiguredItemRule rule : itemRules) {
             ByteBufUtils.writeUTF8String(buffer, rule.getItemId().toString());
             buffer.writeInt(rule.getMetadata());
-            buffer.writeInt(rule.getMaximumMana());
-            buffer.writeDouble(rule.getFlatRegeneration());
-            buffer.writeDouble(rule.getPercentageRegeneration());
+            writeContribution(buffer, rule.getContribution());
         }
 
         buffer.writeBoolean(armorProfile.isEnabled());
@@ -131,6 +136,10 @@ public final class GameplayRulesMessage implements IMessage {
         buffer.writeDouble(armorProfile.getLegsRegeneration());
         buffer.writeInt(armorProfile.getBootsMaximum());
         buffer.writeDouble(armorProfile.getBootsRegeneration());
+        buffer.writeInt(generatedWizardryArmorIds.size());
+        for (ResourceLocation id : generatedWizardryArmorIds) {
+            ByteBufUtils.writeUTF8String(buffer, id.toString());
+        }
     }
 
     public boolean isValid() {
@@ -144,7 +153,8 @@ public final class GameplayRulesMessage implements IMessage {
                 || mediumFlask < 0
                 || largeFlask < 0
                 || spellCosts.size() > MAX_TABLE_ENTRIES
-                || itemRules.size() > MAX_TABLE_ENTRIES) {
+                || itemRules.size() > MAX_TABLE_ENTRIES
+                || generatedWizardryArmorIds.size() > MAX_TABLE_ENTRIES) {
             return false;
         }
         for (double cost : spellCosts.values()) {
@@ -195,6 +205,10 @@ public final class GameplayRulesMessage implements IMessage {
         return armorProfile;
     }
 
+    public List<ResourceLocation> getGeneratedWizardryArmorIds() {
+        return new ArrayList<>(generatedWizardryArmorIds);
+    }
+
     private static int boundedCount(int count) {
         if (count < 0 || count > MAX_TABLE_ENTRIES) {
             throw new IllegalArgumentException("Packet table count is out of bounds: " + count);
@@ -208,6 +222,58 @@ public final class GameplayRulesMessage implements IMessage {
             throw new IllegalArgumentException("Registry identifier is too long.");
         }
         return new ResourceLocation(value);
+    }
+
+    private static void writeContribution(ByteBuf buffer, ManaContribution contribution) {
+        buffer.writeInt(contribution.getFlatMaximumMana());
+        buffer.writeDouble(contribution.getMaximumManaIncrease());
+        buffer.writeDouble(contribution.getMaximumManaReduction());
+        buffer.writeDouble(contribution.getFlatRegeneration());
+        buffer.writeDouble(contribution.getRegenerationIncrease());
+        buffer.writeDouble(contribution.getRegenerationReduction());
+        buffer.writeDouble(contribution.getFlatLockoutSeconds());
+        buffer.writeDouble(contribution.getLockoutIncrease());
+        buffer.writeDouble(contribution.getLockoutReduction());
+        buffer.writeDouble(contribution.getGlobalSpellEfficiency());
+        buffer.writeInt(contribution.getElementSpellEfficiency().size());
+        for (Map.Entry<Element, Double> entry
+                : contribution.getElementSpellEfficiency().entrySet()) {
+            buffer.writeByte(entry.getKey().ordinal());
+            buffer.writeDouble(entry.getValue());
+        }
+        buffer.writeBoolean(contribution.canRegenerateDuringPostCastLockout());
+        buffer.writeBoolean(contribution.canRegenerateDuringContinuousCasting());
+    }
+
+    private static ManaContribution readContribution(ByteBuf buffer) {
+        ManaContribution.Builder builder = ManaContribution.builder()
+                .flatMaximumMana(buffer.readInt())
+                .maximumManaIncrease(buffer.readDouble())
+                .maximumManaReduction(buffer.readDouble())
+                .flatRegeneration(buffer.readDouble())
+                .regenerationIncrease(buffer.readDouble())
+                .regenerationReduction(buffer.readDouble())
+                .flatLockoutSeconds(buffer.readDouble())
+                .lockoutIncrease(buffer.readDouble())
+                .lockoutReduction(buffer.readDouble())
+                .globalSpellEfficiency(buffer.readDouble());
+        int elementCount = buffer.readInt();
+        if (elementCount < 0 || elementCount > Element.values().length) {
+            throw new IllegalArgumentException("Element efficiency count is out of bounds.");
+        }
+        boolean[] seen = new boolean[Element.values().length];
+        for (int index = 0; index < elementCount; index++) {
+            int ordinal = buffer.readUnsignedByte();
+            if (ordinal >= seen.length || seen[ordinal]) {
+                throw new IllegalArgumentException("Invalid or duplicate element efficiency.");
+            }
+            seen[ordinal] = true;
+            builder.elementSpellEfficiency(Element.values()[ordinal], buffer.readDouble());
+        }
+        return builder
+                .regenerateDuringPostCastLockout(buffer.readBoolean())
+                .regenerateDuringContinuousCasting(buffer.readBoolean())
+                .build();
     }
 
     public static final class Handler implements IMessageHandler<GameplayRulesMessage, IMessage> {

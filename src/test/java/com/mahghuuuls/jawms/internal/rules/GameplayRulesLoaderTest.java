@@ -19,6 +19,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class GameplayRulesLoaderTest {
 
@@ -153,6 +155,65 @@ class GameplayRulesLoaderTest {
         assertTrue(!reloaded.getArmorProfile().isEnabled());
         assertTrue(warnings.stream().anyMatch(value -> value.contains("wizardry_armor_defaults.enabled")
                 && value.contains("keeping false")));
+    }
+
+    @Test
+    void completeRulesMigrateLegacyPercentagesAndRejectMixedShapes() {
+        com.mahghuuuls.jawms.api.ManaContribution parsed =
+                GameplayRulesLoader.parseContribution(
+                        "flat_maximum:10;maximum_percent:50;flat_regeneration:2;"
+                                + "regeneration_percent:-50;flat_lockout:1;"
+                                + "lockout_increase:50;lockout_reduction:50;"
+                                + "global_efficiency:5;efficiency_fire:20;"
+                                + "regenerate_during_lockout:true"
+                );
+        assertEquals(10, parsed.getFlatMaximumMana());
+        assertEquals(50.0D, parsed.getMaximumManaIncrease());
+        assertEquals(50.0D, parsed.getRegenerationReduction());
+        assertEquals(20.0D, parsed.getElementSpellEfficiency(
+                electroblob.wizardry.constants.Element.FIRE
+        ));
+        assertTrue(parsed.canRegenerateDuringPostCastLockout());
+        assertFalse(parsed.canRegenerateDuringContinuousCasting());
+
+        File file = temporaryDirectory.resolve("jawms.cfg").toFile();
+        GameplayRulesLoader.load(
+                file,
+                GameplayRules.initialDefaults(),
+                1L,
+                spells(),
+                ignored -> {
+                }
+        );
+        Configuration configuration = new Configuration(file);
+        configuration.load();
+        configuration.get("item_modifiers", "rules", new String[0]).set(new String[]{
+                "minecraft:stick@*=flat_maximum:10;maximum_percent:50;"
+                        + "flat_regeneration:2;regeneration_percent:-50;"
+                        + "flat_lockout:1;lockout_increase:50;lockout_reduction:50;"
+                        + "global_efficiency:5;efficiency_fire:20;"
+                        + "regenerate_during_lockout:true",
+                "minecraft:blaze_rod@*=maximum_percent:50;maximum_increase:10"
+        });
+        configuration.save();
+
+        List<String> warnings = new ArrayList<>();
+        GameplayRules rules = GameplayRulesLoader.load(
+                file,
+                GameplayRules.initialDefaults(),
+                2L,
+                spells(),
+                warnings::add
+        );
+
+        assertEquals(0, rules.getConfiguredItemRules().size());
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> GameplayRulesLoader.parseContribution(
+                        "maximum_percent:50;maximum_increase:10"
+                )
+        );
+        assertTrue(warnings.stream().anyMatch(value -> value.contains("unknown item")));
     }
 
     private static List<SpellCostCompiler.SpellDefinition> spells() {

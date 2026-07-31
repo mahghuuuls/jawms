@@ -1,5 +1,7 @@
 package com.mahghuuuls.jawms.internal.rules;
 
+import com.mahghuuuls.jawms.api.ManaContribution;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
 
 import java.util.Objects;
@@ -10,9 +12,7 @@ public final class ConfiguredItemRule {
 
     private final ResourceLocation itemId;
     private final int metadata;
-    private final int maximumMana;
-    private final double flatRegeneration;
-    private final double percentageRegeneration;
+    private final ManaContribution contribution;
 
     public ConfiguredItemRule(
             ResourceLocation itemId,
@@ -21,16 +21,29 @@ public final class ConfiguredItemRule {
             double flatRegeneration,
             double percentageRegeneration
     ) {
+        this(
+                itemId,
+                metadata,
+                ManaContribution.builder()
+                        .flatMaximumMana(maximumMana)
+                        .flatRegeneration(flatRegeneration)
+                        .regenerationIncrease(Math.max(0.0D, percentageRegeneration))
+                        .regenerationReduction(Math.max(0.0D, -percentageRegeneration))
+                        .build()
+        );
+    }
+
+    public ConfiguredItemRule(
+            ResourceLocation itemId,
+            int metadata,
+            ManaContribution contribution
+    ) {
         this.itemId = Objects.requireNonNull(itemId, "itemId");
         if (metadata < WILDCARD_METADATA || metadata > Short.MAX_VALUE) {
             throw new IllegalArgumentException("Metadata must be wildcard (-1) or 0 through 32767.");
         }
-        requireFinite(flatRegeneration, "flatRegeneration");
-        requireFinite(percentageRegeneration, "percentageRegeneration");
         this.metadata = metadata;
-        this.maximumMana = maximumMana;
-        this.flatRegeneration = flatRegeneration;
-        this.percentageRegeneration = percentageRegeneration;
+        this.contribution = Objects.requireNonNull(contribution, "contribution");
     }
 
     public ResourceLocation getItemId() {
@@ -42,24 +55,31 @@ public final class ConfiguredItemRule {
     }
 
     public int getMaximumMana() {
-        return maximumMana;
+        return contribution.getFlatMaximumMana();
     }
 
     public double getFlatRegeneration() {
-        return flatRegeneration;
+        return contribution.getFlatRegeneration();
     }
 
     public double getPercentageRegeneration() {
-        return percentageRegeneration;
+        return contribution.getRegenerationIncrease() - contribution.getRegenerationReduction();
+    }
+
+    public ManaContribution getContribution() {
+        return contribution;
+    }
+
+    public boolean matches(ItemStack stack) {
+        if (stack.isEmpty() || stack.getItem().getRegistryName() == null
+                || !itemId.equals(stack.getItem().getRegistryName())) {
+            return false;
+        }
+        return metadata == WILDCARD_METADATA || metadata == stack.getMetadata();
     }
 
     public String key() {
         return itemId + "@" + (metadata == WILDCARD_METADATA ? "*" : metadata);
     }
 
-    private static void requireFinite(double value, String name) {
-        if (!Double.isFinite(value)) {
-            throw new IllegalArgumentException(name + " must be finite.");
-        }
-    }
 }

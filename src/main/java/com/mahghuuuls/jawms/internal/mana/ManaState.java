@@ -2,15 +2,24 @@ package com.mahghuuuls.jawms.internal.mana;
 
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
+import com.mahghuuuls.jawms.internal.modifier.ResolvedManaProfile;
+import electroblob.wizardry.constants.Element;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.ResourceLocation;
 
+import java.util.EnumMap;
+import java.util.Map;
+
 public final class ManaState {
 
     private int currentMana;
+    private Integer pendingLoadedMana;
     private int effectiveMaximum;
     private double effectiveRegeneration;
+    private long effectiveLockoutTicks;
+    private double globalSpellEfficiency;
+    private final EnumMap<Element, Double> elementSpellEfficiency = new EnumMap<>(Element.class);
     private double regenerationRemainder;
     private long remainingLockoutTicks;
     private int reservedMana;
@@ -33,6 +42,7 @@ public final class ManaState {
         GameplayRules rules = GameplayRulesManager.current();
         effectiveMaximum = rules.getBaseMaximum();
         effectiveRegeneration = rules.getBaseRegeneration();
+        effectiveLockoutTicks = rules.getRegenerationLockoutTicks();
         currentMana = effectiveMaximum;
     }
 
@@ -50,6 +60,16 @@ public final class ManaState {
 
     public double getEffectiveRegeneration() {
         return effectiveRegeneration;
+    }
+
+    public long getEffectiveLockoutTicks() {
+        return effectiveLockoutTicks;
+    }
+
+    public double getSpellEfficiency(Element element) {
+        Double elementValue = elementSpellEfficiency.get(element);
+        double result = globalSpellEfficiency + (elementValue == null ? 0.0D : elementValue);
+        return Double.isFinite(result) ? result : Double.MAX_VALUE;
     }
 
     public long getRevision() {
@@ -191,13 +211,16 @@ public final class ManaState {
         boolean lockoutBlocked = false;
         if (remainingLockoutTicks > 0L) {
             remainingLockoutTicks--;
-            lockoutBlocked = true;
+            lockoutBlocked = !regenerateDuringPostCastLockout;
         }
-        return !lockoutBlocked && !continuousCastActive;
+        boolean continuousBlocked = continuousCastActive
+                && !regenerateDuringContinuousCasting;
+        return !lockoutBlocked && !continuousBlocked;
     }
 
     public boolean isRegenerationBlocked() {
-        return remainingLockoutTicks > 0L || continuousCastActive;
+        return (remainingLockoutTicks > 0L && !regenerateDuringPostCastLockout)
+                || (continuousCastActive && !regenerateDuringContinuousCasting);
     }
 
     public boolean isRegenerationEligible() {
@@ -327,21 +350,59 @@ public final class ManaState {
     }
 
     public boolean applyEffectiveStats(int maximumMana, double regenerationPerSecond) {
+        return applyResolvedProfile(new ResolvedManaProfile(
+                maximumMana,
+                regenerationPerSecond,
+                effectiveLockoutTicks / 20.0D,
+                effectiveLockoutTicks,
+                globalSpellEfficiency,
+                elementSpellEfficiency,
+                regenerateDuringPostCastLockout,
+                regenerateDuringContinuousCasting
+        ));
+    }
+
+    public boolean applyResolvedProfile(ResolvedManaProfile profile) {
+        if (profile == null) {
+            throw new NullPointerException("profile");
+        }
+        int maximumMana = profile.getMaximumMana();
+        double regenerationPerSecond = profile.getRegeneration();
         if (maximumMana < 1) {
             throw new IllegalArgumentException("Effective maximum must be positive.");
         }
         if (!Double.isFinite(regenerationPerSecond) || regenerationPerSecond < 0.0D) {
             throw new IllegalArgumentException("Effective regeneration must be finite and non-negative.");
         }
-        boolean changed = maximumMana != effectiveMaximum
-                || Double.compare(regenerationPerSecond, effectiveRegeneration) != 0;
+        boolean changed = pendingLoadedMana != null
+                || maximumMana != effectiveMaximum
+                || Double.compare(regenerationPerSecond, effectiveRegeneration) != 0
+                || effectiveLockoutTicks != profile.getLockoutTicks()
+                || regenerateDuringPostCastLockout
+                != profile.canRegenerateDuringPostCastLockout()
+                || regenerateDuringContinuousCasting
+                != profile.canRegenerateDuringContinuousCasting()
+                || Double.compare(globalSpellEfficiency, profile.getGlobalSpellEfficiency()) != 0
+                || !elementSpellEfficiency.equals(profile.getElementSpellEfficiency());
         if (!changed) {
             return false;
         }
         effectiveMaximum = maximumMana;
         effectiveRegeneration = regenerationPerSecond;
-        currentMana = clamp(currentMana);
-        regenerationRemainder = 0.0D;
+        effectiveLockoutTicks = profile.getLockoutTicks();
+        globalSpellEfficiency = profile.getGlobalSpellEfficiency();
+        elementSpellEfficiency.clear();
+        for (Map.Entry<Element, Double> entry : profile.getElementSpellEfficiency().entrySet()) {
+            elementSpellEfficiency.put(entry.getKey(), entry.getValue());
+        }
+        regenerateDuringPostCastLockout = profile.canRegenerateDuringPostCastLockout();
+        regenerateDuringContinuousCasting = profile.canRegenerateDuringContinuousCasting();
+        int intrinsicMana = pendingLoadedMana == null ? currentMana : pendingLoadedMana;
+        pendingLoadedMana = null;
+        currentMana = clamp(intrinsicMana);
+        if (currentMana >= effectiveMaximum) {
+            regenerationRemainder = 0.0D;
+        }
         revision++;
         return true;
     }
@@ -351,6 +412,15 @@ public final class ManaState {
     }
 
     public void copyFrom(ManaState original) {
+        pendingLoadedMana = null;
+        effectiveMaximum = original.effectiveMaximum;
+        effectiveRegeneration = original.effectiveRegeneration;
+        effectiveLockoutTicks = original.effectiveLockoutTicks;
+        globalSpellEfficiency = original.globalSpellEfficiency;
+        elementSpellEfficiency.clear();
+        elementSpellEfficiency.putAll(original.elementSpellEfficiency);
+        regenerateDuringPostCastLockout = original.regenerateDuringPostCastLockout;
+        regenerateDuringContinuousCasting = original.regenerateDuringContinuousCasting;
         currentMana = clamp(original.currentMana);
         regenerationRemainder = 0.0D;
         remainingLockoutTicks = 0L;
@@ -360,20 +430,26 @@ public final class ManaState {
 
     public NBTTagCompound serializeIntrinsicState() {
         NBTTagCompound tag = new NBTTagCompound();
-        tag.setInteger("currentMana", currentMana);
+        tag.setInteger("currentMana", pendingLoadedMana == null ? currentMana : pendingLoadedMana);
         return tag;
     }
 
     public void deserializeIntrinsicState(NBTTagCompound tag) {
         if (tag.hasKey("currentMana", 3)) {
-            currentMana = clamp(tag.getInteger("currentMana"));
+            pendingLoadedMana = Math.max(0, tag.getInteger("currentMana"));
+            currentMana = clamp(pendingLoadedMana);
         } else {
+            pendingLoadedMana = null;
             currentMana = getMaximumMana();
         }
         regenerationRemainder = 0.0D;
         remainingLockoutTicks = 0L;
         resetTransientCastingState();
         revision++;
+    }
+
+    boolean hasPendingLoadedMana() {
+        return pendingLoadedMana != null;
     }
 
     private int clamp(int value) {
