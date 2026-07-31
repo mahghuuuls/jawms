@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.function.Consumer;
 
 public final class GameplayRulesLoader {
@@ -21,6 +23,7 @@ public final class GameplayRulesLoader {
     private static final String FLASKS = "flasks";
     private static final String ITEMS = "item_modifiers";
     private static final String ARMOR = "wizardry_armor_defaults";
+    private static final String PROVIDERS = "modifier_providers";
 
     private GameplayRulesLoader() {
     }
@@ -115,6 +118,15 @@ public final class GameplayRulesLoader {
                 warning
         );
         WizardryArmorProfile profile = loadArmorProfile(configuration, previous.getArmorProfile(), warning);
+        Set<ResourceLocation> disabledProviderIds = parseProviderIds(
+                configuration.get(
+                        PROVIDERS,
+                        "disabledProviderIds",
+                        new String[0],
+                        "Globally unique namespace:path IDs of addon modifier providers to disable."
+                ).getStringList(),
+                warning
+        );
 
         Map<ResourceLocation, Double> spellCosts = SpellCostCompiler.compile(
                 formula,
@@ -138,8 +150,33 @@ public final class GameplayRulesLoader {
                 largeFlask,
                 spellCosts,
                 itemRules,
-                profile
+                profile,
+                disabledProviderIds
         );
+    }
+
+    private static Set<ResourceLocation> parseProviderIds(
+            String[] entries,
+            Consumer<String> warning
+    ) {
+        Set<ResourceLocation> ids = new LinkedHashSet<>();
+        for (String raw : entries) {
+            String entry = raw.trim();
+            if (entry.isEmpty()) {
+                continue;
+            }
+            try {
+                ResourceLocation id = fullIdentifier(entry);
+                if (!ids.add(id)) {
+                    warning.accept("Ignored duplicate modifier_providers.disabledProviderIds entry '"
+                            + id + "'.");
+                }
+            } catch (RuntimeException exception) {
+                warning.accept("Ignored invalid modifier_providers.disabledProviderIds entry '"
+                        + raw + "': " + exception.getMessage());
+            }
+        }
+        return ids;
     }
 
     private static WizardryArmorProfile loadArmorProfile(

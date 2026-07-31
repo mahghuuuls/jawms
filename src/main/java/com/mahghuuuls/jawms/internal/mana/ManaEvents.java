@@ -4,6 +4,7 @@ import com.mahghuuuls.jawms.Tags;
 import com.mahghuuuls.jawms.internal.casting.WizardryWandBridge;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
+import com.mahghuuuls.jawms.internal.modifier.ManaProviderRegistry;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.ResourceLocation;
@@ -71,5 +72,6 @@ public final class ManaEvents {
     @SubscribeEvent
     public void playerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         ManaService.clearTransientLifecycleState(event.player);
+        ManaProviderRegistry.instance().remove(event.player);
     }
 }

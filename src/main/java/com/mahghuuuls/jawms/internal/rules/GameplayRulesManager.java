@@ -36,13 +36,14 @@ public final class GameplayRulesManager {
         current = result.rules;
         JustAnotherWizardryManaSystemMod.LOGGER.info(
                 "Published initial JAWMS gameplay rules revision {}: baseMaximum={}, baseRegeneration={}, "
-                        + "lockoutTicks={}, spellCosts={}, itemRules={}, warnings={}.",
+                        + "lockoutTicks={}, spellCosts={}, itemRules={}, disabledProviders={}, warnings={}.",
                 result.rules.getRevision(),
                 result.rules.getBaseMaximum(),
                 result.rules.getBaseRegeneration(),
                 result.rules.getRegenerationLockoutTicks(),
                 result.rules.getSpellCosts().size(),
                 result.rules.getConfiguredItemRules().size(),
+                result.rules.getDisabledProviderIds().size(),
                 result.warningCount
         );
     }

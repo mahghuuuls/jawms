@@ -21,6 +21,10 @@ class ApiBoundaryTest {
         assertPublicSignaturesDoNotExposeImplementation(ManaMutationResult.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaStateChangeEvent.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaContribution.class);
+        assertPublicSignaturesDoNotExposeImplementation(ManaItemContext.class);
+        assertPublicSignaturesDoNotExposeImplementation(ManaTooltips.class);
+        assertPublicSignaturesDoNotExposeImplementation(IItemManaModifierProvider.class);
+        assertPublicSignaturesDoNotExposeImplementation(IContextualManaModifierProvider.class);
     }
 
     private static void assertPublicSignaturesDoNotExposeImplementation(Class<?> apiType) {

@@ -24,7 +24,7 @@ public final class ManaEvaluationGuard {
         return new Scope(playerId);
     }
 
-    static boolean isEvaluating(UUID playerId) {
+    public static boolean isEvaluating(UUID playerId) {
         return EVALUATING.get().contains(playerId);
     }
 

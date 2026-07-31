@@ -36,6 +36,7 @@ public final class GameplayRules {
     private final List<ConfiguredItemRule> configuredItemRules;
     private final WizardryArmorProfile armorProfile;
     private final Set<ResourceLocation> generatedWizardryArmorIds;
+    private final Set<ResourceLocation> disabledProviderIds;
 
     public GameplayRules(
             long revision,
@@ -51,17 +52,9 @@ public final class GameplayRules {
             WizardryArmorProfile armorProfile
     ) {
         this(
-                revision,
-                baseMaximum,
-                baseRegeneration,
-                regenerationLockoutTicks / 20.0D,
-                costFormula,
-                smallFlask,
-                mediumFlask,
-                largeFlask,
-                spellCosts,
-                configuredItemRules,
-                armorProfile
+                revision, baseMaximum, baseRegeneration, regenerationLockoutTicks / 20.0D,
+                costFormula, smallFlask, mediumFlask, largeFlask, spellCosts,
+                configuredItemRules, armorProfile, Collections.emptySet()
         );
     }
 
@@ -76,7 +69,8 @@ public final class GameplayRules {
             int largeFlask,
             Map<ResourceLocation, Double> spellCosts,
             List<ConfiguredItemRule> configuredItemRules,
-            WizardryArmorProfile armorProfile
+            WizardryArmorProfile armorProfile,
+            Set<ResourceLocation> disabledProviderIds
     ) {
         if (revision < 0L) {
             throw new IllegalArgumentException("Revision must be non-negative.");
@@ -107,6 +101,29 @@ public final class GameplayRules {
         this.configuredItemRules = Collections.unmodifiableList(new ArrayList<>(configuredItemRules));
         this.armorProfile = armorProfile;
         this.generatedWizardryArmorIds = Collections.unmodifiableSet(discoverWizardryArmorIds());
+        this.disabledProviderIds = Collections.unmodifiableSet(
+                new LinkedHashSet<>(disabledProviderIds)
+        );
+    }
+
+    public GameplayRules(
+            long revision,
+            int baseMaximum,
+            double baseRegeneration,
+            double regenerationLockoutSeconds,
+            String costFormula,
+            int smallFlask,
+            int mediumFlask,
+            int largeFlask,
+            Map<ResourceLocation, Double> spellCosts,
+            List<ConfiguredItemRule> configuredItemRules,
+            WizardryArmorProfile armorProfile
+    ) {
+        this(
+                revision, baseMaximum, baseRegeneration, regenerationLockoutSeconds,
+                costFormula, smallFlask, mediumFlask, largeFlask, spellCosts,
+                configuredItemRules, armorProfile, Collections.emptySet()
+        );
     }
 
     public static GameplayRules initialDefaults() {
@@ -194,6 +211,14 @@ public final class GameplayRules {
 
     public Set<ResourceLocation> getGeneratedWizardryArmorIds() {
         return generatedWizardryArmorIds;
+    }
+
+    public Set<ResourceLocation> getDisabledProviderIds() {
+        return disabledProviderIds;
+    }
+
+    public boolean isProviderDisabled(ResourceLocation providerId) {
+        return disabledProviderIds.contains(providerId);
     }
 
     public boolean hasGeneratedWizardryArmor(ItemStack stack) {

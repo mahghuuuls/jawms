@@ -35,6 +35,29 @@ class GameplayRulesLoaderTest {
     Path temporaryDirectory;
 
     @Test
+    void disabledProviderIdsRequireNamespacesAndDeduplicate() {
+        File file = temporaryDirectory.resolve("providers.cfg").toFile();
+        GameplayRulesLoader.load(
+                file, GameplayRules.initialDefaults(), 1L, spells(), ignored -> { }
+        );
+        Configuration configuration = new Configuration(file);
+        configuration.load();
+        configuration.get("modifier_providers", "disabledProviderIds", new String[0]).set(
+                new String[]{"addon:valid", "addon:valid", "missing_namespace"}
+        );
+        configuration.save();
+        List<String> warnings = new ArrayList<>();
+
+        GameplayRules rules = GameplayRulesLoader.load(
+                file, GameplayRules.initialDefaults(), 2L, spells(), warnings::add
+        );
+
+        assertEquals(1, rules.getDisabledProviderIds().size());
+        assertTrue(rules.isProviderDisabled(new ResourceLocation("addon", "valid")));
+        assertEquals(2, warnings.size());
+    }
+
+    @Test
     void freshConfigurationResolvesApprovedDefaultsAndCreatesFile() {
         File file = temporaryDirectory.resolve("jawms.cfg").toFile();
 
@@ -206,14 +229,16 @@ class GameplayRulesLoaderTest {
                 warnings::add
         );
 
-        assertEquals(0, rules.getConfiguredItemRules().size());
+        assertEquals(1, rules.getConfiguredItemRules().size());
+        assertEquals(10, rules.getConfiguredItemRules().get(0)
+                .getContribution().getFlatMaximumMana());
         assertThrows(
                 IllegalArgumentException.class,
                 () -> GameplayRulesLoader.parseContribution(
                         "maximum_percent:50;maximum_increase:10"
                 )
         );
-        assertTrue(warnings.stream().anyMatch(value -> value.contains("unknown item")));
+        assertTrue(warnings.stream().anyMatch(value -> value.contains("cannot be mixed")));
     }
 
     private static List<SpellCostCompiler.SpellDefinition> spells() {

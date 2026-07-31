@@ -1,11 +1,11 @@
 package com.mahghuuuls.jawms.client;
 
 import com.mahghuuuls.jawms.api.ManaContribution;
+import com.mahghuuuls.jawms.api.ManaTooltips;
 import com.mahghuuuls.jawms.internal.modifier.ActiveStackCollector;
 import com.mahghuuuls.jawms.internal.rules.ConfiguredItemRule;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.text.TextFormatting;
 import net.minecraftforge.event.entity.player.ItemTooltipEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
@@ -17,17 +17,7 @@ public final class ManaItemTooltipHandler {
         if (contribution == null) {
             return;
         }
-        java.util.List<ManaContributionTooltipFormatter.TooltipLine> lines =
-                ManaContributionTooltipFormatter.formatLines(contribution);
-        if (lines.isEmpty()) {
-            return;
-        }
-        for (ManaContributionTooltipFormatter.TooltipLine line : lines) {
-            event.getToolTip().add(
-                    (line.isDetrimental() ? TextFormatting.RED : TextFormatting.BLUE)
-                            + line.getText()
-            );
-        }
+        event.getToolTip().addAll(ManaTooltips.format(contribution));
     }
 
     static ManaContribution contributionFor(ItemStack stack) {

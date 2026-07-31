@@ -10,6 +10,7 @@ import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import com.mahghuuuls.jawms.internal.modifier.ActiveStackCollector;
 import com.mahghuuuls.jawms.internal.modifier.ManaProfileResolver;
+import com.mahghuuuls.jawms.internal.modifier.ManaProviderRegistry;
 import com.mahghuuuls.jawms.internal.modifier.ResolvedManaProfile;
 import electroblob.wizardry.spell.Spell;
 import net.minecraft.entity.player.EntityPlayer;
@@ -173,7 +174,8 @@ public final class ManaService implements IManaService {
         if (state == null) {
             throw new IllegalStateException("The player does not have the JAWMS mana capability.");
         }
-        if (state.hasPendingLoadedMana()) {
+        if (state.hasPendingLoadedMana()
+                && !ManaEvaluationGuard.isEvaluating(player.getUniqueID())) {
             state.applyResolvedProfile(resolveProfile(player, GameplayRulesManager.current()));
         }
         return state;
@@ -510,11 +512,14 @@ public final class ManaService implements IManaService {
     }
 
     private static ResolvedManaProfile resolveProfile(EntityPlayer player, GameplayRules rules) {
+        java.util.List<com.mahghuuuls.jawms.api.ManaContribution> contributions =
+                ActiveStackCollector.collect(player, rules);
+        contributions.addAll(ManaProviderRegistry.instance().evaluateContextual(player, rules));
         return ManaProfileResolver.resolve(
                 rules.getBaseMaximum(),
                 rules.getBaseRegeneration(),
                 rules.getRegenerationLockoutSeconds(),
-                ActiveStackCollector.collect(player, rules)
+                contributions
         );
     }
 
