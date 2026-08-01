@@ -12,8 +12,9 @@ class ApiBoundaryTest {
 
     @Test
     void apiVersionAndSurfaceAreStableAndServerSafe() {
-        assertEquals("1.0", ManaApi.API_VERSION);
+        assertEquals("1.1", ManaApi.API_VERSION);
         assertEquals(1, ManaApiVersion.MAJOR);
+        assertEquals(1, ManaApiVersion.MINOR);
 
         assertPublicSignaturesDoNotExposeImplementation(ManaApi.class);
         assertPublicSignaturesDoNotExposeImplementation(IManaService.class);

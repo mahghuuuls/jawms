@@ -20,6 +20,7 @@ public final class GameplayRulesLoader {
 
     private static final String MANA = "mana";
     private static final String SPELLS = "spells";
+    private static final String EFFICIENCY = "spell_efficiency";
     private static final String FLASKS = "flasks";
     private static final String ITEMS = "item_modifiers";
     private static final String ARMOR = "wizardry_armor_defaults";
@@ -112,12 +113,22 @@ public final class GameplayRulesLoader {
                                 + "flat_regeneration, regeneration_increase, regeneration_reduction, "
                                 + "flat_lockout, lockout_increase, lockout_reduction, "
                                 + "global_efficiency, efficiency_<element>, "
+                                + "global_cost_multiplier, cost_multiplier_<element>, "
                                 + "regenerate_during_lockout, regenerate_during_continuous. "
                                 + "Legacy maximum,flat_regeneration,signed_regeneration_percent is migrated."
                 ).getStringList(),
                 warning
         );
         WizardryArmorProfile profile = loadArmorProfile(configuration, previous.getArmorProfile(), warning);
+        double efficiencyScale = positiveDouble(
+                string(configuration, EFFICIENCY, "scale",
+                        Double.toString(GameplayRules.DEFAULT_EFFICIENCY_SCALE),
+                        "Positive diminishing-returns scale K. Cost multiplier is K / (K + efficiency points)."),
+                previous.getEfficiencyScale(), EFFICIENCY + ".scale", warning
+        );
+        WizardryArmorEfficiencyProfile efficiencyProfile = loadArmorEfficiencyProfile(
+                configuration, previous.getArmorEfficiencyProfile(), warning
+        );
         Set<ResourceLocation> disabledProviderIds = parseProviderIds(
                 configuration.get(
                         PROVIDERS,
@@ -151,7 +162,30 @@ public final class GameplayRulesLoader {
                 spellCosts,
                 itemRules,
                 profile,
-                disabledProviderIds
+                disabledProviderIds,
+                efficiencyScale,
+                efficiencyProfile
+        );
+    }
+
+    private static WizardryArmorEfficiencyProfile loadArmorEfficiencyProfile(
+            Configuration configuration,
+            WizardryArmorEfficiencyProfile previous,
+            Consumer<String> warning
+    ) {
+        boolean enabled = booleanValue(
+                string(configuration, EFFICIENCY, "wizardryArmorEnabled",
+                        Boolean.toString(WizardryArmorEfficiencyProfile.DEFAULT.isEnabled()),
+                        "Replace Electroblob Wizardry armor spell-cost reductions with JAWMS efficiency points."),
+                previous.isEnabled(), EFFICIENCY + ".wizardryArmorEnabled", warning
+        );
+        return new WizardryArmorEfficiencyProfile(
+                enabled,
+                nonNegativeDouble(string(configuration, EFFICIENCY, "wizardPoints", "10", "Efficiency points per matching Wizard armor piece."), previous.getWizard(), EFFICIENCY + ".wizardPoints", warning),
+                nonNegativeDouble(string(configuration, EFFICIENCY, "sagePoints", "20", "Efficiency points per matching Sage armor piece."), previous.getSage(), EFFICIENCY + ".sagePoints", warning),
+                nonNegativeDouble(string(configuration, EFFICIENCY, "battlemagePoints", "5", "Efficiency points per matching Battlemage armor piece."), previous.getBattlemage(), EFFICIENCY + ".battlemagePoints", warning),
+                nonNegativeDouble(string(configuration, EFFICIENCY, "warlockPoints", "10", "Efficiency points per matching Warlock armor piece."), previous.getWarlock(), EFFICIENCY + ".warlockPoints", warning),
+                nonNegativeDouble(string(configuration, EFFICIENCY, "sageFullSetNonmatchingPoints", "20", "Global-equivalent efficiency awarded once by a charged full Sage set for nonmatching elements."), previous.getSageNonmatchingFullSet(), EFFICIENCY + ".sageFullSetNonmatchingPoints", warning)
         );
     }
 
@@ -430,6 +464,9 @@ public final class GameplayRulesLoader {
                 case "global_efficiency":
                     builder.globalSpellEfficiency(nonNegative(fieldValue, name));
                     break;
+                case "global_cost_multiplier":
+                    builder.globalSpellCostMultiplier(positive(fieldValue, name));
+                    break;
                 case "regenerate_during_lockout":
                     builder.regenerateDuringPostCastLockout(strictBoolean(fieldValue, name));
                     break;
@@ -442,6 +479,14 @@ public final class GameplayRulesLoader {
                         builder.elementSpellEfficiency(
                                 element,
                                 nonNegative(fieldValue, name)
+                        );
+                    } else if (name.startsWith("cost_multiplier_")) {
+                        Element element = Element.fromName(
+                                name.substring("cost_multiplier_".length())
+                        );
+                        builder.elementSpellCostMultiplier(
+                                element,
+                                positive(fieldValue, name)
                         );
                     } else {
                         throw new IllegalArgumentException("unknown contribution field '" + name + "'");
@@ -505,6 +550,14 @@ public final class GameplayRulesLoader {
         return parsed;
     }
 
+    private static double positive(String value, String name) {
+        double parsed = parseFinite(value);
+        if (parsed <= 0.0D) {
+            throw new IllegalArgumentException(name + " must be positive");
+        }
+        return parsed;
+    }
+
     private static boolean strictBoolean(String value, String name) {
         if ("true".equalsIgnoreCase(value)) {
             return true;
@@ -561,6 +614,17 @@ public final class GameplayRulesLoader {
     ) {
         double parsed = finiteDouble(value, previous, path, warning);
         if (parsed < 0.0D) {
+            warning.accept("Invalid " + path + "='" + value + "'; keeping " + previous + ".");
+            return previous;
+        }
+        return parsed;
+    }
+
+    private static double positiveDouble(
+            String value, double previous, String path, Consumer<String> warning
+    ) {
+        double parsed = finiteDouble(value, previous, path, warning);
+        if (parsed <= 0.0D) {
             warning.accept("Invalid " + path + "='" + value + "'; keeping " + previous + ".");
             return previous;
         }

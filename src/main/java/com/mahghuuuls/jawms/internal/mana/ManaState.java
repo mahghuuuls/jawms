@@ -20,6 +20,8 @@ public final class ManaState {
     private long effectiveLockoutTicks;
     private double globalSpellEfficiency;
     private final EnumMap<Element, Double> elementSpellEfficiency = new EnumMap<>(Element.class);
+    private double globalSpellCostMultiplier = 1.0D;
+    private final EnumMap<Element, Double> elementSpellCostMultiplier = new EnumMap<>(Element.class);
     private double regenerationRemainder;
     private long remainingLockoutTicks;
     private int reservedMana;
@@ -70,6 +72,27 @@ public final class ManaState {
         Double elementValue = elementSpellEfficiency.get(element);
         double result = globalSpellEfficiency + (elementValue == null ? 0.0D : elementValue);
         return Double.isFinite(result) ? result : Double.MAX_VALUE;
+    }
+
+    public double getGlobalSpellEfficiency() {
+        return globalSpellEfficiency;
+    }
+
+    public Map<Element, Double> getElementSpellEfficiency() {
+        return java.util.Collections.unmodifiableMap(new EnumMap<>(elementSpellEfficiency));
+    }
+
+    public double getSpellCostMultiplier(Element element) {
+        Double elementValue = elementSpellCostMultiplier.get(element);
+        return elementValue == null ? globalSpellCostMultiplier : elementValue;
+    }
+
+    public double getGlobalSpellCostMultiplier() {
+        return globalSpellCostMultiplier;
+    }
+
+    public Map<Element, Double> getElementSpellCostMultipliers() {
+        return java.util.Collections.unmodifiableMap(new EnumMap<>(elementSpellCostMultiplier));
     }
 
     public long getRevision() {
@@ -357,6 +380,8 @@ public final class ManaState {
                 effectiveLockoutTicks,
                 globalSpellEfficiency,
                 elementSpellEfficiency,
+                globalSpellCostMultiplier,
+                elementSpellCostMultiplier,
                 regenerateDuringPostCastLockout,
                 regenerateDuringContinuousCasting
         ));
@@ -383,7 +408,11 @@ public final class ManaState {
                 || regenerateDuringContinuousCasting
                 != profile.canRegenerateDuringContinuousCasting()
                 || Double.compare(globalSpellEfficiency, profile.getGlobalSpellEfficiency()) != 0
-                || !elementSpellEfficiency.equals(profile.getElementSpellEfficiency());
+                || !elementSpellEfficiency.equals(profile.getElementSpellEfficiency())
+                || Double.compare(globalSpellCostMultiplier,
+                profile.getGlobalSpellCostMultiplier()) != 0
+                || !elementSpellCostMultiplier.equals(
+                profile.getElementSpellCostMultipliers());
         if (!changed) {
             return false;
         }
@@ -395,6 +424,9 @@ public final class ManaState {
         for (Map.Entry<Element, Double> entry : profile.getElementSpellEfficiency().entrySet()) {
             elementSpellEfficiency.put(entry.getKey(), entry.getValue());
         }
+        globalSpellCostMultiplier = profile.getGlobalSpellCostMultiplier();
+        elementSpellCostMultiplier.clear();
+        elementSpellCostMultiplier.putAll(profile.getElementSpellCostMultipliers());
         regenerateDuringPostCastLockout = profile.canRegenerateDuringPostCastLockout();
         regenerateDuringContinuousCasting = profile.canRegenerateDuringContinuousCasting();
         int intrinsicMana = pendingLoadedMana == null ? currentMana : pendingLoadedMana;
@@ -419,6 +451,9 @@ public final class ManaState {
         globalSpellEfficiency = original.globalSpellEfficiency;
         elementSpellEfficiency.clear();
         elementSpellEfficiency.putAll(original.elementSpellEfficiency);
+        globalSpellCostMultiplier = original.globalSpellCostMultiplier;
+        elementSpellCostMultiplier.clear();
+        elementSpellCostMultiplier.putAll(original.elementSpellCostMultiplier);
         regenerateDuringPostCastLockout = original.regenerateDuringPostCastLockout;
         regenerateDuringContinuousCasting = original.regenerateDuringContinuousCasting;
         currentMana = clamp(original.currentMana);

@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 
 class ActiveStackCollectorTest {
 
@@ -121,5 +122,35 @@ class ActiveStackCollectorTest {
                 contributions.get(0).getFlatMaximumMana(),
                 contributions.get(1).getFlatMaximumMana()
         ));
+    }
+
+    @Test
+    void sageNonmatchingBonusRequiresEveryPieceToUseGeneratedLayer() {
+        EntityPlayer player = mock(EntityPlayerMP.class);
+        java.util.EnumMap<EntityEquipmentSlot, ItemStack> equipped =
+                new java.util.EnumMap<>(EntityEquipmentSlot.class);
+        for (EntityEquipmentSlot slot : Arrays.asList(
+                EntityEquipmentSlot.HEAD, EntityEquipmentSlot.CHEST,
+                EntityEquipmentSlot.LEGS, EntityEquipmentSlot.FEET)) {
+            equipped.put(slot, new ItemStack(Items.STICK));
+        }
+        when(player.getItemStackFromSlot(any(EntityEquipmentSlot.class)))
+                .thenAnswer(invocation -> equipped.get(invocation.getArgument(0)));
+
+        ItemStack chest = equipped.get(EntityEquipmentSlot.CHEST);
+        assertEquals(true, ActiveStackCollector.allArmorUsesGeneratedLayer(
+                player, stack -> true
+        ));
+        assertEquals(false, ActiveStackCollector.allArmorUsesGeneratedLayer(
+                player, stack -> stack != chest
+        ));
+        assertEquals(10.0D, com.mahghuuuls.jawms.internal.rules
+                .WizardryArmorEfficiencyProfile.DEFAULT.getWizard());
+        assertEquals(20.0D, com.mahghuuuls.jawms.internal.rules
+                .WizardryArmorEfficiencyProfile.DEFAULT.getSage());
+        assertEquals(5.0D, com.mahghuuuls.jawms.internal.rules
+                .WizardryArmorEfficiencyProfile.DEFAULT.getBattlemage());
+        assertEquals(10.0D, com.mahghuuuls.jawms.internal.rules
+                .WizardryArmorEfficiencyProfile.DEFAULT.getWarlock());
     }
 }

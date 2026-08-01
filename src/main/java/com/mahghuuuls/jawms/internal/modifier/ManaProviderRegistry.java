@@ -186,6 +186,8 @@ public final class ManaProviderRegistry {
             ManaContribution contribution = registration.provider.getContribution(player, context);
             if (contribution == null) {
                 diagnostic(player, registration.id, "item", context.toString(), null);
+            } else {
+                ManaProfileResolver.validateContribution(contribution);
             }
             return new CachedContribution(contribution);
         } catch (RuntimeException exception) {
@@ -202,6 +204,8 @@ public final class ManaProviderRegistry {
             ManaContribution contribution = registration.provider.getContribution(player);
             if (contribution == null) {
                 diagnostic(player, registration.id, "contextual", "player", null);
+            } else {
+                ManaProfileResolver.validateContribution(contribution);
             }
             return new CachedContribution(contribution);
         } catch (RuntimeException exception) {

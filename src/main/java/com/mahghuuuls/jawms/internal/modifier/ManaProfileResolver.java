@@ -4,6 +4,7 @@ import com.mahghuuuls.jawms.api.ManaContribution;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import electroblob.wizardry.constants.Element;
 
+import java.math.BigDecimal;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +40,8 @@ public final class ManaProfileResolver {
         double lockoutReductionFactor = 1.0D;
         double globalEfficiency = 0.0D;
         EnumMap<Element, Double> elementEfficiency = new EnumMap<>(Element.class);
+        BigDecimal globalSpellCostMultiplier = BigDecimal.ONE;
+        EnumMap<Element, BigDecimal> elementSpellCostMultiplier = new EnumMap<>(Element.class);
         boolean postCastPermission = false;
         boolean continuousPermission = false;
 
@@ -46,6 +49,7 @@ public final class ManaProfileResolver {
             if (contribution == null) {
                 throw new IllegalArgumentException("Contribution list contains null.");
             }
+            validateContribution(contribution);
             maximumFlat = saturatedAdd(maximumFlat, contribution.getFlatMaximumMana());
             maximumIncrease = saturatedAdd(
                     maximumIncrease,
@@ -90,6 +94,20 @@ public final class ManaProfileResolver {
                         )
                 );
             }
+            globalSpellCostMultiplier = globalSpellCostMultiplier.multiply(
+                    BigDecimal.valueOf(contribution.getGlobalSpellCostMultiplier())
+            );
+            for (Map.Entry<Element, Double> entry
+                    : contribution.getElementSpellCostMultipliers().entrySet()) {
+                elementSpellCostMultiplier.put(
+                        entry.getKey(),
+                        elementSpellCostMultiplier.getOrDefault(
+                                entry.getKey(), BigDecimal.ONE
+                        ).multiply(
+                                BigDecimal.valueOf(entry.getValue())
+                        )
+                );
+            }
             postCastPermission |= contribution.canRegenerateDuringPostCastLockout();
             continuousPermission |= contribution.canRegenerateDuringContinuousCasting();
         }
@@ -120,6 +138,11 @@ public final class ManaProfileResolver {
                 GameplayRules.secondsToTicks(lockoutSeconds),
                 globalEfficiency,
                 elementEfficiency,
+                positiveDouble(globalSpellCostMultiplier),
+                applicableSpellCostMultipliers(
+                        globalSpellCostMultiplier,
+                        elementSpellCostMultiplier
+                ),
                 postCastPermission,
                 continuousPermission
         );
@@ -153,6 +176,81 @@ public final class ManaProfileResolver {
     private static double saturatedMultiply(double left, double right) {
         double result = left * right;
         return Double.isFinite(result) ? result : Double.MAX_VALUE;
+    }
+
+    static void validateContribution(ManaContribution contribution) {
+        requireFinite(contribution.getFlatRegeneration(), "flatRegeneration");
+        requireFinite(contribution.getFlatLockoutSeconds(), "flatLockoutSeconds");
+        requireNonNegativeFinite(contribution.getMaximumManaIncrease(), "maximumManaIncrease");
+        requireReduction(contribution.getMaximumManaReduction(), "maximumManaReduction");
+        requireNonNegativeFinite(contribution.getRegenerationIncrease(), "regenerationIncrease");
+        requireReduction(contribution.getRegenerationReduction(), "regenerationReduction");
+        requireNonNegativeFinite(contribution.getLockoutIncrease(), "lockoutIncrease");
+        requireReduction(contribution.getLockoutReduction(), "lockoutReduction");
+        requireNonNegativeFinite(contribution.getGlobalSpellEfficiency(), "globalSpellEfficiency");
+        for (Map.Entry<Element, Double> entry
+                : contribution.getElementSpellEfficiency().entrySet()) {
+            if (entry.getKey() == null) {
+                throw new IllegalArgumentException("Element efficiency key must not be null.");
+            }
+            requireNonNegativeFinite(entry.getValue(), "elementSpellEfficiency");
+        }
+        requirePositiveFinite(
+                contribution.getGlobalSpellCostMultiplier(),
+                "globalSpellCostMultiplier"
+        );
+        for (Map.Entry<Element, Double> entry
+                : contribution.getElementSpellCostMultipliers().entrySet()) {
+            if (entry.getKey() == null) {
+                throw new IllegalArgumentException("Element cost-multiplier key must not be null.");
+            }
+            requirePositiveFinite(entry.getValue(), "elementSpellCostMultiplier");
+        }
+    }
+
+    private static EnumMap<Element, Double> applicableSpellCostMultipliers(
+            BigDecimal globalMultiplier,
+            EnumMap<Element, BigDecimal> elementMultipliers
+    ) {
+        EnumMap<Element, Double> result = new EnumMap<>(Element.class);
+        for (Element element : Element.values()) {
+            BigDecimal elementMultiplier = elementMultipliers.getOrDefault(
+                    element,
+                    BigDecimal.ONE
+            );
+            result.put(
+                    element,
+                    positiveDouble(globalMultiplier.multiply(elementMultiplier))
+            );
+        }
+        return result;
+    }
+
+    private static double positiveDouble(BigDecimal value) {
+        if (value.compareTo(BigDecimal.valueOf(Double.MAX_VALUE)) > 0) {
+            return Double.MAX_VALUE;
+        }
+        double result = value.doubleValue();
+        return result == 0.0D ? Double.MIN_VALUE : result;
+    }
+
+    private static void requireFinite(double value, String name) {
+        if (!Double.isFinite(value)) {
+            throw new IllegalArgumentException(name + " must be finite.");
+        }
+    }
+
+    private static void requirePositiveFinite(double value, String name) {
+        if (!Double.isFinite(value) || value <= 0.0D) {
+            throw new IllegalArgumentException(name + " must be finite and positive.");
+        }
+    }
+
+    private static void requireReduction(double value, String name) {
+        requireNonNegativeFinite(value, name);
+        if (value > 100.0D) {
+            throw new IllegalArgumentException(name + " must not exceed 100.");
+        }
     }
 
     private static void requireNonNegativeFinite(double value, String name) {

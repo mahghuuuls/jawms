@@ -77,6 +77,11 @@ class GameplayRulesLoaderTest {
         assertEquals(20, rules.getSmallFlask());
         assertEquals(50, rules.getMediumFlask());
         assertEquals(100, rules.getLargeFlask());
+        assertEquals(100.0D, rules.getEfficiencyScale());
+        assertEquals(10.0D, rules.getArmorEfficiencyProfile().getWizard());
+        assertEquals(20.0D, rules.getArmorEfficiencyProfile().getSage());
+        assertEquals(5.0D, rules.getArmorEfficiencyProfile().getBattlemage());
+        assertEquals(10.0D, rules.getArmorEfficiencyProfile().getWarlock());
         assertEquals(10.0D, rules.getSpellCosts().get(id("novice")));
         assertEquals(75.0D, rules.getSpellCosts().get(id("advanced")));
         assertEquals(100.0D, rules.getSpellCosts().get(id("master")));
@@ -188,12 +193,17 @@ class GameplayRulesLoaderTest {
                                 + "regeneration_percent:-50;flat_lockout:1;"
                                 + "lockout_increase:50;lockout_reduction:50;"
                                 + "global_efficiency:5;efficiency_fire:20;"
+                                + "global_cost_multiplier:0.5;cost_multiplier_fire:1.5;"
                                 + "regenerate_during_lockout:true"
                 );
         assertEquals(10, parsed.getFlatMaximumMana());
         assertEquals(50.0D, parsed.getMaximumManaIncrease());
         assertEquals(50.0D, parsed.getRegenerationReduction());
         assertEquals(20.0D, parsed.getElementSpellEfficiency(
+                electroblob.wizardry.constants.Element.FIRE
+        ));
+        assertEquals(0.5D, parsed.getGlobalSpellCostMultiplier());
+        assertEquals(1.5D, parsed.getElementSpellCostMultiplier(
                 electroblob.wizardry.constants.Element.FIRE
         ));
         assertTrue(parsed.canRegenerateDuringPostCastLockout());
@@ -215,6 +225,7 @@ class GameplayRulesLoaderTest {
                         + "flat_regeneration:2;regeneration_percent:-50;"
                         + "flat_lockout:1;lockout_increase:50;lockout_reduction:50;"
                         + "global_efficiency:5;efficiency_fire:20;"
+                        + "global_cost_multiplier:0.5;cost_multiplier_fire:1.5;"
                         + "regenerate_during_lockout:true",
                 "minecraft:blaze_rod@*=maximum_percent:50;maximum_increase:10"
         });
@@ -237,6 +248,10 @@ class GameplayRulesLoaderTest {
                 () -> GameplayRulesLoader.parseContribution(
                         "maximum_percent:50;maximum_increase:10"
                 )
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> GameplayRulesLoader.parseContribution("global_cost_multiplier:0")
         );
         assertTrue(warnings.stream().anyMatch(value -> value.contains("cannot be mixed")));
     }

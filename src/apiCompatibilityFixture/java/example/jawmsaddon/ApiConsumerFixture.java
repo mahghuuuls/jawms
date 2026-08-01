@@ -168,6 +168,10 @@ public final class ApiConsumerFixture {
         return ManaApi.getManaService().getApplicableSpellEfficiency(player, spell);
     }
 
+    public static double inspectCostMultiplier(EntityPlayer player, Spell spell) {
+        return ManaApi.getManaService().getApplicableSpellCostMultiplier(player, spell);
+    }
+
     public static ManaContribution exampleContribution() {
         return ManaContribution.builder()
                 .flatMaximumMana(10)
@@ -181,6 +185,8 @@ public final class ApiConsumerFixture {
                 .lockoutReduction(50.0D)
                 .globalSpellEfficiency(5.0D)
                 .elementSpellEfficiency(Element.FIRE, 10.0D)
+                .globalSpellCostMultiplier(0.5D)
+                .elementSpellCostMultiplier(Element.FIRE, 1.5D)
                 .regenerateDuringPostCastLockout(true)
                 .regenerateDuringContinuousCasting(true)
                 .build();

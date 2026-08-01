@@ -18,6 +18,7 @@ public final class GameplayRules {
     public static final int DEFAULT_BASE_MAXIMUM = 50;
     public static final double DEFAULT_BASE_REGENERATION = 2.0D;
     public static final double DEFAULT_LOCKOUT_SECONDS = 2.0D;
+    public static final double DEFAULT_EFFICIENCY_SCALE = 100.0D;
     public static final String DEFAULT_COST_FORMULA = "min(original_cost, tier * 25)";
     public static final int DEFAULT_SMALL_FLASK = 20;
     public static final int DEFAULT_MEDIUM_FLASK = 50;
@@ -37,6 +38,8 @@ public final class GameplayRules {
     private final WizardryArmorProfile armorProfile;
     private final Set<ResourceLocation> generatedWizardryArmorIds;
     private final Set<ResourceLocation> disabledProviderIds;
+    private final double efficiencyScale;
+    private final WizardryArmorEfficiencyProfile armorEfficiencyProfile;
 
     public GameplayRules(
             long revision,
@@ -72,6 +75,30 @@ public final class GameplayRules {
             WizardryArmorProfile armorProfile,
             Set<ResourceLocation> disabledProviderIds
     ) {
+        this(
+                revision, baseMaximum, baseRegeneration, regenerationLockoutSeconds,
+                costFormula, smallFlask, mediumFlask, largeFlask, spellCosts,
+                configuredItemRules, armorProfile, disabledProviderIds,
+                DEFAULT_EFFICIENCY_SCALE, WizardryArmorEfficiencyProfile.DEFAULT
+        );
+    }
+
+    public GameplayRules(
+            long revision,
+            int baseMaximum,
+            double baseRegeneration,
+            double regenerationLockoutSeconds,
+            String costFormula,
+            int smallFlask,
+            int mediumFlask,
+            int largeFlask,
+            Map<ResourceLocation, Double> spellCosts,
+            List<ConfiguredItemRule> configuredItemRules,
+            WizardryArmorProfile armorProfile,
+            Set<ResourceLocation> disabledProviderIds,
+            double efficiencyScale,
+            WizardryArmorEfficiencyProfile armorEfficiencyProfile
+    ) {
         if (revision < 0L) {
             throw new IllegalArgumentException("Revision must be non-negative.");
         }
@@ -87,6 +114,9 @@ public final class GameplayRules {
         }
         if (smallFlask < 0 || mediumFlask < 0 || largeFlask < 0) {
             throw new IllegalArgumentException("Flask values must be non-negative.");
+        }
+        if (!Double.isFinite(efficiencyScale) || efficiencyScale <= 0.0D) {
+            throw new IllegalArgumentException("Efficiency scale must be finite and positive.");
         }
         this.revision = revision;
         this.baseMaximum = baseMaximum;
@@ -104,6 +134,8 @@ public final class GameplayRules {
         this.disabledProviderIds = Collections.unmodifiableSet(
                 new LinkedHashSet<>(disabledProviderIds)
         );
+        this.efficiencyScale = efficiencyScale;
+        this.armorEfficiencyProfile = armorEfficiencyProfile;
     }
 
     public GameplayRules(
@@ -219,6 +251,14 @@ public final class GameplayRules {
 
     public boolean isProviderDisabled(ResourceLocation providerId) {
         return disabledProviderIds.contains(providerId);
+    }
+
+    public double getEfficiencyScale() {
+        return efficiencyScale;
+    }
+
+    public WizardryArmorEfficiencyProfile getArmorEfficiencyProfile() {
+        return armorEfficiencyProfile;
     }
 
     public boolean hasGeneratedWizardryArmor(ItemStack stack) {

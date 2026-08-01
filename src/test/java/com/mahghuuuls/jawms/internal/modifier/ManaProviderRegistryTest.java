@@ -19,6 +19,7 @@ import net.minecraft.world.WorldServer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -120,6 +121,29 @@ class ManaProviderRegistryTest {
         assertEquals(1.0D, first.get(0).getFlatRegeneration());
         assertEquals(1, second.size());
         assertEquals(2, failures.get());
+    }
+
+    @Test
+    void corruptedThirdPartyContributionIsIsolatedAtTheRegistryBoundary() throws Exception {
+        ManaContribution corrupted = ManaContribution.builder().build();
+        Field multiplier = ManaContribution.class.getDeclaredField(
+                "globalSpellCostMultiplier"
+        );
+        multiplier.setAccessible(true);
+        multiplier.setDouble(corrupted, Double.NaN);
+
+        ManaProviderRegistry registry = new ManaProviderRegistry();
+        registry.registerContextual(id("a_corrupted"), player -> corrupted);
+        registry.registerContextual(id("b_valid"), player ->
+                ManaContribution.builder().flatMaximumMana(2).build());
+
+        List<ManaContribution> result = registry.evaluateContextual(
+                player(25L).player, GameplayRules.initialDefaults()
+        );
+
+        assertEquals(1, result.size());
+        assertEquals(2, result.get(0).getFlatMaximumMana());
+        assertEquals(1L, registry.diagnosticEmissionCount());
     }
 
     @Test

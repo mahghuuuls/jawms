@@ -1,8 +1,12 @@
 package com.mahghuuuls.jawms.internal.mana;
 
+import electroblob.wizardry.constants.Element;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
+import java.util.EnumMap;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -12,7 +16,12 @@ class ManaStateMessageTest {
 
     @Test
     void codecPreservesAValidState() {
-        ManaStateMessage encoded = new ManaStateMessage(23, 50, 2.5D, 42);
+        EnumMap<Element, Double> multipliers = new EnumMap<>(Element.class);
+        multipliers.put(Element.FIRE, 1.5D);
+        ManaStateMessage encoded = new ManaStateMessage(
+                23, 50, 2.5D, 42, 10.0D, Collections.emptyMap(),
+                0.5D, multipliers
+        );
         ByteBuf buffer = Unpooled.buffer();
         encoded.toBytes(buffer);
         ManaStateMessage decoded = new ManaStateMessage();
@@ -24,6 +33,8 @@ class ManaStateMessageTest {
         assertEquals(50, decoded.getMaximumMana());
         assertEquals(2.5D, decoded.getEffectiveRegeneration());
         assertEquals(42L, decoded.getRevision());
+        assertEquals(0.5D, decoded.getGlobalSpellCostMultiplier());
+        assertEquals(1.5D, decoded.getElementSpellCostMultipliers().get(Element.FIRE));
     }
 
     @Test

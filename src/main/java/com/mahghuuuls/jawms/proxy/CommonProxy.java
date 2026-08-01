@@ -7,6 +7,8 @@ import net.minecraft.util.EnumHand;
 import net.minecraft.util.ResourceLocation;
 
 import java.io.File;
+import electroblob.wizardry.constants.Element;
+import java.util.Map;
 
 public class CommonProxy {
 
@@ -18,7 +20,11 @@ public class CommonProxy {
             int currentMana,
             int maximumMana,
             double effectiveRegeneration,
-            long revision
+            long revision,
+            double globalSpellEfficiency,
+            Map<Element, Double> elementSpellEfficiency,
+            double globalSpellCostMultiplier,
+            Map<Element, Double> elementSpellCostMultiplier
     ) {
         // Server proxy intentionally ignores client-bound presentation state.
     }

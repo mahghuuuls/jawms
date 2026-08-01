@@ -13,6 +13,7 @@ import com.mahghuuuls.jawms.internal.modifier.ManaProfileResolver;
 import com.mahghuuuls.jawms.internal.modifier.ManaProviderRegistry;
 import com.mahghuuuls.jawms.internal.modifier.ResolvedManaProfile;
 import electroblob.wizardry.spell.Spell;
+import com.mahghuuuls.jawms.internal.casting.CastCostContextManager;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.util.EnumHand;
@@ -71,13 +72,24 @@ public final class ManaService implements IManaService {
     @Override
     public double getApplicableSpellEfficiency(EntityPlayer player, Spell spell) {
         ManaState state = requireState(player);
+        requireRegisteredSpell(spell);
+        return state.getSpellEfficiency(spell.getElement());
+    }
+
+    @Override
+    public double getApplicableSpellCostMultiplier(EntityPlayer player, Spell spell) {
+        ManaState state = requireState(player);
+        requireRegisteredSpell(spell);
+        return state.getSpellCostMultiplier(spell.getElement());
+    }
+
+    private static void requireRegisteredSpell(Spell spell) {
         if (spell == null
                 || spell.getRegistryName() == null
                 || Spell.registry == null
                 || Spell.registry.getValue(spell.getRegistryName()) != spell) {
             throw new IllegalArgumentException("A registered Wizardry spell is required.");
         }
-        return state.getSpellEfficiency(spell.getElement());
     }
 
     @Override
@@ -301,6 +313,7 @@ public final class ManaService implements IManaService {
         boolean force = state.isContinuousCastActive() || state.getRemainingLockoutTicks() > 0L;
         transition(player, ManaCauses.LIFECYCLE, force, state::clearTransientLifecycleState);
         ManaMutationCoordinator.clear(player.getUniqueID());
+        CastCostContextManager.clearAll(player);
     }
 
     public static void copyForClone(EntityPlayer replacementPlayer, ManaState original) {
@@ -333,7 +346,7 @@ public final class ManaService implements IManaService {
         ManaPublicState oldState = snapshot(state);
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
-            state.applyResolvedProfile(resolveProfile(player, rules));
+            boolean profileChanged = state.applyResolvedProfile(resolveProfile(player, rules));
             boolean lockoutEnded = state.getRemainingLockoutTicks() > 0L;
             boolean gateOpen = state.advanceRegenerationGate();
             lockoutEnded = lockoutEnded && state.getRemainingLockoutTicks() == 0L;
@@ -347,6 +360,8 @@ public final class ManaService implements IManaService {
                         ? ManaCauses.REGENERATION
                         : lockoutEnded ? ManaCauses.LOCKOUT_END : ManaCauses.STAT_CLAMP;
                 publishTransition(player, oldState, newState, cause, lockoutEnded);
+            } else if (profileChanged) {
+                ManaNetwork.synchronize(player, state);
             }
         }
     }
@@ -363,7 +378,7 @@ public final class ManaService implements IManaService {
             boolean hadLockout = state.getRemainingLockoutTicks() > 0L;
             ResolvedManaProfile replacementProfile = resolveProfile(player, replacement);
             state.clampLockoutAfterReload(replacementProfile.getLockoutTicks());
-            state.applyResolvedProfile(replacementProfile);
+            boolean profileChanged = state.applyResolvedProfile(replacementProfile);
             ManaPublicState newState = snapshot(state);
             boolean lockoutEnded = hadLockout && newState.getRemainingLockoutTicks() == 0L;
             if (!oldState.equals(newState)) {
@@ -375,6 +390,8 @@ public final class ManaService implements IManaService {
                         ManaCauses.RULES_UPDATE,
                         lockoutEnded
                 );
+            } else if (profileChanged) {
+                ManaNetwork.synchronize(player, state);
             }
         }
     }

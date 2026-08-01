@@ -6,6 +6,9 @@ import com.mahghuuuls.jawms.api.ManaSlotCategory;
 import com.mahghuuuls.jawms.internal.rules.ConfiguredItemRule;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorProfile;
+import com.mahghuuuls.jawms.internal.rules.WizardryArmorEfficiencyProfile;
+import electroblob.wizardry.constants.Element;
+import electroblob.wizardry.item.ItemWizardArmour;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemStack;
@@ -64,7 +67,7 @@ public final class ActiveStackCollector {
         ManaContribution generated = null;
         if (slot.getSlotType() == EntityEquipmentSlot.Type.ARMOR
                 && rules.hasGeneratedWizardryArmor(stack)) {
-            generated = generatedWizardryArmor(slot, rules.getArmorProfile());
+            generated = generatedWizardryArmor(player, stack, slot, rules);
         }
         collectResolvedStack(
                 player, stack, slot, explicit, generated, rules, destination,
@@ -144,6 +147,60 @@ public final class ActiveStackCollector {
             default:
                 return null;
         }
+    }
+
+    public static ManaContribution generatedWizardryArmor(
+            EntityPlayer player, ItemStack stack, EntityEquipmentSlot slot, GameplayRules rules
+    ) {
+        ManaContribution mana = generatedWizardryArmor(slot, rules.getArmorProfile());
+        if (!(stack.getItem() instanceof ItemWizardArmour)) {
+            return mana;
+        }
+        ItemWizardArmour armor = (ItemWizardArmour) stack.getItem();
+        WizardryArmorEfficiencyProfile efficiency = rules.getArmorEfficiencyProfile();
+        if (!efficiency.isEnabled()) {
+            return mana;
+        }
+        ManaContribution.Builder builder = ManaContribution.builder();
+        if (mana != null) {
+            builder.flatMaximumMana(mana.getFlatMaximumMana())
+                    .flatRegeneration(mana.getFlatRegeneration());
+        }
+        double points = efficiency.getPerPiece(armor.armourClass);
+        Element matchingElement = armor.element == null ? Element.MAGIC : armor.element;
+        builder.elementSpellEfficiency(matchingElement, points);
+        if (slot == EntityEquipmentSlot.HEAD
+                && armor.armourClass == ItemWizardArmour.ArmourClass.SAGE
+                && ItemWizardArmour.isWearingFullSet(player, armor.element, armor.armourClass)
+                && ItemWizardArmour.doAllArmourPiecesHaveMana(player)
+                && allArmorUsesGeneratedLayer(player, rules)) {
+            for (Element element : Element.values()) {
+                if (element != matchingElement) {
+                    builder.elementSpellEfficiency(
+                            element, efficiency.getSageNonmatchingFullSet()
+                    );
+                }
+            }
+        }
+        return builder.build();
+    }
+
+    private static boolean allArmorUsesGeneratedLayer(EntityPlayer player, GameplayRules rules) {
+        return allArmorUsesGeneratedLayer(player, equipped ->
+                rules.hasGeneratedWizardryArmor(equipped)
+                        && rules.findConfiguredItemRule(equipped) == null);
+    }
+
+    static boolean allArmorUsesGeneratedLayer(
+            EntityPlayer player, java.util.function.Predicate<ItemStack> usesGeneratedLayer
+    ) {
+        for (EntityEquipmentSlot slot : ARMOR_SLOTS) {
+            ItemStack equipped = player.getItemStackFromSlot(slot);
+            if (!usesGeneratedLayer.test(equipped)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static ManaContribution armorContribution(int maximum, double regeneration) {

@@ -46,6 +46,8 @@ class GameplayRulesMessageTest {
                                 .lockoutReduction(30)
                                 .globalSpellEfficiency(5)
                                 .elementSpellEfficiency(Element.FIRE, 12)
+                                .globalSpellCostMultiplier(0.5D)
+                                .elementSpellCostMultiplier(Element.FIRE, 1.5D)
                                 .regenerateDuringPostCastLockout(true)
                                 .regenerateDuringContinuousCasting(true)
                                 .build()
@@ -73,9 +75,13 @@ class GameplayRulesMessageTest {
         assertEquals(25.0D, contribution.getMaximumManaIncrease());
         assertEquals(10.0D, contribution.getMaximumManaReduction());
         assertEquals(12.0D, contribution.getElementSpellEfficiency(Element.FIRE));
+        assertEquals(0.5D, contribution.getGlobalSpellCostMultiplier());
+        assertEquals(1.5D, contribution.getElementSpellCostMultiplier(Element.FIRE));
         assertTrue(contribution.canRegenerateDuringPostCastLockout());
         assertTrue(contribution.canRegenerateDuringContinuousCasting());
         assertEquals(15, decoded.getArmorProfile().getHelmetMaximum());
+        assertEquals(100.0D, decoded.getEfficiencyScale());
+        assertEquals(20.0D, decoded.getArmorEfficiencyProfile().getSage());
     }
 
     @Test

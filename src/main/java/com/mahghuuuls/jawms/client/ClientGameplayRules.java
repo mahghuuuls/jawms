@@ -3,6 +3,7 @@ package com.mahghuuuls.jawms.client;
 import com.mahghuuuls.jawms.internal.rules.ConfiguredItemRule;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesMessage;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorProfile;
+import com.mahghuuuls.jawms.internal.rules.WizardryArmorEfficiencyProfile;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.network.FMLNetworkEvent;
@@ -28,6 +29,8 @@ public final class ClientGameplayRules {
     private static List<ConfiguredItemRule> itemRules = Collections.emptyList();
     private static WizardryArmorProfile armorProfile = WizardryArmorProfile.DEFAULT;
     private static Set<ResourceLocation> generatedWizardryArmorIds = Collections.emptySet();
+    private static double efficiencyScale;
+    private static WizardryArmorEfficiencyProfile armorEfficiencyProfile = WizardryArmorEfficiencyProfile.DEFAULT;
 
     public ClientGameplayRules() {
     }
@@ -49,6 +52,8 @@ public final class ClientGameplayRules {
         generatedWizardryArmorIds = Collections.unmodifiableSet(
                 new LinkedHashSet<>(message.getGeneratedWizardryArmorIds())
         );
+        efficiencyScale = message.getEfficiencyScale();
+        armorEfficiencyProfile = message.getArmorEfficiencyProfile();
     }
 
     public static long getRevision() {
@@ -99,6 +104,14 @@ public final class ClientGameplayRules {
         return armorProfile;
     }
 
+    public static double getEfficiencyScale() {
+        return efficiencyScale;
+    }
+
+    public static WizardryArmorEfficiencyProfile getArmorEfficiencyProfile() {
+        return armorEfficiencyProfile;
+    }
+
     public static boolean isGeneratedWizardryArmor(ItemStack stack) {
         return stack != null && !stack.isEmpty()
                 && stack.getItem().getRegistryName() != null
@@ -122,5 +135,7 @@ public final class ClientGameplayRules {
         itemRules = Collections.emptyList();
         armorProfile = WizardryArmorProfile.DEFAULT;
         generatedWizardryArmorIds = Collections.emptySet();
+        efficiencyScale = 0.0D;
+        armorEfficiencyProfile = WizardryArmorEfficiencyProfile.DEFAULT;
     }
 }

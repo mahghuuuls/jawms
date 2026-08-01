@@ -40,6 +40,19 @@ public final class ManaTooltips {
                     titleCase(entry.getKey().name()) + " spell efficiency"
             );
         }
+        addCostMultiplier(
+                lines,
+                contribution.getGlobalSpellCostMultiplier(),
+                "Mana cost"
+        );
+        for (Map.Entry<Element, Double> entry
+                : contribution.getElementSpellCostMultipliers().entrySet()) {
+            addCostMultiplier(
+                    lines,
+                    entry.getValue(),
+                    titleCase(entry.getKey().name()) + " spell mana cost"
+            );
+        }
         if (contribution.canRegenerateDuringPostCastLockout()) {
             add(lines, "Mana regenerates during post-cast delay", false);
         }
@@ -82,7 +95,21 @@ public final class ManaTooltips {
 
     private static void addPositive(List<String> lines, double value, String label) {
         if (value != 0.0D) {
-            add(lines, "+" + number(value) + " " + label + " points", false);
+            add(lines, "+" + number(value) + " " + label, false);
+        }
+    }
+
+    private static void addCostMultiplier(
+            List<String> lines, double multiplier, String label
+    ) {
+        double percentage = (multiplier - 1.0D) * 100.0D;
+        if (percentage != 0.0D) {
+            add(
+                    lines,
+                    (percentage > 0.0D ? "+" : "") + number(percentage)
+                            + "% " + label,
+                    percentage > 0.0D
+            );
         }
     }
 

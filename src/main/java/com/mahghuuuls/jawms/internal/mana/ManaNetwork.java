@@ -44,7 +44,11 @@ public final class ManaNetwork {
                             state.getCurrentMana(),
                             state.getMaximumMana(),
                             state.getEffectiveRegeneration(),
-                            state.getRevision()
+                            state.getRevision(),
+                            state.getGlobalSpellEfficiency(),
+                            state.getElementSpellEfficiency(),
+                            state.getGlobalSpellCostMultiplier(),
+                            state.getElementSpellCostMultipliers()
                     ),
                     (EntityPlayerMP) player
             );

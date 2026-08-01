@@ -22,6 +22,8 @@ public final class ManaContribution {
     private final double lockoutReduction;
     private final double globalSpellEfficiency;
     private final Map<Element, Double> elementSpellEfficiency;
+    private final double globalSpellCostMultiplier;
+    private final Map<Element, Double> elementSpellCostMultiplier;
     private final boolean regenerateDuringPostCastLockout;
     private final boolean regenerateDuringContinuousCasting;
 
@@ -50,6 +52,21 @@ public final class ManaContribution {
             );
         }
         elementSpellEfficiency = Collections.unmodifiableMap(efficiencies);
+        globalSpellCostMultiplier = positive(
+                builder.globalSpellCostMultiplier,
+                "globalSpellCostMultiplier"
+        );
+        EnumMap<Element, Double> costMultipliers = new EnumMap<>(Element.class);
+        for (Map.Entry<Element, Double> entry : builder.elementSpellCostMultiplier.entrySet()) {
+            if (entry.getKey() == null) {
+                throw new NullPointerException("elementSpellCostMultiplier key");
+            }
+            costMultipliers.put(
+                    entry.getKey(),
+                    positive(entry.getValue(), "elementSpellCostMultiplier")
+            );
+        }
+        elementSpellCostMultiplier = Collections.unmodifiableMap(costMultipliers);
         regenerateDuringPostCastLockout = builder.regenerateDuringPostCastLockout;
         regenerateDuringContinuousCasting = builder.regenerateDuringContinuousCasting;
     }
@@ -107,6 +124,22 @@ public final class ManaContribution {
         return value == null ? 0.0D : value;
     }
 
+    /** Returns the player-wide multiplicative spell-cost factor. Neutral is {@code 1}. */
+    public double getGlobalSpellCostMultiplier() {
+        return globalSpellCostMultiplier;
+    }
+
+    /** Returns immutable element-specific multiplicative spell-cost factors. */
+    public Map<Element, Double> getElementSpellCostMultipliers() {
+        return elementSpellCostMultiplier;
+    }
+
+    /** Returns the factor for one element, or neutral {@code 1} when absent. */
+    public double getElementSpellCostMultiplier(Element element) {
+        Double value = elementSpellCostMultiplier.get(element);
+        return value == null ? 1.0D : value;
+    }
+
     public boolean canRegenerateDuringPostCastLockout() {
         return regenerateDuringPostCastLockout;
     }
@@ -127,6 +160,8 @@ public final class ManaContribution {
                 && lockoutReduction == 0.0D
                 && globalSpellEfficiency == 0.0D
                 && elementSpellEfficiency.isEmpty()
+                && globalSpellCostMultiplier == 1.0D
+                && elementSpellCostMultiplier.isEmpty()
                 && !regenerateDuringPostCastLockout
                 && !regenerateDuringContinuousCasting;
     }
@@ -142,6 +177,14 @@ public final class ManaContribution {
         finite(value, name);
         if (value < 0.0D) {
             throw new IllegalArgumentException(name + " must be non-negative.");
+        }
+        return value;
+    }
+
+    private static double positive(double value, String name) {
+        finite(value, name);
+        if (value <= 0.0D) {
+            throw new IllegalArgumentException(name + " must be positive.");
         }
         return value;
     }
@@ -167,6 +210,9 @@ public final class ManaContribution {
         private double lockoutReduction;
         private double globalSpellEfficiency;
         private final EnumMap<Element, Double> elementSpellEfficiency =
+                new EnumMap<>(Element.class);
+        private double globalSpellCostMultiplier = 1.0D;
+        private final EnumMap<Element, Double> elementSpellCostMultiplier =
                 new EnumMap<>(Element.class);
         private boolean regenerateDuringPostCastLockout;
         private boolean regenerateDuringContinuousCasting;
@@ -226,6 +272,18 @@ public final class ManaContribution {
 
         public Builder elementSpellEfficiency(Element element, double value) {
             elementSpellEfficiency.put(element, value);
+            return this;
+        }
+
+        /** Sets a player-wide multiplicative spell-cost factor. Neutral is {@code 1}. */
+        public Builder globalSpellCostMultiplier(double value) {
+            globalSpellCostMultiplier = value;
+            return this;
+        }
+
+        /** Sets a multiplicative spell-cost factor for one Wizardry element. */
+        public Builder elementSpellCostMultiplier(Element element, double value) {
+            elementSpellCostMultiplier.put(element, value);
             return this;
         }
 

@@ -50,6 +50,13 @@ public interface IManaService {
     double getApplicableSpellEfficiency(EntityPlayer player, Spell spell);
 
     /**
+     * Returns the resolved multiplicative mana-cost factor applicable to this
+     * registered spell. Values below {@code 1} reduce cost; values above it
+     * increase cost.
+     */
+    double getApplicableSpellCostMultiplier(EntityPlayer player, Spell spell);
+
+    /**
      * Sets current mana, clamping the target to the effective maximum. A
      * target below mana reserved by an in-progress cast is rejected so that
      * the already-authorized cast can still commit its exact cost.

@@ -1,5 +1,6 @@
 package com.mahghuuuls.jawms.api;
 
+import electroblob.wizardry.constants.Element;
 import net.minecraft.util.text.TextFormatting;
 import org.junit.jupiter.api.Test;
 
@@ -19,6 +20,8 @@ class ManaTooltipsTest {
                 .regenerationReduction(25)
                 .flatLockoutSeconds(1)
                 .lockoutReduction(50)
+                .globalSpellCostMultiplier(0.5D)
+                .elementSpellCostMultiplier(Element.FIRE, 1.5D)
                 .build());
 
         assertEquals(TextFormatting.RED + "-5 Mana", lines.get(0));
@@ -27,6 +30,8 @@ class ManaTooltipsTest {
         assertEquals(TextFormatting.RED + "-25% Mana regen", lines.get(3));
         assertEquals(TextFormatting.RED + "+1 Mana regen delay", lines.get(4));
         assertEquals(TextFormatting.BLUE + "-50% Mana regen delay", lines.get(5));
+        assertEquals(TextFormatting.BLUE + "-50% Mana cost", lines.get(6));
+        assertEquals(TextFormatting.RED + "+50% Fire spell mana cost", lines.get(7));
         assertThrows(UnsupportedOperationException.class, () -> lines.add("bad"));
     }
 }

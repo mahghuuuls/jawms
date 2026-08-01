@@ -14,6 +14,8 @@ public final class ResolvedManaProfile {
     private final long lockoutTicks;
     private final double globalSpellEfficiency;
     private final Map<Element, Double> elementSpellEfficiency;
+    private final double globalSpellCostMultiplier;
+    private final Map<Element, Double> elementSpellCostMultiplier;
     private final boolean regenerateDuringPostCastLockout;
     private final boolean regenerateDuringContinuousCasting;
 
@@ -27,6 +29,24 @@ public final class ResolvedManaProfile {
             boolean regenerateDuringPostCastLockout,
             boolean regenerateDuringContinuousCasting
     ) {
+        this(maximumMana, regeneration, lockoutSeconds, lockoutTicks,
+                globalSpellEfficiency, elementSpellEfficiency,
+                1.0D, Collections.emptyMap(),
+                regenerateDuringPostCastLockout, regenerateDuringContinuousCasting);
+    }
+
+    public ResolvedManaProfile(
+            int maximumMana,
+            double regeneration,
+            double lockoutSeconds,
+            long lockoutTicks,
+            double globalSpellEfficiency,
+            Map<Element, Double> elementSpellEfficiency,
+            double globalSpellCostMultiplier,
+            Map<Element, Double> elementSpellCostMultiplier,
+            boolean regenerateDuringPostCastLockout,
+            boolean regenerateDuringContinuousCasting
+    ) {
         this.maximumMana = maximumMana;
         this.regeneration = regeneration;
         this.lockoutSeconds = lockoutSeconds;
@@ -35,6 +55,10 @@ public final class ResolvedManaProfile {
         EnumMap<Element, Double> efficiencies = new EnumMap<>(Element.class);
         efficiencies.putAll(elementSpellEfficiency);
         this.elementSpellEfficiency = Collections.unmodifiableMap(efficiencies);
+        this.globalSpellCostMultiplier = globalSpellCostMultiplier;
+        EnumMap<Element, Double> multipliers = new EnumMap<>(Element.class);
+        multipliers.putAll(elementSpellCostMultiplier);
+        this.elementSpellCostMultiplier = Collections.unmodifiableMap(multipliers);
         this.regenerateDuringPostCastLockout = regenerateDuringPostCastLockout;
         this.regenerateDuringContinuousCasting = regenerateDuringContinuousCasting;
     }
@@ -68,6 +92,19 @@ public final class ResolvedManaProfile {
         return elementSpellEfficiency;
     }
 
+    public double getGlobalSpellCostMultiplier() {
+        return globalSpellCostMultiplier;
+    }
+
+    public double getSpellCostMultiplier(Element element) {
+        Double value = elementSpellCostMultiplier.get(element);
+        return value == null ? globalSpellCostMultiplier : value;
+    }
+
+    public Map<Element, Double> getElementSpellCostMultipliers() {
+        return elementSpellCostMultiplier;
+    }
+
     public boolean canRegenerateDuringPostCastLockout() {
         return regenerateDuringPostCastLockout;
     }
@@ -80,4 +117,5 @@ public final class ResolvedManaProfile {
         double result = left + right;
         return Double.isFinite(result) ? result : Double.MAX_VALUE;
     }
+
 }

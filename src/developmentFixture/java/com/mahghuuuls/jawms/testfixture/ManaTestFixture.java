@@ -9,6 +9,7 @@ import com.mahghuuuls.jawms.api.ManaPublicState;
 import com.mahghuuuls.jawms.api.ManaStateChangeEvent;
 import com.mahghuuuls.jawms.internal.casting.CastingDiagnostics;
 import com.mahghuuuls.jawms.internal.casting.SpellCostService;
+import com.mahghuuuls.jawms.internal.casting.CastCostContextManager;
 import com.mahghuuuls.jawms.internal.mana.ManaService;
 import com.mahghuuuls.jawms.internal.mana.ManaState;
 import com.mahghuuuls.jawms.internal.modifier.ActiveStackCollector;
@@ -32,6 +33,7 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 import java.util.UUID;
 
@@ -78,7 +80,10 @@ public final class ManaTestFixture {
                     + " | cost get <namespace:spell> | casting debug <true|false>"
                     + " | casting cancel <true|false>"
                     + " | casting cancel-tick <true|false>"
-                    + " | wand set <main|off> <namespace:spell> | wand inspect <main|off>";
+                    + " | casting factor <positive-number>"
+                    + " | casting factor-delay <positive-number> <ticks>"
+                    + " | wand set <main|off> <namespace:spell>"
+                    + " | wand mana <main|off> <amount> | wand inspect <main|off>";
         }
 
         @Override
@@ -157,6 +162,18 @@ public final class ManaTestFixture {
             }
             if (arguments.length == 3
                     && "casting".equalsIgnoreCase(arguments[0])
+                    && "factor".equalsIgnoreCase(arguments[1])) {
+                setCastingFactor(sender, arguments[2]);
+                return;
+            }
+            if (arguments.length == 4
+                    && "casting".equalsIgnoreCase(arguments[0])
+                    && "factor-delay".equalsIgnoreCase(arguments[1])) {
+                scheduleCastingFactor(sender, arguments[2], arguments[3]);
+                return;
+            }
+            if (arguments.length == 3
+                    && "casting".equalsIgnoreCase(arguments[0])
                     && "debug".equalsIgnoreCase(arguments[1])) {
                 setCastingDebug(sender, arguments[2]);
                 return;
@@ -183,6 +200,12 @@ public final class ManaTestFixture {
                     && "mana".equalsIgnoreCase(arguments[0])
                     && "set".equalsIgnoreCase(arguments[1])) {
                 setMana(sender, arguments[2]);
+                return;
+            }
+            if (arguments.length == 4
+                    && "wand".equalsIgnoreCase(arguments[0])
+                    && "mana".equalsIgnoreCase(arguments[1])) {
+                setWandMana(sender, arguments[2], arguments[3]);
                 return;
             }
             if (arguments.length == 4
@@ -218,7 +241,15 @@ public final class ManaTestFixture {
                             + ", spellCosts=" + rules.getSpellCosts().size()
                             + ", itemRules=" + rules.getConfiguredItemRules().size()
                             + ", generatedArmorIds="
-                            + rules.getGeneratedWizardryArmorIds().size() + "."
+                            + rules.getGeneratedWizardryArmorIds().size()
+                            + ", efficiencyScale=" + rules.getEfficiencyScale()
+                            + ", armorEfficiency="
+                            + rules.getArmorEfficiencyProfile().getWizard() + "/"
+                            + rules.getArmorEfficiencyProfile().getSage() + "/"
+                            + rules.getArmorEfficiencyProfile().getBattlemage() + "/"
+                            + rules.getArmorEfficiencyProfile().getWarlock()
+                            + ", sageNonmatching="
+                            + rules.getArmorEfficiencyProfile().getSageNonmatchingFullSet() + "."
             ));
         }
 
@@ -369,6 +400,42 @@ public final class ManaTestFixture {
             ));
         }
 
+        private static void setCastingFactor(ICommandSender sender, String value)
+                throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            float factor = parseCastingFactor(value);
+            CAST_CANCELLATION.setFactorFor(player, factor);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS test contextual cost factor=" + factor + "."
+            ));
+        }
+
+        private static void scheduleCastingFactor(
+                ICommandSender sender, String value, String ticksValue
+        ) throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            float factor = parseCastingFactor(value);
+            int ticks = parseInt(ticksValue, 1, 1200);
+            CAST_CANCELLATION.scheduleFactorFor(player, factor, ticks);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS test contextual cost factor=" + factor
+                            + " scheduled in " + ticks + " ticks."
+            ));
+        }
+
+        private static float parseCastingFactor(String value) throws CommandException {
+            final float factor;
+            try {
+                factor = Float.parseFloat(value);
+            } catch (RuntimeException exception) {
+                throw new CommandException("Expected a finite positive casting factor.");
+            }
+            if (!Float.isFinite(factor) || factor <= 0.0F) {
+                throw new CommandException("Expected a finite positive casting factor.");
+            }
+            return factor;
+        }
+
         private static void setWandSpell(
                 ICommandSender sender,
                 String handName,
@@ -389,6 +456,24 @@ public final class ManaTestFixture {
             inspectWand(sender, handName);
         }
 
+        private static void setWandMana(
+                ICommandSender sender, String handName, String amount
+        ) throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EnumHand hand = parseHand(handName);
+            ItemStack stack = player.getHeldItem(hand);
+            if (!(stack.getItem() instanceof ItemWand)) {
+                throw new CommandException("Hold a Wizardry wand in the selected hand.");
+            }
+            ItemWand wand = (ItemWand) stack.getItem();
+            int target = parseInt(amount, 0, wand.getManaCapacity(stack));
+            wand.setMana(stack, target);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS test wand mana=" + wand.getMana(stack)
+                            + " / " + wand.getManaCapacity(stack) + "."
+            ));
+        }
+
         private static void inspectWand(ICommandSender sender, String handName)
                 throws CommandException {
             EntityPlayerMP player = getCommandSenderAsPlayer(sender);
@@ -400,6 +485,10 @@ public final class ManaTestFixture {
             ItemWand wand = (ItemWand) stack.getItem();
             Spell spell = WandHelper.getCurrentSpell(stack);
             SpellModifiers modifiers = wand.calculateModifiers(stack, player, spell);
+            double efficiency = ManaApi.getManaService()
+                    .getApplicableSpellEfficiency(player, spell);
+            double profileMultiplier = ManaApi.getManaService()
+                    .getApplicableSpellCostMultiplier(player, spell);
             sender.sendMessage(new TextComponentString(
                     "JAWMS wand hand=" + hand
                             + ", spell=" + spell.getRegistryName()
@@ -409,8 +498,13 @@ public final class ManaTestFixture {
                                     spell.getRegistryName(),
                                     spell.getCost()
                             )
-                            + ", finalCost=" + SpellCostService.getFinalCost(spell, modifiers)
+                            + ", contextualFactor=" + modifiers.get(SpellModifiers.COST)
+                            + ", profileMultiplier=" + profileMultiplier
+                            + ", efficiencyPoints=" + efficiency
+                            + ", efficiencyScale=" + GameplayRulesManager.current().getEfficiencyScale()
+                            + ", finalCost=" + SpellCostService.getFinalCost(player, spell, modifiers)
                             + ", storedWandMana=" + wand.getMana(stack)
+                            + ", captured=" + CastCostContextManager.describe(player, hand)
                             + "."
             ));
         }
@@ -508,6 +602,49 @@ public final class ManaTestFixture {
 
         private UUID playerId;
         private UUID tickPlayerId;
+        private UUID factorPlayerId;
+        private float factor = 1.0F;
+        private UUID scheduledFactorPlayerId;
+        private float scheduledFactor = 1.0F;
+        private int scheduledFactorTicks;
+
+        @SubscribeEvent(priority = EventPriority.HIGHEST)
+        public void applyContextualCostFactor(SpellCastEvent.Pre event) {
+            if (event.getSource() != SpellCastEvent.Source.WAND
+                    || !(event.getCaster() instanceof EntityPlayerMP)
+                    || factorPlayerId == null
+                    || !factorPlayerId.equals(event.getCaster().getUniqueID())) {
+                return;
+            }
+            event.getModifiers().set(
+                    SpellModifiers.COST,
+                    event.getModifiers().get(SpellModifiers.COST) * factor,
+                    false
+            );
+        }
+
+        @SubscribeEvent
+        public void applyScheduledFactor(TickEvent.PlayerTickEvent event) {
+            if (event.phase != TickEvent.Phase.END
+                    || !(event.player instanceof EntityPlayerMP)
+                    || scheduledFactorPlayerId == null
+                    || !scheduledFactorPlayerId.equals(event.player.getUniqueID())) {
+                return;
+            }
+            if (--scheduledFactorTicks > 0) {
+                return;
+            }
+            EntityPlayerMP player = (EntityPlayerMP) event.player;
+            setFactorFor(player, scheduledFactor);
+            scheduledFactorPlayerId = null;
+            JustAnotherWizardryManaSystemMod.LOGGER.info(
+                    "JAWMS test contextual factor changed during runtime: player={}, factor={}, mainCaptured={}, offCaptured={}.",
+                    player.getUniqueID(),
+                    factor,
+                    CastCostContextManager.describe(player, EnumHand.MAIN_HAND),
+                    CastCostContextManager.describe(player, EnumHand.OFF_HAND)
+            );
+        }
 
         @SubscribeEvent(priority = EventPriority.HIGHEST)
         public void cancelWandPreCast(SpellCastEvent.Pre event) {
@@ -583,9 +720,25 @@ public final class ManaTestFixture {
             return playerId != null && playerId.equals(player.getUniqueID());
         }
 
+        private void setFactorFor(EntityPlayerMP player, float value) {
+            factorPlayerId = player.getUniqueID();
+            factor = value;
+        }
+
+        private void scheduleFactorFor(EntityPlayerMP player, float value, int ticks) {
+            scheduledFactorPlayerId = player.getUniqueID();
+            scheduledFactor = value;
+            scheduledFactorTicks = ticks;
+        }
+
         private void clear() {
             playerId = null;
             tickPlayerId = null;
+            factorPlayerId = null;
+            factor = 1.0F;
+            scheduledFactorPlayerId = null;
+            scheduledFactor = 1.0F;
+            scheduledFactorTicks = 0;
         }
     }
 }

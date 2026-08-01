@@ -88,11 +88,15 @@ class ManaProfileResolverTest {
         ManaContribution first = ManaContribution.builder()
                 .globalSpellEfficiency(10.0D)
                 .elementSpellEfficiency(Element.FIRE, 20.0D)
+                .globalSpellCostMultiplier(0.5D)
+                .elementSpellCostMultiplier(Element.FIRE, 1.5D)
                 .regenerateDuringPostCastLockout(true)
                 .build();
         ManaContribution second = ManaContribution.builder()
                 .globalSpellEfficiency(5.0D)
                 .elementSpellEfficiency(Element.FIRE, 7.0D)
+                .globalSpellCostMultiplier(1.5D)
+                .elementSpellCostMultiplier(Element.FIRE, 0.5D)
                 .regenerateDuringContinuousCasting(true)
                 .build();
 
@@ -105,6 +109,8 @@ class ManaProfileResolverTest {
 
         assertEquals(42.0D, profile.getSpellEfficiency(Element.FIRE));
         assertEquals(15.0D, profile.getSpellEfficiency(Element.ICE));
+        assertEquals(0.5625D, profile.getSpellCostMultiplier(Element.FIRE));
+        assertEquals(0.75D, profile.getSpellCostMultiplier(Element.ICE));
         assertTrue(profile.canRegenerateDuringPostCastLockout());
         assertTrue(profile.canRegenerateDuringContinuousCasting());
         assertFalse(ManaProfileResolver.resolve(
@@ -113,5 +119,51 @@ class ManaProfileResolverTest {
                 2.0D,
                 Collections.emptyList()
         ).canRegenerateDuringPostCastLockout());
+    }
+
+    @Test
+    void extremeMultiplierProductsAreOrderIndependentBeforeFinalSaturation() {
+        ManaContribution huge = ManaContribution.builder()
+                .globalSpellCostMultiplier(1.0E308D)
+                .build();
+        ManaContribution ten = ManaContribution.builder()
+                .globalSpellCostMultiplier(10.0D)
+                .build();
+        ManaContribution tenth = ManaContribution.builder()
+                .globalSpellCostMultiplier(0.1D)
+                .build();
+
+        ResolvedManaProfile overflowFirst = ManaProfileResolver.resolve(
+                50, 2.0D, 2.0D, Arrays.asList(huge, ten, tenth)
+        );
+        ResolvedManaProfile inverseFirst = ManaProfileResolver.resolve(
+                50, 2.0D, 2.0D, Arrays.asList(huge, tenth, ten)
+        );
+
+        assertEquals(1.0E308D, overflowFirst.getSpellCostMultiplier(Element.FIRE));
+        assertEquals(
+                overflowFirst.getSpellCostMultiplier(Element.FIRE),
+                inverseFirst.getSpellCostMultiplier(Element.FIRE)
+        );
+    }
+
+    @Test
+    void combinesGlobalAndElementProductsBeforeFinalSaturation() {
+        ManaContribution huge = ManaContribution.builder()
+                .globalSpellCostMultiplier(1.0E308D)
+                .build();
+        ManaContribution ten = ManaContribution.builder()
+                .globalSpellCostMultiplier(10.0D)
+                .build();
+        ManaContribution fireTenth = ManaContribution.builder()
+                .elementSpellCostMultiplier(Element.FIRE, 0.1D)
+                .build();
+
+        ResolvedManaProfile profile = ManaProfileResolver.resolve(
+                50, 2.0D, 2.0D, Arrays.asList(huge, ten, fireTenth)
+        );
+
+        assertEquals(1.0E308D, profile.getSpellCostMultiplier(Element.FIRE));
+        assertEquals(Double.MAX_VALUE, profile.getSpellCostMultiplier(Element.ICE));
     }
 }

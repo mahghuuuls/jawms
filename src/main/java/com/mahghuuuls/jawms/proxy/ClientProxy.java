@@ -7,6 +7,7 @@ import com.mahghuuuls.jawms.client.ClientHudConfigManager;
 import com.mahghuuuls.jawms.client.ManaHudRenderer;
 import com.mahghuuuls.jawms.client.ManaItemTooltipHandler;
 import com.mahghuuuls.jawms.internal.casting.SpellCostService;
+import com.mahghuuuls.jawms.internal.casting.CastCostContextManager;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesMessage;
 import electroblob.wizardry.item.ItemWand;
 import electroblob.wizardry.spell.Spell;
@@ -21,6 +22,8 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 
 import java.io.File;
+import electroblob.wizardry.constants.Element;
+import java.util.Map;
 
 public final class ClientProxy extends CommonProxy {
 
@@ -40,9 +43,15 @@ public final class ClientProxy extends CommonProxy {
             int currentMana,
             int maximumMana,
             double effectiveRegeneration,
-            long revision
+            long revision,
+            double globalSpellEfficiency,
+            Map<Element, Double> elementSpellEfficiency,
+            double globalSpellCostMultiplier,
+            Map<Element, Double> elementSpellCostMultiplier
     ) {
-        ClientManaState.accept(currentMana, maximumMana, effectiveRegeneration, revision);
+        ClientManaState.accept(currentMana, maximumMana, effectiveRegeneration, revision,
+                globalSpellEfficiency, elementSpellEfficiency,
+                globalSpellCostMultiplier, elementSpellCostMultiplier);
     }
 
     @Override
@@ -105,7 +114,10 @@ public final class ClientProxy extends CommonProxy {
         );
         return SpellCostService.roundFinalCost(
                 baseCost,
-                modifiers.get(SpellModifiers.COST)
+                modifiers.get(SpellModifiers.COST),
+                ClientManaState.getSpellCostMultiplier(spell.getElement()),
+                ClientManaState.getSpellEfficiency(spell.getElement()),
+                ClientGameplayRules.getEfficiencyScale()
         );
     }
 
@@ -119,6 +131,7 @@ public final class ClientProxy extends CommonProxy {
         if (player == null) {
             return;
         }
+        CastCostContextManager.clear(player, hand);
         ItemStack stack = player.getHeldItem(hand);
         if (!(stack.getItem() instanceof ItemWand)) {
             return;

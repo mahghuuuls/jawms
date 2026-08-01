@@ -67,6 +67,7 @@ public abstract class ItemWandMixin {
                 wizardryCost,
                 spell,
                 caster,
+                hand,
                 modifiers
         );
     }
@@ -125,6 +126,7 @@ public abstract class ItemWandMixin {
                 wizardryCost,
                 spell,
                 caster,
+                hand,
                 modifiers
         );
     }
@@ -244,7 +246,16 @@ public abstract class ItemWandMixin {
             );
         } finally {
             WizardryWandBridge.cleanupToDepth(caster, initialDepth);
+            WizardryWandBridge.endDiscreteCast(caster, hand, spell);
         }
+    }
+
+    @Inject(method = RIGHT_CLICK, at = @At("HEAD"), require = 1, expect = 1, remap = false)
+    private void jawms$beginPhysicalCast(
+            World world, EntityPlayer player, EnumHand hand,
+            CallbackInfoReturnable<ActionResult<ItemStack>> callback
+    ) {
+        WizardryWandBridge.beginPhysicalCast(player, hand);
     }
 
     @Inject(

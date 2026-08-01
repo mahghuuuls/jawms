@@ -44,6 +44,8 @@ dependencies {
 
     // Optional runtime integration. Compile against the API without requiring or bundling Baubles.
     compileOnly rfg.deobf('curse.maven:baubles-227083:2518667')
+    // Install Baubles only in development runs so optional slot integration is testable.
+    runtimeOnly rfg.deobf('curse.maven:baubles-227083:2518667')
 }
 
 // Need reobfJar to use uber jars, so dependencies that are shaded in are present

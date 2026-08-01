@@ -30,20 +30,41 @@ public final class WizardryWandBridge {
     private WizardryWandBridge() {
     }
 
+    public static void beginPhysicalCast(EntityPlayer caster, EnumHand hand) {
+        CastCostContextManager.clear(caster, hand);
+    }
+
+    public static void endDiscreteCast(EntityPlayer caster, EnumHand hand, Spell spell) {
+        if (!spell.isContinuous) {
+            CastCostContextManager.clear(caster, hand);
+        }
+    }
+
     public static int replaceCalculatedCost(
             int wizardryCost,
             Spell spell,
             EntityPlayer caster,
+            EnumHand hand,
             SpellModifiers modifiers
     ) {
         if (caster.world.isRemote) {
-            return JustAnotherWizardryManaSystemMod.proxy.getClientFinalSpellCost(
+            int calculated = JustAnotherWizardryManaSystemMod.proxy.getClientFinalSpellCost(
                     spell,
                     modifiers,
                     wizardryCost
             );
+            return CastCostContextManager.captureOrGet(caster, hand, spell, calculated);
         }
-        return SpellCostService.getFinalCost(spell, modifiers);
+        com.mahghuuuls.jawms.internal.rules.GameplayRules rules =
+                com.mahghuuuls.jawms.internal.rules.GameplayRulesManager.current();
+        ManaService mana = new ManaService();
+        double points = mana.getApplicableSpellEfficiency(caster, spell);
+        double profileMultiplier = mana.getApplicableSpellCostMultiplier(caster, spell);
+        return CastCostContextManager.captureOrGet(caster, hand, spell,
+                SpellCostService.getFinalCost(caster, spell, modifiers),
+                SpellCostService.getConfiguredBaseCost(rules, spell),
+                SpellCostService.retainedContextualFactor(modifiers.get(SpellModifiers.COST)),
+                profileMultiplier, points, rules.getEfficiencyScale());
     }
 
     public static int getAvailableManaForPrecheck(
@@ -69,12 +90,15 @@ public final class WizardryWandBridge {
             int fallbackCost = SpellCostService.getFinalCost(spell, modifiers);
             int synchronizedCost = JustAnotherWizardryManaSystemMod.proxy
                     .getClientFinalSpellCost(spell, modifiers, fallbackCost);
+            int capturedCost = CastCostContextManager.captureOrGet(
+                    caster, hand, spell, synchronizedCost
+            );
             int required = spell.isContinuous
                     ? ContinuousSpellCost.portionAtTick(
-                            synchronizedCost,
+                            capturedCost,
                             castingTick
                     )
-                    : synchronizedCost;
+                    : capturedCost;
             if (spell.isContinuous && required > available) {
                 JustAnotherWizardryManaSystemMod.proxy.blockClientContinuousCast(
                         spell,
@@ -93,7 +117,7 @@ public final class WizardryWandBridge {
                 )) {
             return -1;
         }
-        int required = costForAttempt(spell, modifiers, castingTick);
+        int required = costForAttempt(caster, hand, spell, modifiers, castingTick);
         int available = ManaService.getAvailableMana(caster);
         if (required > available) {
             if (spell.isContinuous) {
@@ -128,7 +152,7 @@ public final class WizardryWandBridge {
             return spell.cast(world, caster, hand, castingTick, modifiers);
         }
 
-        int cost = costForAttempt(spell, modifiers, castingTick);
+        int cost = costForAttempt(caster, hand, spell, modifiers, castingTick);
         ManaReservation reservation = ManaService.reserveMana(caster, cost);
         if (reservation == null) {
             int available = ManaService.getAvailableMana(caster);
@@ -208,10 +232,13 @@ public final class WizardryWandBridge {
             ItemStack stack,
             ActionResult<ItemStack> result
     ) {
+        Spell spell = WandHelper.getCurrentSpell(stack);
+        if (result.getType() != EnumActionResult.SUCCESS) {
+            CastCostContextManager.clear(caster, hand);
+        }
         if (caster.world.isRemote) {
             return;
         }
-        Spell spell = WandHelper.getCurrentSpell(stack);
         if (!spell.isContinuous) {
             return;
         }
@@ -260,6 +287,7 @@ public final class WizardryWandBridge {
     }
 
     public static void interruptContinuousCast(EntityPlayer caster, Spell spell, EnumHand hand) {
+        CastCostContextManager.clear(caster, hand);
         if (caster.world.isRemote || !spell.isContinuous) {
             return;
         }
@@ -310,6 +338,7 @@ public final class WizardryWandBridge {
     }
 
     public static void finishContinuousCast(EntityPlayer caster, Spell spell, EnumHand hand) {
+        CastCostContextManager.clear(caster, hand);
         if (caster.world.isRemote || !spell.isContinuous) {
             return;
         }
@@ -334,17 +363,20 @@ public final class WizardryWandBridge {
         }
         if (!caster.isHandActive()) {
             ManaService.finishContinuousCast(caster);
+            CastCostContextManager.clearAll(caster);
             return;
         }
         EnumHand hand = caster.getActiveHand();
         ItemStack stack = caster.getHeldItem(hand);
         if (!(stack.getItem() instanceof ItemWand)) {
             ManaService.finishContinuousCast(caster);
+            CastCostContextManager.clearAll(caster);
             return;
         }
         Spell spell = WandHelper.getCurrentSpell(stack);
         if (!spell.isContinuous || !state.matchesContinuousCast(hand, spell.getRegistryName())) {
             ManaService.finishContinuousCast(caster);
+            CastCostContextManager.clearAll(caster);
         }
     }
 
@@ -446,11 +478,17 @@ public final class WizardryWandBridge {
     }
 
     private static int costForAttempt(
+            EntityPlayer caster,
+            EnumHand hand,
             Spell spell,
             SpellModifiers modifiers,
             int castingTick
     ) {
-        int cost = SpellCostService.getFinalCost(spell, modifiers);
+        int calculated = caster.world.isRemote
+                ? JustAnotherWizardryManaSystemMod.proxy.getClientFinalSpellCost(
+                        spell, modifiers, SpellCostService.getFinalCost(spell, modifiers))
+                : SpellCostService.getFinalCost(caster, spell, modifiers);
+        int cost = CastCostContextManager.captureOrGet(caster, hand, spell, calculated);
         return spell.isContinuous
                 ? ContinuousSpellCost.portionAtTick(cost, castingTick)
                 : cost;

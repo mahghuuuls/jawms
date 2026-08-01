@@ -33,6 +33,8 @@ public final class GameplayRulesMessage implements IMessage {
     private List<ConfiguredItemRule> itemRules = new ArrayList<>();
     private WizardryArmorProfile armorProfile = WizardryArmorProfile.DEFAULT;
     private List<ResourceLocation> generatedWizardryArmorIds = new ArrayList<>();
+    private double efficiencyScale = GameplayRules.DEFAULT_EFFICIENCY_SCALE;
+    private WizardryArmorEfficiencyProfile armorEfficiencyProfile = WizardryArmorEfficiencyProfile.DEFAULT;
     private boolean malformed;
 
     public GameplayRulesMessage() {
@@ -50,6 +52,8 @@ public final class GameplayRulesMessage implements IMessage {
         itemRules = new ArrayList<>(rules.getConfiguredItemRules());
         armorProfile = rules.getArmorProfile();
         generatedWizardryArmorIds = new ArrayList<>(rules.getGeneratedWizardryArmorIds());
+        efficiencyScale = rules.getEfficiencyScale();
+        armorEfficiencyProfile = rules.getArmorEfficiencyProfile();
     }
 
     @Override
@@ -97,6 +101,11 @@ public final class GameplayRulesMessage implements IMessage {
             for (int index = 0; index < armorCount; index++) {
                 generatedWizardryArmorIds.add(readIdentifier(buffer));
             }
+            efficiencyScale = buffer.readDouble();
+            armorEfficiencyProfile = new WizardryArmorEfficiencyProfile(
+                    buffer.readBoolean(), buffer.readDouble(), buffer.readDouble(),
+                    buffer.readDouble(), buffer.readDouble(), buffer.readDouble()
+            );
         } catch (RuntimeException exception) {
             malformed = true;
             spellCosts.clear();
@@ -140,6 +149,13 @@ public final class GameplayRulesMessage implements IMessage {
         for (ResourceLocation id : generatedWizardryArmorIds) {
             ByteBufUtils.writeUTF8String(buffer, id.toString());
         }
+        buffer.writeDouble(efficiencyScale);
+        buffer.writeBoolean(armorEfficiencyProfile.isEnabled());
+        buffer.writeDouble(armorEfficiencyProfile.getWizard());
+        buffer.writeDouble(armorEfficiencyProfile.getSage());
+        buffer.writeDouble(armorEfficiencyProfile.getBattlemage());
+        buffer.writeDouble(armorEfficiencyProfile.getWarlock());
+        buffer.writeDouble(armorEfficiencyProfile.getSageNonmatchingFullSet());
     }
 
     public boolean isValid() {
@@ -152,6 +168,8 @@ public final class GameplayRulesMessage implements IMessage {
                 || smallFlask < 0
                 || mediumFlask < 0
                 || largeFlask < 0
+                || !Double.isFinite(efficiencyScale)
+                || efficiencyScale <= 0.0D
                 || spellCosts.size() > MAX_TABLE_ENTRIES
                 || itemRules.size() > MAX_TABLE_ENTRIES
                 || generatedWizardryArmorIds.size() > MAX_TABLE_ENTRIES) {
@@ -209,6 +227,14 @@ public final class GameplayRulesMessage implements IMessage {
         return new ArrayList<>(generatedWizardryArmorIds);
     }
 
+    public double getEfficiencyScale() {
+        return efficiencyScale;
+    }
+
+    public WizardryArmorEfficiencyProfile getArmorEfficiencyProfile() {
+        return armorEfficiencyProfile;
+    }
+
     private static int boundedCount(int count) {
         if (count < 0 || count > MAX_TABLE_ENTRIES) {
             throw new IllegalArgumentException("Packet table count is out of bounds: " + count);
@@ -241,6 +267,13 @@ public final class GameplayRulesMessage implements IMessage {
             buffer.writeByte(entry.getKey().ordinal());
             buffer.writeDouble(entry.getValue());
         }
+        buffer.writeDouble(contribution.getGlobalSpellCostMultiplier());
+        buffer.writeInt(contribution.getElementSpellCostMultipliers().size());
+        for (Map.Entry<Element, Double> entry
+                : contribution.getElementSpellCostMultipliers().entrySet()) {
+            buffer.writeByte(entry.getKey().ordinal());
+            buffer.writeDouble(entry.getValue());
+        }
         buffer.writeBoolean(contribution.canRegenerateDuringPostCastLockout());
         buffer.writeBoolean(contribution.canRegenerateDuringContinuousCasting());
     }
@@ -269,6 +302,20 @@ public final class GameplayRulesMessage implements IMessage {
             }
             seen[ordinal] = true;
             builder.elementSpellEfficiency(Element.values()[ordinal], buffer.readDouble());
+        }
+        builder.globalSpellCostMultiplier(buffer.readDouble());
+        elementCount = buffer.readInt();
+        if (elementCount < 0 || elementCount > Element.values().length) {
+            throw new IllegalArgumentException("Element cost-multiplier count is out of bounds.");
+        }
+        seen = new boolean[Element.values().length];
+        for (int index = 0; index < elementCount; index++) {
+            int ordinal = buffer.readUnsignedByte();
+            if (ordinal >= seen.length || seen[ordinal]) {
+                throw new IllegalArgumentException("Invalid or duplicate element cost multiplier.");
+            }
+            seen[ordinal] = true;
+            builder.elementSpellCostMultiplier(Element.values()[ordinal], buffer.readDouble());
         }
         return builder
                 .regenerateDuringPostCastLockout(buffer.readBoolean())

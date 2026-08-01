@@ -24,6 +24,8 @@ class ManaContributionTest {
                 .lockoutReduction(40.0D)
                 .globalSpellEfficiency(5.0D)
                 .elementSpellEfficiency(Element.FIRE, 20.0D)
+                .globalSpellCostMultiplier(0.5D)
+                .elementSpellCostMultiplier(Element.FIRE, 1.5D)
                 .regenerateDuringContinuousCasting(true)
                 .build();
 
@@ -33,11 +35,16 @@ class ManaContributionTest {
         assertEquals(-0.5D, contribution.getFlatRegeneration());
         assertEquals(20.0D, contribution.getElementSpellEfficiency(Element.FIRE));
         assertEquals(0.0D, contribution.getElementSpellEfficiency(Element.ICE));
+        assertEquals(0.5D, contribution.getGlobalSpellCostMultiplier());
+        assertEquals(1.5D, contribution.getElementSpellCostMultiplier(Element.FIRE));
+        assertEquals(1.0D, contribution.getElementSpellCostMultiplier(Element.ICE));
         assertTrue(contribution.canRegenerateDuringContinuousCasting());
         assertFalse(contribution.canRegenerateDuringPostCastLockout());
         assertFalse(contribution.isEmpty());
         assertThrows(UnsupportedOperationException.class,
                 () -> contribution.getElementSpellEfficiency().put(Element.ICE, 1.0D));
+        assertThrows(UnsupportedOperationException.class,
+                () -> contribution.getElementSpellCostMultipliers().put(Element.ICE, 1.0D));
     }
 
     @Test
@@ -50,6 +57,11 @@ class ManaContributionTest {
                 () -> ManaContribution.builder().flatLockoutSeconds(Double.NaN).build());
         assertThrows(IllegalArgumentException.class,
                 () -> ManaContribution.builder().globalSpellEfficiency(-1.0D).build());
+        assertThrows(IllegalArgumentException.class,
+                () -> ManaContribution.builder().globalSpellCostMultiplier(0.0D).build());
+        assertThrows(IllegalArgumentException.class,
+                () -> ManaContribution.builder()
+                        .elementSpellCostMultiplier(Element.FIRE, Double.NaN).build());
         assertTrue(ManaContribution.EMPTY.isEmpty());
     }
 }

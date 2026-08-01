@@ -1,7 +1,11 @@
 package com.mahghuuuls.jawms.client;
 
+import electroblob.wizardry.constants.Element;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
+import java.util.EnumMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -46,5 +50,18 @@ class ClientManaStateTest {
         ClientManaState.clear();
 
         assertFalse(ClientManaState.isAvailable());
+        assertEquals(1.0D, ClientManaState.getSpellCostMultiplier(Element.FIRE));
+    }
+
+    @Test
+    void resolvesSynchronizedGlobalAndElementCostMultipliers() {
+        EnumMap<Element, Double> elements = new EnumMap<>(Element.class);
+        elements.put(Element.FIRE, 1.5D);
+        ClientManaState.accept(
+                40, 50, 2.0D, 1, 0.0D, Collections.emptyMap(), 0.5D, elements
+        );
+
+        assertEquals(1.5D, ClientManaState.getSpellCostMultiplier(Element.FIRE));
+        assertEquals(0.5D, ClientManaState.getSpellCostMultiplier(Element.ICE));
     }
 }

@@ -14,6 +14,7 @@ import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
@@ -44,9 +45,20 @@ public final class JustAnotherWizardryManaSystemMod {
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         LOGGER.info("Initializing {}.", Tags.MOD_NAME);
-        GameplayRulesManager.configure(event.getSuggestedConfigurationFile());
+        File configurationDirectory = new File(
+                event.getModConfigurationDirectory(), Tags.MOD_ID
+        );
+        if (!configurationDirectory.isDirectory() && !configurationDirectory.mkdirs()) {
+            throw new IllegalStateException(
+                    "Could not create JAWMS configuration directory: "
+                            + configurationDirectory.getAbsolutePath()
+            );
+        }
+        GameplayRulesManager.configure(
+                new File(configurationDirectory, Tags.MOD_ID + ".cfg")
+        );
         ManaBootstrap.initialize();
-        proxy.preInit(event.getModConfigurationDirectory());
+        proxy.preInit(configurationDirectory);
     }
 
     @Mod.EventHandler
