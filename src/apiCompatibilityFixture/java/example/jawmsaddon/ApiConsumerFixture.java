@@ -12,6 +12,7 @@ import com.mahghuuuls.jawms.api.ManaItemContext;
 import com.mahghuuuls.jawms.api.ManaTooltips;
 import electroblob.wizardry.spell.Spell;
 import electroblob.wizardry.constants.Element;
+import electroblob.wizardry.registry.WizardryItems;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.command.CommandBase;
@@ -28,6 +29,7 @@ import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** A separately compiled Java 8 example addon that uses only JAWMS public API types. */
 @Mod(
@@ -46,10 +48,13 @@ public final class ApiConsumerFixture {
     private static final AtomicInteger CONTEXT_CALLS = new AtomicInteger();
     private static final AtomicInteger FAILURE_CALLS = new AtomicInteger();
     private static final AtomicInteger MUTATION_REJECTIONS = new AtomicInteger();
+    private static final AtomicReference<String> LAST_ITEM_CONTEXT =
+            new AtomicReference<>("none");
     private static volatile boolean contextualEnabled;
     private static volatile boolean nullEnabled;
     private static volatile boolean throwingEnabled;
     private static volatile boolean mutationProbeEnabled;
+    private static volatile boolean baubleProbeEnabled;
 
     private ManaStateChangeEvent lastEvent;
 
@@ -65,6 +70,7 @@ public final class ApiConsumerFixture {
                             ManaItemContext context
                     ) {
                         ITEM_CALLS.incrementAndGet();
+                        LAST_ITEM_CONTEXT.set(context.toString());
                         return ManaContribution.builder().flatMaximumMana(1).build();
                     }
                 }
@@ -79,6 +85,7 @@ public final class ApiConsumerFixture {
                             ManaItemContext context
                     ) {
                         ITEM_CALLS.incrementAndGet();
+                        LAST_ITEM_CONTEXT.set(context.toString());
                         context.getStack().setCount(0); // proves the context stack is defensive
                         return ManaContribution.builder().flatMaximumMana(2).build();
                     }
@@ -92,6 +99,26 @@ public final class ApiConsumerFixture {
                         CONTEXT_CALLS.incrementAndGet();
                         return contextualEnabled
                                 ? ManaContribution.builder().flatRegeneration(1.0D).build()
+                                : ManaContribution.EMPTY;
+                    }
+                }
+        );
+        ManaApi.registerItemProvider(
+                new ResourceLocation(MOD_ID, "bauble_probe"),
+                WizardryItems.ring_condensing,
+                new IItemManaModifierProvider() {
+                    @Override
+                    public ManaContribution getContribution(
+                            EntityPlayer player,
+                            ManaItemContext context
+                    ) {
+                        ITEM_CALLS.incrementAndGet();
+                        LAST_ITEM_CONTEXT.set(context.toString());
+                        return baubleProbeEnabled
+                                ? ManaContribution.builder()
+                                .flatMaximumMana(7)
+                                .flatRegeneration(0.5D)
+                                .build()
                                 : ManaContribution.EMPTY;
                     }
                 }
@@ -216,7 +243,7 @@ public final class ApiConsumerFixture {
 
         @Override
         public String getUsage(ICommandSender sender) {
-            return "/jawms-api-fixture inspect | cycle | providers <status|contextual|null|throwing|mutation|invalidate> [true|false]";
+            return "/jawms-api-fixture inspect | cycle | providers <status|contextual|null|throwing|mutation|bauble|invalidate> [true|false]";
         }
 
         @Override
@@ -259,13 +286,15 @@ public final class ApiConsumerFixture {
                 if ("status".equals(operation) && arguments.length == 2) {
                     sender.sendMessage(new TextComponentString(
                             "providers itemCalls=" + ITEM_CALLS.get()
+                                    + ", lastItemContext=" + LAST_ITEM_CONTEXT.get()
                                     + ", contextCalls=" + CONTEXT_CALLS.get()
                                     + ", failureCalls=" + FAILURE_CALLS.get()
                                     + ", mutationRejections=" + MUTATION_REJECTIONS.get()
                                     + ", contextual=" + contextualEnabled
                                     + ", null=" + nullEnabled
                                     + ", throwing=" + throwingEnabled
-                                    + ", mutation=" + mutationProbeEnabled + "."
+                                    + ", mutation=" + mutationProbeEnabled
+                                    + ", bauble=" + baubleProbeEnabled + "."
                     ));
                     return;
                 }
@@ -279,6 +308,8 @@ public final class ApiConsumerFixture {
                         throwingEnabled = enabled;
                     } else if ("mutation".equals(operation)) {
                         mutationProbeEnabled = enabled;
+                    } else if ("bauble".equals(operation)) {
+                        baubleProbeEnabled = enabled;
                     } else {
                         throw new CommandException(getUsage(sender));
                     }

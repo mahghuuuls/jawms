@@ -214,6 +214,24 @@ tasks.register('verifyApiCompatibilityFixture') {
         if (!packagedFixtures.empty) {
             throw new GradleException("Development/API fixture leaked into the production jar: ${packagedFixtures}")
         }
+
+        def productionJar = tasks.named('jar').get().archiveFile.get().asFile
+        def bundledBaubles = zipTree(productionJar).matching {
+            include 'baubles/**'
+        }.files
+        if (!bundledBaubles.empty) {
+            throw new GradleException("Optional Baubles classes were bundled into the production jar: ${bundledBaubles}")
+        }
+
+        def leakedBaublesReferences = zipTree(productionJar).matching {
+            include 'com/mahghuuuls/jawms/**/*.class'
+            exclude 'com/mahghuuuls/jawms/internal/integration/baubles/**'
+        }.files.findAll { classFile ->
+            new String(classFile.bytes, 'ISO-8859-1').contains('baubles/api/')
+        }
+        if (!leakedBaublesReferences.empty) {
+            throw new GradleException("Baubles type leaked outside its guarded adapter: ${leakedBaublesReferences}")
+        }
     }
 }
 

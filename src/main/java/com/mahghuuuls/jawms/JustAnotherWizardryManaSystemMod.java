@@ -4,6 +4,7 @@ import com.mahghuuuls.jawms.internal.mana.ManaBootstrap;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import com.mahghuuuls.jawms.internal.rules.JawmsCommand;
 import com.mahghuuuls.jawms.internal.modifier.ManaProviderRegistry;
+import com.mahghuuuls.jawms.internal.modifier.ActiveSlotSources;
 import com.mahghuuuls.jawms.proxy.CommonProxy;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.SidedProxy;
@@ -57,6 +58,7 @@ public final class JustAnotherWizardryManaSystemMod {
         GameplayRulesManager.configure(
                 new File(configurationDirectory, Tags.MOD_ID + ".cfg")
         );
+        ActiveSlotSources.initialize();
         ManaBootstrap.initialize();
         proxy.preInit(configurationDirectory);
     }

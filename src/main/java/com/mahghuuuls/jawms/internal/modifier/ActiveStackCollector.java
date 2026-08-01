@@ -50,7 +50,35 @@ public final class ActiveStackCollector {
                 rules,
                 contributions
         );
+        for (ActiveSlotSource source : ActiveSlotSources.current()) {
+            source.collect(player, (stack, category, slotIndex) -> collectStack(
+                    player, stack, category, slotIndex, rules, contributions
+            ));
+        }
         return contributions;
+    }
+
+    static void collectStack(
+            EntityPlayer player,
+            ItemStack stack,
+            ManaSlotCategory category,
+            int slotIndex,
+            GameplayRules rules,
+            List<ManaContribution> destination
+    ) {
+        if (stack == null || stack.isEmpty()) {
+            return;
+        }
+        ConfiguredItemRule explicit = rules.findConfiguredItemRule(stack);
+        collectResolvedStack(
+                player,
+                new ManaItemContext(stack, category, slotIndex),
+                explicit,
+                null,
+                rules,
+                destination,
+                ManaProviderRegistry.instance()
+        );
     }
 
     static void collectStack(
@@ -69,16 +97,28 @@ public final class ActiveStackCollector {
                 && rules.hasGeneratedWizardryArmor(stack)) {
             generated = generatedWizardryArmor(player, stack, slot, rules);
         }
-        collectResolvedStack(
-                player, stack, slot, explicit, generated, rules, destination,
-                ManaProviderRegistry.instance()
-        );
+        collectResolvedStack(player, context(stack, slot), explicit, generated, rules,
+                destination, ManaProviderRegistry.instance());
     }
 
     static void collectResolvedStack(
             EntityPlayer player,
             ItemStack stack,
             EntityEquipmentSlot slot,
+            ConfiguredItemRule explicit,
+            ManaContribution generated,
+            GameplayRules rules,
+            List<ManaContribution> destination,
+            ManaProviderRegistry registry
+    ) {
+        collectResolvedStack(
+                player, context(stack, slot), explicit, generated, rules, destination, registry
+        );
+    }
+
+    static void collectResolvedStack(
+            EntityPlayer player,
+            ManaItemContext context,
             ConfiguredItemRule explicit,
             ManaContribution generated,
             GameplayRules rules,
@@ -93,7 +133,6 @@ public final class ActiveStackCollector {
             destination.add(generated);
             return;
         }
-        ManaItemContext context = context(stack, slot);
         destination.addAll(registry.evaluateItem(player, context, rules));
     }
 

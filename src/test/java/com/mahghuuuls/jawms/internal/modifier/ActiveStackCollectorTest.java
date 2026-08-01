@@ -1,6 +1,8 @@
 package com.mahghuuuls.jawms.internal.modifier;
 
 import com.mahghuuuls.jawms.api.ManaContribution;
+import com.mahghuuuls.jawms.api.ManaItemContext;
+import com.mahghuuuls.jawms.api.ManaSlotCategory;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorProfile;
 import com.mahghuuuls.jawms.internal.rules.ConfiguredItemRule;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
@@ -152,5 +154,66 @@ class ActiveStackCollectorTest {
                 .WizardryArmorEfficiencyProfile.DEFAULT.getBattlemage());
         assertEquals(10.0D, com.mahghuuuls.jawms.internal.rules
                 .WizardryArmorEfficiencyProfile.DEFAULT.getWarlock());
+    }
+
+    @Test
+    void configuredBaubleUsesExplicitLayerOnceForItsOccupiedSlot() {
+        EntityPlayer player = mock(EntityPlayerMP.class);
+        ItemStack stack = new ItemStack(Items.STICK, 64);
+        ConfiguredItemRule explicit = new ConfiguredItemRule(
+                Items.STICK.getRegistryName(), ConfiguredItemRule.WILDCARD_METADATA,
+                ManaContribution.builder().flatMaximumMana(3).build()
+        );
+        List<ManaContribution> contributions = new ArrayList<>();
+
+        ActiveStackCollector.collectResolvedStack(
+                player,
+                new ManaItemContext(stack, ManaSlotCategory.BAUBLES, 5),
+                explicit,
+                null,
+                GameplayRules.initialDefaults(),
+                contributions,
+                new ManaProviderRegistry()
+        );
+
+        assertEquals(1, contributions.size());
+        assertEquals(3, contributions.get(0).getFlatMaximumMana());
+    }
+
+    @Test
+    void identicalBaublesInSeparateSlotsHaveSeparateProviderCacheKeys() {
+        ManaProviderRegistry registry = new ManaProviderRegistry();
+        AtomicInteger calls = new AtomicInteger();
+        List<String> contexts = new ArrayList<>();
+        registry.registerItem(new net.minecraft.util.ResourceLocation("test", "bauble_provider"),
+                Items.STICK, (player, context) -> {
+                    calls.incrementAndGet();
+                    contexts.add(context.getSlotCategory() + ":" + context.getSlotIndex());
+                    return ManaContribution.builder().flatRegeneration(1.0D).build();
+                });
+        EntityPlayer player = mock(EntityPlayerMP.class);
+        WorldServer world = mock(WorldServer.class);
+        player.world = world;
+        when(player.getUniqueID()).thenReturn(UUID.randomUUID());
+        when(world.getTotalWorldTime()).thenReturn(20L);
+        GameplayRules rules = GameplayRules.initialDefaults();
+        ItemStack stack = new ItemStack(Items.STICK);
+        List<ManaContribution> contributions = new ArrayList<>();
+
+        for (int slot : new int[]{1, 4}) {
+            ManaItemContext context = new ManaItemContext(
+                    stack, ManaSlotCategory.BAUBLES, slot
+            );
+            ActiveStackCollector.collectResolvedStack(
+                    player, context, null, null, rules, contributions, registry
+            );
+            ActiveStackCollector.collectResolvedStack(
+                    player, context, null, null, rules, contributions, registry
+            );
+        }
+
+        assertEquals(2, calls.get());
+        assertEquals(Arrays.asList("BAUBLES:1", "BAUBLES:4"), contexts);
+        assertEquals(4, contributions.size());
     }
 }

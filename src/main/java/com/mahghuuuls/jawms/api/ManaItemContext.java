@@ -44,7 +44,10 @@ public final class ManaItemContext {
         return slotCategory;
     }
 
-    /** Armor indices are head=0, chest=1, legs=2, feet=3. Hand indices are zero. */
+    /**
+     * Armor indices are head=0, chest=1, legs=2, feet=3. Hand indices are zero.
+     * Baubles indices are the stable indices reported by the installed Baubles handler.
+     */
     public int getSlotIndex() {
         return slotIndex;
     }
