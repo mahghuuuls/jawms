@@ -178,6 +178,15 @@ tasks.named(sourceSets.developmentFixture.compileJavaTaskName, JavaCompile).conf
     classpath = tasks.named('compileJava', JavaCompile).get().classpath + sourceSets.main.output
 }
 
+tasks.named('compileTestJava', JavaCompile).configure {
+    dependsOn sourceSets.developmentFixture.classesTaskName
+    classpath += sourceSets.developmentFixture.output
+}
+
+tasks.named('test', Test).configure {
+    classpath += sourceSets.developmentFixture.output
+}
+
 tasks.named(sourceSets.apiCompatibilityFixture.compileJavaTaskName, JavaCompile).configure {
     dependsOn tasks.named(sourceSets.main.classesTaskName)
     classpath = tasks.named('compileJava', JavaCompile).get().classpath + sourceSets.main.output

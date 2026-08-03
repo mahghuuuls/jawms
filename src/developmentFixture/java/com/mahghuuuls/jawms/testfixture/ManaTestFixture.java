@@ -55,9 +55,14 @@ public final class ManaTestFixture {
     private static final ManaEventProbe MANA_EVENT_PROBE = new ManaEventProbe();
     private static boolean manaEventProbeRegistered;
     private static final Set<UUID> REGENERATION_DISABLED = new HashSet<>();
+    private static final Set<UUID> BALANCE_PERCENT_BOOST = new HashSet<>();
     private static final ResourceLocation REGENERATION_TOGGLE_PROVIDER =
             new ResourceLocation("jawms_test", "regeneration_toggle");
+    private static final ResourceLocation BALANCE_PERCENT_BOOST_PROVIDER =
+            new ResourceLocation("jawms_test", "balance_percent_boost");
     private static boolean developmentProviderRegistered;
+    private static final BalanceRecorder BALANCE_RECORDER = new BalanceRecorder();
+    private static boolean balanceRecorderRegistered;
 
     private ManaTestFixture() {
     }
@@ -72,12 +77,23 @@ public final class ManaTestFixture {
                         ? ManaContribution.builder().regenerationReduction(100.0D).build()
                         : ManaContribution.EMPTY
         );
+        ManaApi.registerContextualProvider(
+                BALANCE_PERCENT_BOOST_PROVIDER,
+                player -> BALANCE_PERCENT_BOOST.contains(player.getUniqueID())
+                        ? ManaContribution.builder()
+                        .maximumManaIncrease(50.0D)
+                        .regenerationIncrease(50.0D)
+                        .build()
+                        : ManaContribution.EMPTY
+        );
         developmentProviderRegistered = true;
     }
 
     public static void register(FMLServerStartingEvent event) {
         CAST_CANCELLATION.clear();
         REGENERATION_DISABLED.clear();
+        BALANCE_PERCENT_BOOST.clear();
+        BALANCE_RECORDER.clear();
         if (!cancellationFixtureRegistered) {
             MinecraftForge.EVENT_BUS.register(CAST_CANCELLATION);
             cancellationFixtureRegistered = true;
@@ -87,7 +103,32 @@ public final class ManaTestFixture {
             MinecraftForge.EVENT_BUS.register(MANA_EVENT_PROBE);
             manaEventProbeRegistered = true;
         }
+        if (!balanceRecorderRegistered) {
+            MinecraftForge.EVENT_BUS.register(BALANCE_RECORDER);
+            balanceRecorderRegistered = true;
+        }
         event.registerServerCommand(new SetManaCommand());
+        event.registerServerCommand(new BalanceCommand(BALANCE_RECORDER));
+    }
+
+    static void setBalancePercentBoost(EntityPlayerMP player, boolean enabled) {
+        if (enabled) {
+            BALANCE_PERCENT_BOOST.add(player.getUniqueID());
+        } else {
+            BALANCE_PERCENT_BOOST.remove(player.getUniqueID());
+        }
+        ManaApi.invalidateModifierCache(player);
+    }
+
+    static boolean isBalancePercentBoostEnabled(EntityPlayerMP player) {
+        return BALANCE_PERCENT_BOOST.contains(player.getUniqueID());
+    }
+
+    static void clearPlayerState(EntityPlayerMP player) {
+        UUID playerId = player.getUniqueID();
+        REGENERATION_DISABLED.remove(playerId);
+        BALANCE_PERCENT_BOOST.remove(playerId);
+        ManaApi.invalidateModifierCache(player);
     }
 
     private static final class SetManaCommand extends CommandBase {
