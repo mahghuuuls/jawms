@@ -42,6 +42,7 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 import java.util.UUID;
 import java.util.HashSet;
 import java.util.Set;
+import java.lang.reflect.Field;
 
 /**
  * Development-only controlled-state fixture. This source set is not packaged.
@@ -583,11 +584,24 @@ public final class ManaTestFixture {
             }
             ItemWand wand = (ItemWand) stack.getItem();
             int target = parseInt(amount, 0, wand.getManaCapacity(stack));
-            wand.setMana(stack, target);
+            setRawWandDamage(stack, wand.getManaCapacity(stack) - target);
             sender.sendMessage(new TextComponentString(
-                    "JAWMS test wand mana=" + wand.getMana(stack)
-                            + " / " + wand.getManaCapacity(stack) + "."
+                    "JAWMS test raw wand mana="
+                            + (wand.getManaCapacity(stack) - stack.getItemDamage())
+                            + " / " + wand.getManaCapacity(stack)
+                            + ", reported=" + wand.getMana(stack) + "."
             ));
+        }
+
+        private static void setRawWandDamage(ItemStack stack, int damage)
+                throws CommandException {
+            try {
+                Field field = ItemStack.class.getDeclaredField("itemDamage");
+                field.setAccessible(true);
+                field.setInt(stack, damage);
+            } catch (ReflectiveOperationException exception) {
+                throw new CommandException("Could not set development-only raw wand damage.");
+            }
         }
 
         private static void inspectWand(ICommandSender sender, String handName)
@@ -619,7 +633,19 @@ public final class ManaTestFixture {
                             + ", efficiencyPoints=" + efficiency
                             + ", efficiencyScale=" + GameplayRulesManager.current().getEfficiencyScale()
                             + ", finalCost=" + SpellCostService.getFinalCost(player, spell, modifiers)
-                            + ", storedWandMana=" + wand.getMana(stack)
+                            + ", reportedWandMana=" + wand.getMana(stack)
+                            + ", rawWandDamage=" + stack.getItemDamage()
+                            + ", rawWandMana="
+                            + (wand.getManaCapacity(stack) - stack.getItemDamage())
+                            + ", storage=" + WandHelper.getUpgradeLevel(
+                                    stack, electroblob.wizardry.registry.WizardryItems.storage_upgrade)
+                            + ", condenser=" + WandHelper.getUpgradeLevel(
+                                    stack, electroblob.wizardry.registry.WizardryItems.condenser_upgrade)
+                            + ", siphon=" + WandHelper.getUpgradeLevel(
+                                    stack, electroblob.wizardry.registry.WizardryItems.siphon_upgrade)
+                            + ", melee=" + WandHelper.getUpgradeLevel(
+                                    stack, electroblob.wizardry.registry.WizardryItems.melee_upgrade)
+                            + ", food=" + player.getFoodStats().getFoodLevel()
                             + ", captured=" + CastCostContextManager.describe(player, hand)
                             + "."
             ));

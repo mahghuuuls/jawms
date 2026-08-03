@@ -8,16 +8,20 @@ import electroblob.wizardry.spell.Spell;
 import electroblob.wizardry.util.SpellModifiers;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.EnumHand;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(value = ItemWand.class, remap = false)
 public abstract class ItemWandMixin {
@@ -58,6 +62,119 @@ public abstract class ItemWandMixin {
             "onPlayerStoppedUsing(Lnet/minecraft/item/ItemStack;"
                     + "Lnet/minecraft/world/World;"
                     + "Lnet/minecraft/entity/EntityLivingBase;I)V";
+    private static final String GET_MANA =
+            "getMana(Lnet/minecraft/item/ItemStack;)I";
+    private static final String SET_MANA =
+            "setMana(Lnet/minecraft/item/ItemStack;I)V";
+    private static final String ATTRIBUTE_MODIFIERS =
+            "getAttributeModifiers(Lnet/minecraft/inventory/EntityEquipmentSlot;"
+                    + "Lnet/minecraft/item/ItemStack;)Lcom/google/common/collect/Multimap;";
+    private static final String HIT_ENTITY =
+            "hitEntity(Lnet/minecraft/item/ItemStack;"
+                    + "Lnet/minecraft/entity/EntityLivingBase;"
+                    + "Lnet/minecraft/entity/EntityLivingBase;)Z";
+    private static final String CREATIVE_BLOCK_BREAKING =
+            "canDestroyBlockInCreative(Lnet/minecraft/world/World;"
+                    + "Lnet/minecraft/util/math/BlockPos;"
+                    + "Lnet/minecraft/item/ItemStack;"
+                    + "Lnet/minecraft/entity/player/EntityPlayer;)Z";
+    private static final String ATTACK_EVENT =
+            "onAttackEntityEvent(Lnet/minecraftforge/event/entity/player/AttackEntityEvent;)V";
+
+    @Inject(
+            method = GET_MANA,
+            at = @At("HEAD"),
+            cancellable = true,
+            require = 1,
+            expect = 1,
+            remap = false
+    )
+    private void jawms$reportWandManaFull(
+            ItemStack stack, CallbackInfoReturnable<Integer> callback
+    ) {
+        callback.setReturnValue(((ItemWand) (Object) this).getManaCapacity(stack));
+    }
+
+    @Inject(
+            method = SET_MANA,
+            at = @At("HEAD"),
+            cancellable = true,
+            require = 1,
+            expect = 1,
+            remap = false
+    )
+    private void jawms$preserveHistoricalWandMana(
+            ItemStack stack, int mana, CallbackInfo callback
+    ) {
+        callback.cancel();
+    }
+
+    @Redirect(
+            method = ATTRIBUTE_MODIFIERS,
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lelectroblob/wizardry/util/WandHelper;"
+                            + "getUpgradeLevel(Lnet/minecraft/item/ItemStack;"
+                            + "Lnet/minecraft/item/Item;)I",
+                    ordinal = 0,
+                    remap = false
+            ),
+            require = 1,
+            expect = 1,
+            remap = false
+    )
+    private int jawms$disableMeleeAttributes(ItemStack stack, Item upgrade) {
+        return 0;
+    }
+
+    @Inject(
+            method = HIT_ENTITY,
+            at = @At("HEAD"),
+            cancellable = true,
+            require = 1,
+            expect = 1,
+            remap = false
+    )
+    private void jawms$disableMeleeManaConsumption(
+            ItemStack stack,
+            EntityLivingBase target,
+            EntityLivingBase wielder,
+            CallbackInfoReturnable<Boolean> callback
+    ) {
+        callback.setReturnValue(true);
+    }
+
+    @Inject(
+            method = CREATIVE_BLOCK_BREAKING,
+            at = @At("HEAD"),
+            cancellable = true,
+            require = 1,
+            expect = 1,
+            remap = false
+    )
+    private void jawms$allowOrdinaryCreativeBlockBreaking(
+            World world,
+            BlockPos position,
+            ItemStack stack,
+            EntityPlayer player,
+            CallbackInfoReturnable<Boolean> callback
+    ) {
+        callback.setReturnValue(true);
+    }
+
+    @Inject(
+            method = ATTACK_EVENT,
+            at = @At("HEAD"),
+            cancellable = true,
+            require = 1,
+            expect = 1,
+            remap = false
+    )
+    private static void jawms$disableMeleeFeedback(
+            AttackEntityEvent event, CallbackInfo callback
+    ) {
+        callback.cancel();
+    }
 
     @ModifyVariable(
             method = CAN_CAST,

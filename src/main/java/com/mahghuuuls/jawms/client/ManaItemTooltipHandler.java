@@ -15,12 +15,29 @@ import net.minecraft.util.text.translation.I18n;
 import net.minecraftforge.event.entity.player.ItemTooltipEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
 public final class ManaItemTooltipHandler {
+
+    private static final Set<String> OBSOLETE_WAND_MANA_ITEMS = new HashSet<>(Arrays.asList(
+            "ebwizardry:storage_upgrade",
+            "ebwizardry:siphon_upgrade",
+            "ebwizardry:condenser_upgrade",
+            "ebwizardry:melee_upgrade",
+            "ebwizardry:ring_condensing",
+            "ebwizardry:ring_siphoning",
+            "ebwizardry:ring_extraction",
+            "ebwizardry:ring_mana_return",
+            "ebwizardry:charm_hunger_casting"
+    ));
 
     @SubscribeEvent
     public void tooltip(ItemTooltipEvent event) {
         removeWandDurabilityLine(event);
         removeSupersededWizardryCostLines(event);
+        addObsoleteWandManaNotice(event);
         ManaContribution contribution = contributionFor(event.getItemStack());
         if (contribution == null) {
             return;
@@ -41,6 +58,19 @@ public final class ManaItemTooltipHandler {
                 insertAfter(event.getToolTip(), heading, replacement);
             }
         }
+    }
+
+    private static void addObsoleteWandManaNotice(ItemTooltipEvent event) {
+        if (event.getItemStack().getItem().getRegistryName() != null
+                && isObsoleteWandManaItem(
+                event.getItemStack().getItem().getRegistryName().toString())) {
+            event.getToolTip().add(TextFormatting.RED
+                    + I18n.translateToLocal("tooltip.jawms.inactive_wand_mana"));
+        }
+    }
+
+    static boolean isObsoleteWandManaItem(String registryName) {
+        return OBSOLETE_WAND_MANA_ITEMS.contains(registryName);
     }
 
     private static void removeWandDurabilityLine(ItemTooltipEvent event) {

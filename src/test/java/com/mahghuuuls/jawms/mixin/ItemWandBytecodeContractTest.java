@@ -65,6 +65,15 @@ class ItemWandBytecodeContractTest {
         assertEquals(1, visitor.tooltipGetManaCalls);
         assertEquals(1, visitor.tooltipGetManaCapacityCalls);
         assertEquals(1, visitor.tooltipProgressionCalls);
+        assertTrue(visitor.getManaFound);
+        assertEquals(1, visitor.getManaDamageReads);
+        assertTrue(visitor.setManaFound);
+        assertEquals(1, visitor.setManaDamageWrites);
+        assertEquals(1, visitor.attributeMeleeLevelCalls);
+        assertEquals(1, visitor.hitMeleeLevelCalls);
+        assertEquals(1, visitor.hitManaConsumptionCalls);
+        assertEquals(1, visitor.creativeMeleeLevelCalls);
+        assertEquals(1, visitor.attackMeleeLevelCalls);
     }
 
     private static final class ContractVisitor extends ClassVisitor {
@@ -84,6 +93,15 @@ class ItemWandBytecodeContractTest {
         private int tooltipGetManaCalls;
         private int tooltipGetManaCapacityCalls;
         private int tooltipProgressionCalls;
+        private boolean getManaFound;
+        private int getManaDamageReads;
+        private boolean setManaFound;
+        private int setManaDamageWrites;
+        private int attributeMeleeLevelCalls;
+        private int hitMeleeLevelCalls;
+        private int hitManaConsumptionCalls;
+        private int creativeMeleeLevelCalls;
+        private int attackMeleeLevelCalls;
 
         private ContractVisitor() {
             super(Opcodes.ASM5);
@@ -241,7 +259,76 @@ class ItemWandBytecodeContractTest {
                     }
                 };
             }
+            if ("getMana".equals(name)
+                    && "(Lnet/minecraft/item/ItemStack;)I".equals(descriptor)) {
+                getManaFound = true;
+                return calls((owner, invokedName, invokedDescriptor) -> {
+                    if ("electroblob/wizardry/item/ItemWand".equals(owner)
+                            && "getDamage".equals(invokedName)) {
+                        getManaDamageReads++;
+                    }
+                });
+            }
+            if ("setMana".equals(name)
+                    && "(Lnet/minecraft/item/ItemStack;I)V".equals(descriptor)) {
+                setManaFound = true;
+                return calls((owner, invokedName, invokedDescriptor) -> {
+                    if ("net/minecraft/item/Item".equals(owner)
+                            && "setDamage".equals(invokedName)) {
+                        setManaDamageWrites++;
+                    }
+                });
+            }
+            if ("getAttributeModifiers".equals(name)) {
+                return upgradeCalls(() -> attributeMeleeLevelCalls++);
+            }
+            if ("hitEntity".equals(name)) {
+                return calls((owner, invokedName, invokedDescriptor) -> {
+                    if ("electroblob/wizardry/util/WandHelper".equals(owner)
+                            && "getUpgradeLevel".equals(invokedName)) {
+                        hitMeleeLevelCalls++;
+                    }
+                    if ("electroblob/wizardry/item/ItemWand".equals(owner)
+                            && "consumeMana".equals(invokedName)) {
+                        hitManaConsumptionCalls++;
+                    }
+                });
+            }
+            if ("canDestroyBlockInCreative".equals(name)) {
+                return upgradeCalls(() -> creativeMeleeLevelCalls++);
+            }
+            if ("onAttackEntityEvent".equals(name)) {
+                return upgradeCalls(() -> attackMeleeLevelCalls++);
+            }
             return null;
+        }
+
+        private static MethodVisitor upgradeCalls(Runnable match) {
+            return calls((owner, invokedName, invokedDescriptor) -> {
+                if ("electroblob/wizardry/util/WandHelper".equals(owner)
+                        && "getUpgradeLevel".equals(invokedName)) {
+                    match.run();
+                }
+            });
+        }
+
+        private static MethodVisitor calls(MethodCall call) {
+            return new MethodVisitor(Opcodes.ASM5) {
+                @Override
+                public void visitMethodInsn(
+                        int opcode,
+                        String owner,
+                        String invokedName,
+                        String invokedDescriptor,
+                        boolean isInterface
+                ) {
+                    call.accept(owner, invokedName, invokedDescriptor);
+                }
+            };
+        }
+
+        private interface MethodCall {
+            void accept(String owner, String name, String descriptor);
         }
     }
 }
