@@ -4,6 +4,7 @@ import com.mahghuuuls.jawms.internal.rules.ConfiguredItemRule;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesMessage;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorProfile;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorEfficiencyProfile;
+import com.mahghuuuls.jawms.internal.integration.wizardry.WizardryFlaskBridge;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.network.FMLNetworkEvent;
@@ -54,6 +55,7 @@ public final class ClientGameplayRules {
         );
         efficiencyScale = message.getEfficiencyScale();
         armorEfficiencyProfile = message.getArmorEfficiencyProfile();
+        WizardryFlaskBridge.refreshCapacities(smallFlask, mediumFlask, largeFlask);
     }
 
     public static long getRevision() {

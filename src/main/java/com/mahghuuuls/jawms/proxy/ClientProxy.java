@@ -67,6 +67,13 @@ public final class ClientProxy extends CommonProxy {
     }
 
     @Override
+    public int getClientMissingMana() {
+        return ClientManaState.isAvailable()
+                ? Math.max(0, ClientManaState.getMaximumMana() - ClientManaState.getCurrentMana())
+                : 0;
+    }
+
+    @Override
     public boolean isClientContinuousCastBlocked(Spell spell, EnumHand hand) {
         return spell.isContinuous
                 && ClientContinuousCastGuard.isBlocked(

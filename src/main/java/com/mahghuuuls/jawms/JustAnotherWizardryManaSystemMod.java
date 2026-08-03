@@ -60,6 +60,7 @@ public final class JustAnotherWizardryManaSystemMod {
         );
         ActiveSlotSources.initialize();
         ManaBootstrap.initialize();
+        initializeDevelopmentFixture();
         proxy.preInit(configurationDirectory);
     }
 
@@ -89,6 +90,25 @@ public final class JustAnotherWizardryManaSystemMod {
             LOGGER.warn("JAWMS test commands were requested but the development fixture is unavailable.");
         } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
             throw new IllegalStateException("Could not register the JAWMS development test fixture.", exception);
+        }
+    }
+
+    private static void initializeDevelopmentFixture() {
+        if (!Boolean.getBoolean("jawms.enableTestCommands")) {
+            return;
+        }
+        try {
+            Class<?> fixtureClass = Class.forName(
+                    "com.mahghuuuls.jawms.testfixture.ManaTestFixture"
+            );
+            Method registrationMethod = fixtureClass.getMethod("preInitialize");
+            registrationMethod.invoke(null);
+        } catch (ClassNotFoundException exception) {
+            LOGGER.warn("JAWMS development fixture initialization was requested but is unavailable.");
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
+            throw new IllegalStateException(
+                    "Could not initialize the JAWMS development fixture.", exception
+            );
         }
     }
 }

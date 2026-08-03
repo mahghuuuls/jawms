@@ -3,6 +3,7 @@ package com.mahghuuuls.jawms.internal.rules;
 import com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod;
 import com.mahghuuuls.jawms.internal.mana.ManaNetwork;
 import com.mahghuuuls.jawms.internal.mana.ManaService;
+import com.mahghuuuls.jawms.internal.integration.wizardry.WizardryFlaskBridge;
 import electroblob.wizardry.spell.Spell;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
@@ -34,6 +35,7 @@ public final class GameplayRulesManager {
         }
         BuildResult result = build(current);
         current = result.rules;
+        WizardryFlaskBridge.refreshCapacities(result.rules);
         JustAnotherWizardryManaSystemMod.LOGGER.info(
                 "Published initial JAWMS gameplay rules revision {}: baseMaximum={}, baseRegeneration={}, "
                         + "lockoutTicks={}, spellCosts={}, itemRules={}, disabledProviders={}, warnings={}.",
@@ -74,6 +76,7 @@ public final class GameplayRulesManager {
         }
 
         current = result.rules;
+        WizardryFlaskBridge.refreshCapacities(result.rules);
         for (EntityPlayerMP player : server.getPlayerList().getPlayers()) {
             ManaService.applyRulesReload(player, previous, result.rules);
             ManaNetwork.synchronizeRules(player, result.rules);

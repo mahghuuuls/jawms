@@ -4,6 +4,7 @@ import com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod;
 import com.mahghuuuls.jawms.api.IManaService;
 import com.mahghuuuls.jawms.api.ManaApi;
 import com.mahghuuuls.jawms.api.ManaCauses;
+import com.mahghuuuls.jawms.api.ManaContribution;
 import com.mahghuuuls.jawms.api.ManaMutationResult;
 import com.mahghuuuls.jawms.api.ManaPublicState;
 import com.mahghuuuls.jawms.api.ManaStateChangeEvent;
@@ -17,6 +18,9 @@ import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import electroblob.wizardry.event.SpellCastEvent;
 import electroblob.wizardry.item.ItemWand;
+import electroblob.wizardry.item.IManaStoringItem;
+import electroblob.wizardry.item.ItemManaFlask;
+import electroblob.wizardry.item.ItemWizardArmour;
 import electroblob.wizardry.spell.Spell;
 import electroblob.wizardry.util.SpellModifiers;
 import electroblob.wizardry.util.WandHelper;
@@ -36,6 +40,8 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 import java.util.UUID;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Development-only controlled-state fixture. This source set is not packaged.
@@ -47,12 +53,30 @@ public final class ManaTestFixture {
     private static boolean cancellationFixtureRegistered;
     private static final ManaEventProbe MANA_EVENT_PROBE = new ManaEventProbe();
     private static boolean manaEventProbeRegistered;
+    private static final Set<UUID> REGENERATION_DISABLED = new HashSet<>();
+    private static final ResourceLocation REGENERATION_TOGGLE_PROVIDER =
+            new ResourceLocation("jawms_test", "regeneration_toggle");
+    private static boolean developmentProviderRegistered;
 
     private ManaTestFixture() {
     }
 
+    public static void preInitialize() {
+        if (developmentProviderRegistered) {
+            return;
+        }
+        ManaApi.registerContextualProvider(
+                REGENERATION_TOGGLE_PROVIDER,
+                player -> REGENERATION_DISABLED.contains(player.getUniqueID())
+                        ? ManaContribution.builder().regenerationReduction(100.0D).build()
+                        : ManaContribution.EMPTY
+        );
+        developmentProviderRegistered = true;
+    }
+
     public static void register(FMLServerStartingEvent event) {
         CAST_CANCELLATION.clear();
+        REGENERATION_DISABLED.clear();
         if (!cancellationFixtureRegistered) {
             MinecraftForge.EVENT_BUS.register(CAST_CANCELLATION);
             cancellationFixtureRegistered = true;
@@ -76,12 +100,14 @@ public final class ManaTestFixture {
         public String getUsage(ICommandSender sender) {
             return "/jawms-test mana set <amount> | mana inspect | rules inspect"
                     + " | mana restore <amount> | mana consume <amount> | mana drain <amount>"
+                    + " | mana regen <true|false>"
                     + " | mana events <true|false> | mana event-inspect"
                     + " | cost get <namespace:spell> | casting debug <true|false>"
                     + " | casting cancel <true|false>"
                     + " | casting cancel-tick <true|false>"
                     + " | casting factor <positive-number>"
                     + " | casting factor-delay <positive-number> <ticks>"
+                    + " | flask inspect | armor mana <head|chest|legs|feet> <amount>"
                     + " | wand set <main|off> <namespace:spell>"
                     + " | wand mana <main|off> <amount> | wand inspect <main|off>";
         }
@@ -110,6 +136,12 @@ public final class ManaTestFixture {
                     && "mana".equalsIgnoreCase(arguments[0])
                     && "inspect".equalsIgnoreCase(arguments[1])) {
                 inspectMana(sender);
+                return;
+            }
+            if (arguments.length == 2
+                    && "flask".equalsIgnoreCase(arguments[0])
+                    && "inspect".equalsIgnoreCase(arguments[1])) {
+                inspectFlask(sender);
                 return;
             }
             if (arguments.length == 2
@@ -158,6 +190,12 @@ public final class ManaTestFixture {
                     && "mana".equalsIgnoreCase(arguments[0])
                     && "events".equalsIgnoreCase(arguments[1])) {
                 setManaEvents(sender, arguments[2]);
+                return;
+            }
+            if (arguments.length == 3
+                    && "mana".equalsIgnoreCase(arguments[0])
+                    && "regen".equalsIgnoreCase(arguments[1])) {
+                setManaRegeneration(sender, arguments[2]);
                 return;
             }
             if (arguments.length == 3
@@ -212,6 +250,12 @@ public final class ManaTestFixture {
                     && "wand".equalsIgnoreCase(arguments[0])
                     && "set".equalsIgnoreCase(arguments[1])) {
                 setWandSpell(sender, arguments[2], arguments[3]);
+                return;
+            }
+            if (arguments.length == 4
+                    && "armor".equalsIgnoreCase(arguments[0])
+                    && "mana".equalsIgnoreCase(arguments[1])) {
+                setArmorMana(sender, arguments[2], arguments[3]);
                 return;
             }
             throw new CommandException(getUsage(sender));
@@ -278,6 +322,60 @@ public final class ManaTestFixture {
             ));
         }
 
+        private static void inspectFlask(ICommandSender sender) throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            IManaService service = ManaApi.getManaService();
+            StringBuilder armor = new StringBuilder();
+            for (int slot = 0; slot < player.inventory.armorInventory.size(); slot++) {
+                ItemStack stack = player.inventory.armorInventory.get(slot);
+                if (!(stack.getItem() instanceof ItemWizardArmour)
+                        || !(stack.getItem() instanceof IManaStoringItem)) {
+                    continue;
+                }
+                IManaStoringItem item = (IManaStoringItem) stack.getItem();
+                if (armor.length() > 0) armor.append(", ");
+                armor.append(slot).append('=')
+                        .append(item.getMana(stack)).append('/')
+                        .append(item.getManaCapacity(stack));
+            }
+            if (armor.length() == 0) armor.append("none");
+            GameplayRules rules = GameplayRulesManager.current();
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS flask player=" + service.getCurrentMana(player) + "/"
+                            + service.getMaximumMana(player)
+                            + ", armor[feet=0..head=3]=" + armor
+                            + ", configured=" + rules.getSmallFlask() + "/"
+                            + rules.getMediumFlask() + "/" + rules.getLargeFlask()
+                            + ", WizardrySize=" + ItemManaFlask.Size.SMALL.capacity + "/"
+                            + ItemManaFlask.Size.MEDIUM.capacity + "/"
+                            + ItemManaFlask.Size.LARGE.capacity
+                            + ", lastEvent={" + MANA_EVENT_PROBE.describe(player) + "}."
+            ));
+        }
+
+        private static void setArmorMana(
+                ICommandSender sender, String slotName, String amount
+        ) throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            int slot = parseArmorSlot(slotName);
+            ItemStack stack = player.inventory.armorInventory.get(slot);
+            if (!(stack.getItem() instanceof ItemWizardArmour)
+                    || !(stack.getItem() instanceof IManaStoringItem)) {
+                throw new CommandException("Equip Wizardry armor in the selected slot.");
+            }
+            IManaStoringItem armor = (IManaStoringItem) stack.getItem();
+            armor.setMana(stack, parseInt(amount, 0, armor.getManaCapacity(stack)));
+            inspectFlask(sender);
+        }
+
+        private static int parseArmorSlot(String value) throws CommandException {
+            if ("feet".equalsIgnoreCase(value)) return 0;
+            if ("legs".equalsIgnoreCase(value)) return 1;
+            if ("chest".equalsIgnoreCase(value)) return 2;
+            if ("head".equalsIgnoreCase(value)) return 3;
+            throw new CommandException("Expected head, chest, legs, or feet.");
+        }
+
         private static void mutateMana(
                 ICommandSender sender,
                 String value,
@@ -313,6 +411,24 @@ public final class ManaTestFixture {
             MANA_EVENT_PROBE.setEnabled(player, Boolean.parseBoolean(value));
             sender.sendMessage(new TextComponentString(
                     "JAWMS mana event probe enabled=" + MANA_EVENT_PROBE.appliesTo(player) + "."
+            ));
+        }
+
+        private static void setManaRegeneration(ICommandSender sender, String value)
+                throws CommandException {
+            if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
+                throw new CommandException("Expected true or false.");
+            }
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            boolean enabled = Boolean.parseBoolean(value);
+            if (enabled) {
+                REGENERATION_DISABLED.remove(player.getUniqueID());
+            } else {
+                REGENERATION_DISABLED.add(player.getUniqueID());
+            }
+            ManaApi.invalidateModifierCache(player);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS test mana regeneration enabled=" + enabled + "."
             ));
         }
 

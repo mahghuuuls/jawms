@@ -37,6 +37,10 @@ public class CommonProxy {
         return fallback;
     }
 
+    public int getClientMissingMana() {
+        return 0;
+    }
+
     public boolean isClientContinuousCastBlocked(
             Spell spell,
             EnumHand hand

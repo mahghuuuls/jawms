@@ -32,6 +32,8 @@ class MixinConfigurationTest {
         assertTrue(json.contains("\"ItemWandMixin\""));
         assertTrue(json.contains("\"ItemWizardArmourMixin\""));
         assertTrue(json.contains("\"ItemArtefactMixin\""));
+        assertTrue(json.contains("\"ItemManaFlaskMixin\""));
+        assertTrue(json.contains("\"ItemManaFlaskClientMixin\""));
         assertTrue(json.contains("\"defaultRequire\": 1"));
         assertFalse(json.contains("\"refmap\""));
     }
