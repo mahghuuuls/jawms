@@ -33,6 +33,9 @@ class ItemWandBytecodeContractTest {
             "(Lnet/minecraft/item/ItemStack;"
                     + "Lnet/minecraft/world/World;"
                     + "Lnet/minecraft/entity/EntityLivingBase;I)V";
+    private static final String ADD_INFORMATION_DESCRIPTOR =
+            "(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;"
+                    + "Ljava/util/List;Lnet/minecraft/client/util/ITooltipFlag;)V";
 
     @Test
     void pinnedWizardryWandContainsEveryRequiredInjectionAnchor() throws IOException {
@@ -58,6 +61,10 @@ class ItemWandBytecodeContractTest {
         assertEquals(4, visitor.rightClickReturns);
         assertEquals(1, visitor.usingTickStopActiveHandCalls);
         assertEquals(1, visitor.stoppedUsingGetManaCalls);
+        assertTrue(visitor.addInformationFound);
+        assertEquals(1, visitor.tooltipGetManaCalls);
+        assertEquals(1, visitor.tooltipGetManaCapacityCalls);
+        assertEquals(1, visitor.tooltipProgressionCalls);
     }
 
     private static final class ContractVisitor extends ClassVisitor {
@@ -73,6 +80,10 @@ class ItemWandBytecodeContractTest {
         private int rightClickReturns;
         private int usingTickStopActiveHandCalls;
         private int stoppedUsingGetManaCalls;
+        private boolean addInformationFound;
+        private int tooltipGetManaCalls;
+        private int tooltipGetManaCapacityCalls;
+        private int tooltipProgressionCalls;
 
         private ContractVisitor() {
             super(Opcodes.ASM5);
@@ -199,6 +210,33 @@ class ItemWandBytecodeContractTest {
                                 && "getMana".equals(invokedName)
                                 && "(Lnet/minecraft/item/ItemStack;)I".equals(invokedDescriptor)) {
                             stoppedUsingGetManaCalls++;
+                        }
+                    }
+                };
+            }
+            if ("addInformation".equals(name)
+                    && ADD_INFORMATION_DESCRIPTOR.equals(descriptor)) {
+                addInformationFound = true;
+                return new MethodVisitor(Opcodes.ASM5) {
+                    @Override
+                    public void visitMethodInsn(
+                            int opcode,
+                            String owner,
+                            String invokedName,
+                            String invokedDescriptor,
+                            boolean isInterface
+                    ) {
+                        if ("electroblob/wizardry/item/ItemWand".equals(owner)
+                                && "getMana".equals(invokedName)) {
+                            tooltipGetManaCalls++;
+                        }
+                        if ("electroblob/wizardry/item/ItemWand".equals(owner)
+                                && "getManaCapacity".equals(invokedName)) {
+                            tooltipGetManaCapacityCalls++;
+                        }
+                        if ("electroblob/wizardry/util/WandHelper".equals(owner)
+                                && "getProgression".equals(invokedName)) {
+                            tooltipProgressionCalls++;
                         }
                     }
                 };

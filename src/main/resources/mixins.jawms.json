@@ -13,6 +13,7 @@
 	"server": [],
 	"client": [
 		"GuiSpellInfoMixin",
+		"ItemWandClientMixin",
 		"ItemManaFlaskClientMixin"
 	],
 	"injectors": {

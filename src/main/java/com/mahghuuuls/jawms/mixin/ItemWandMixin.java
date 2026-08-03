@@ -22,6 +22,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(value = ItemWand.class, remap = false)
 public abstract class ItemWandMixin {
 
+    /**
+     * Wizardry stores wand mana as inverse item damage. Suppress only the
+     * inherited durability presentation; the stored value remains untouched.
+     */
+    public boolean showDurabilityBar(ItemStack stack) {
+        return false;
+    }
+
+    /** Suppresses only the wand-mana line in the arcane workbench tooltip. */
+    public boolean showManaInWorkbench(EntityPlayer player, ItemStack stack) {
+        return false;
+    }
+
     private static final String CAN_CAST =
             "canCast(Lnet/minecraft/item/ItemStack;"
                     + "Lelectroblob/wizardry/spell/Spell;"

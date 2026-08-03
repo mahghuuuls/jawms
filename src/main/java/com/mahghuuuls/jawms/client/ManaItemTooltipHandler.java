@@ -6,10 +6,12 @@ import com.mahghuuuls.jawms.internal.modifier.ActiveStackCollector;
 import com.mahghuuuls.jawms.internal.rules.ConfiguredItemRule;
 import net.minecraft.item.ItemArmor;
 import electroblob.wizardry.item.ItemWizardArmour;
+import electroblob.wizardry.item.ItemWand;
 import electroblob.wizardry.Wizardry;
 import net.minecraft.util.text.Style;
 import net.minecraft.util.text.TextFormatting;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.text.translation.I18n;
 import net.minecraftforge.event.entity.player.ItemTooltipEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
@@ -17,6 +19,7 @@ public final class ManaItemTooltipHandler {
 
     @SubscribeEvent
     public void tooltip(ItemTooltipEvent event) {
+        removeWandDurabilityLine(event);
         removeSupersededWizardryCostLines(event);
         ManaContribution contribution = contributionFor(event.getItemStack());
         if (contribution == null) {
@@ -38,6 +41,30 @@ public final class ManaItemTooltipHandler {
                 insertAfter(event.getToolTip(), heading, replacement);
             }
         }
+    }
+
+    private static void removeWandDurabilityLine(ItemTooltipEvent event) {
+        ItemStack stack = event.getItemStack();
+        removeWandDurabilityLine(
+                event.getToolTip(),
+                stack.getItem() instanceof ItemWand,
+                stack.getMaxDamage() - stack.getItemDamage(),
+                stack.getMaxDamage()
+        );
+    }
+
+    static void removeWandDurabilityLine(
+            java.util.List<String> tooltip,
+            boolean wizardryWand,
+            int remainingDurability,
+            int maximumDurability
+    ) {
+        if (!wizardryWand) {
+            return;
+        }
+        tooltip.remove(I18n.translateToLocalFormatted(
+                "item.durability", remainingDurability, maximumDurability
+        ));
     }
 
     private static void removeSupersededWizardryCostLines(ItemTooltipEvent event) {
