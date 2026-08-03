@@ -33,7 +33,8 @@ public abstract class ItemArtefactMixin {
             method = "onSpellCastPreEvent",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/util/FoodStats;getFoodLevel()I"
+                    target = "Lnet/minecraft/util/FoodStats;getFoodLevel()I",
+                    remap = true
             ),
             require = 1,
             expect = 1,
@@ -44,7 +45,7 @@ public abstract class ItemArtefactMixin {
     }
 
     @Redirect(method = "onSpellCastPreEvent", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/util/FoodStats;addStats(IF)V"),
+            target = "Lnet/minecraft/util/FoodStats;addStats(IF)V", remap = true),
             require = 1, expect = 1, remap = false)
     private static void jawms$disableHungerCastingFallback(
             FoodStats foodStats, int foodLevel, float saturation

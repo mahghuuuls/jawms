@@ -28,7 +28,7 @@ public abstract class ItemWandClientMixin {
             at = @At("RETURN"),
             require = 1,
             expect = 1,
-            remap = false
+            remap = true
     )
     private void jawms$removeAdvancedManaLine(
             ItemStack stack,

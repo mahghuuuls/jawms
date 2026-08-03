@@ -42,7 +42,7 @@ public abstract class ItemManaFlaskMixin {
             cancellable = true,
             require = 1,
             expect = 1,
-            remap = false
+            remap = true
     )
     private void jawms$replaceEligibility(
             World world,

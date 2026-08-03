@@ -30,7 +30,7 @@ public abstract class ItemManaFlaskClientMixin {
             cancellable = true,
             require = 1,
             expect = 1,
-            remap = false
+            remap = true
     )
     private void jawms$replaceDescription(
             ItemStack stack,

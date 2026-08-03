@@ -2,11 +2,11 @@ package com.mahghuuuls.jawms.mixin;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -16,17 +16,8 @@ import java.lang.reflect.Method;
 class MixinConfigurationTest {
 
     @Test
-    void commonMixinIsRequiredAndDoesNotClaimANonexistentRefmap() throws IOException {
-        InputStream input = getClass().getResourceAsStream("/mixins.jawms.json");
-        assertNotNull(input);
-        String json;
-        try {
-            byte[] bytes = new byte[4096];
-            int length = input.read(bytes);
-            json = new String(bytes, 0, length, StandardCharsets.UTF_8);
-        } finally {
-            input.close();
-        }
+    void commonMixinIsRequiredAndDeclaresGeneratedProductionRefmap() throws IOException {
+        String json = readResource("/mixins.jawms.json");
 
         assertTrue(json.contains("\"required\": true"));
         assertTrue(json.contains("\"ItemWandMixin\""));
@@ -36,7 +27,16 @@ class MixinConfigurationTest {
         assertTrue(json.contains("\"ItemWandClientMixin\""));
         assertTrue(json.contains("\"ItemManaFlaskClientMixin\""));
         assertTrue(json.contains("\"defaultRequire\": 1"));
-        assertFalse(json.contains("\"refmap\""));
+        assertTrue(json.contains("\"refmap\": \"mixins.jawms.refmap.json\""));
+
+        String refmap = readResource("/mixins.jawms.refmap.json");
+        assertTrue(refmap.contains("func_77659_a"));
+        assertTrue(refmap.contains("func_77624_a"));
+        assertTrue(refmap.contains("func_77615_a"));
+        assertTrue(refmap.contains("func_184597_cx"));
+        assertTrue(refmap.contains("func_135052_a"));
+        assertTrue(refmap.contains("func_75116_a"));
+        assertTrue(refmap.contains("func_75122_a"));
     }
 
     @Test
@@ -68,5 +68,21 @@ class MixinConfigurationTest {
             }
         }
         throw new AssertionError("Missing redirect " + name);
+    }
+
+    private String readResource(String path) throws IOException {
+        InputStream input = getClass().getResourceAsStream(path);
+        assertNotNull(input);
+        try {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int length;
+            while ((length = input.read(buffer)) != -1) {
+                output.write(buffer, 0, length);
+            }
+            return new String(output.toByteArray(), StandardCharsets.UTF_8);
+        } finally {
+            input.close();
+        }
     }
 }

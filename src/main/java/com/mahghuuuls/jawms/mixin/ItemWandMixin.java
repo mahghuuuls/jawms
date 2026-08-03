@@ -133,7 +133,7 @@ public abstract class ItemWandMixin {
             cancellable = true,
             require = 1,
             expect = 1,
-            remap = false
+            remap = true
     )
     private void jawms$disableMeleeManaConsumption(
             ItemStack stack,
@@ -380,7 +380,7 @@ public abstract class ItemWandMixin {
         }
     }
 
-    @Inject(method = RIGHT_CLICK, at = @At("HEAD"), require = 1, expect = 1, remap = false)
+    @Inject(method = RIGHT_CLICK, at = @At("HEAD"), require = 1, expect = 1, remap = true)
     private void jawms$beginPhysicalCast(
             World world, EntityPlayer player, EnumHand hand,
             CallbackInfoReturnable<ActionResult<ItemStack>> callback
@@ -393,7 +393,7 @@ public abstract class ItemWandMixin {
             at = @At("RETURN"),
             require = 4,
             expect = 4,
-            remap = false
+            remap = true
     )
     private void jawms$beginContinuousCast(
             World world,
@@ -414,7 +414,8 @@ public abstract class ItemWandMixin {
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/entity/player/EntityPlayer;stopActiveHand()V",
-                    ordinal = 0
+                    ordinal = 0,
+                    remap = true
             ),
             require = 1,
             expect = 1,
@@ -446,7 +447,7 @@ public abstract class ItemWandMixin {
             ),
             require = 1,
             expect = 1,
-            remap = false
+            remap = true
     )
     private int jawms$replaceContinuousFinishAffordability(
             ItemWand wand,
@@ -468,7 +469,7 @@ public abstract class ItemWandMixin {
         );
     }
 
-    @WrapMethod(method = STOPPED_USING, require = 1, expect = 1, remap = false)
+    @WrapMethod(method = STOPPED_USING, require = 1, expect = 1, remap = true)
     private void jawms$finishContinuousCast(
             ItemStack stack,
             World world,

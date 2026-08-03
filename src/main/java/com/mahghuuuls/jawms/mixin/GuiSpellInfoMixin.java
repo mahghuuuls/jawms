@@ -24,7 +24,8 @@ public abstract class GuiSpellInfoMixin {
                     value = "INVOKE",
                     target = "Lnet/minecraft/client/resources/I18n;"
                             + "format(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;",
-                    ordinal = 3
+                    ordinal = 3,
+                    remap = true
             ),
             require = 1,
             expect = 1
@@ -42,7 +43,8 @@ public abstract class GuiSpellInfoMixin {
                     value = "INVOKE",
                     target = "Lnet/minecraft/client/resources/I18n;"
                             + "format(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;",
-                    ordinal = 4
+                    ordinal = 4,
+                    remap = true
             ),
             require = 1,
             expect = 1
