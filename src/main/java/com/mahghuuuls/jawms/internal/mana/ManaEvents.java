@@ -3,6 +3,8 @@ package com.mahghuuuls.jawms.internal.mana;
 import com.mahghuuuls.jawms.Tags;
 import com.mahghuuuls.jawms.internal.casting.WizardryWandBridge;
 import com.mahghuuuls.jawms.internal.casting.CastCostContextManager;
+import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentContextManager;
+import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentService;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import com.mahghuuuls.jawms.internal.modifier.ManaProviderRegistry;
@@ -30,6 +32,10 @@ public final class ManaEvents {
     public void clonePlayer(Clone event) {
         CastCostContextManager.clearAll(event.getOriginal());
         CastCostContextManager.clearAll(event.getEntityPlayer());
+        CastPaymentContextManager.clearAll(event.getOriginal());
+        CastPaymentContextManager.clearAll(event.getEntityPlayer());
+        CastPaymentService.clear(event.getOriginal());
+        CastPaymentService.clear(event.getEntityPlayer());
         if (event.getEntityPlayer().world.isRemote) {
             return;
         }
@@ -62,6 +68,8 @@ public final class ManaEvents {
     @SubscribeEvent
     public void playerRespawned(PlayerEvent.PlayerRespawnEvent event) {
         CastCostContextManager.clearAll(event.player);
+        CastPaymentContextManager.clearAll(event.player);
+        CastPaymentService.clear(event.player);
         ManaNetwork.synchronizeRules(event.player, GameplayRulesManager.current());
         ManaNetwork.synchronizeLifecycle(event.player, "respawn");
     }

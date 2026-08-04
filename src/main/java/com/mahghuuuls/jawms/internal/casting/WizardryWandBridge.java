@@ -1,10 +1,16 @@
 package com.mahghuuuls.jawms.internal.casting;
 
 import com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod;
-import com.mahghuuuls.jawms.internal.mana.ManaReservation;
 import com.mahghuuuls.jawms.internal.mana.ManaNetwork;
 import com.mahghuuuls.jawms.internal.mana.ManaService;
 import com.mahghuuuls.jawms.internal.mana.ManaState;
+import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentContextManager;
+import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentPlan;
+import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentReservation;
+import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentService;
+import com.mahghuuuls.jawms.internal.integration.wizardry.payment.DemonicSealPolicy;
+import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
+import com.mahghuuuls.jawms.internal.rules.WizardryIntegrationRules;
 import electroblob.wizardry.item.ItemWand;
 import electroblob.wizardry.spell.Spell;
 import electroblob.wizardry.util.SpellModifiers;
@@ -31,12 +37,22 @@ public final class WizardryWandBridge {
     }
 
     public static void beginPhysicalCast(EntityPlayer caster, EnumHand hand) {
-        CastCostContextManager.clear(caster, hand);
+        boolean continuingSameUse = caster.isHandActive()
+                && caster.getActiveHand() == hand
+                && CastPaymentContextManager.has(caster, hand);
+        if (!continuingSameUse) {
+            CastCostContextManager.clear(caster, hand);
+            CastPaymentContextManager.clear(caster, hand);
+        }
+        CastPaymentContextManager.captureIfAbsent(
+                caster, hand, integrationRules(caster)
+        );
     }
 
     public static void endDiscreteCast(EntityPlayer caster, EnumHand hand, Spell spell) {
         if (!spell.isContinuous) {
             CastCostContextManager.clear(caster, hand);
+            CastPaymentContextManager.clear(caster, hand);
         }
     }
 
@@ -99,14 +115,22 @@ public final class WizardryWandBridge {
                             castingTick
                     )
                     : capturedCost;
-            if (spell.isContinuous && required > available) {
+            CastPaymentPlan plan = CastPaymentPlan.calculate(
+                    required,
+                    available,
+                    caster.getFoodStats().getFoodLevel(),
+                    0,
+                    paymentPolicy(caster, hand),
+                    spell.isContinuous
+            );
+            if (spell.isContinuous && !plan.isAffordable()) {
                 JustAnotherWizardryManaSystemMod.proxy.blockClientContinuousCast(
                         spell,
                         hand,
                         true
                 );
             }
-            return available;
+            return plan.isAffordable() ? Math.max(available, required) : available;
         }
 
         if (spell.isContinuous
@@ -118,8 +142,16 @@ public final class WizardryWandBridge {
             return -1;
         }
         int required = costForAttempt(caster, hand, spell, modifiers, castingTick);
+        CastPaymentPlan plan = CastPaymentService.preview(
+                caster,
+                required,
+                paymentPolicy(caster, hand),
+                spell.isContinuous,
+                hand,
+                spell.getRegistryName()
+        );
         int available = ManaService.getAvailableMana(caster);
-        if (required > available) {
+        if (!plan.isAffordable()) {
             if (spell.isContinuous) {
                 ManaService.exhaustContinuousCastMana(
                         caster,
@@ -127,7 +159,7 @@ public final class WizardryWandBridge {
                         spell.getRegistryName()
                 );
             }
-            notifyInsufficient(caster, spell, hand, required, available);
+            notifyInsufficient(caster, spell, hand, plan);
             CastingDiagnostics.trace(
                     "precheck_rejected",
                     caster,
@@ -137,7 +169,7 @@ public final class WizardryWandBridge {
                     available
             );
         }
-        return available;
+        return plan.isAffordable() ? Math.max(available, required) : available;
     }
 
     public static boolean castWithReservation(
@@ -148,15 +180,43 @@ public final class WizardryWandBridge {
             int castingTick,
             SpellModifiers modifiers
     ) {
-        if (world.isRemote || caster.isCreative()) {
+        if (world.isRemote) {
             return spell.cast(world, caster, hand, castingTick, modifiers);
         }
 
         int cost = costForAttempt(caster, hand, spell, modifiers, castingTick);
-        ManaReservation reservation = ManaService.reserveMana(caster, cost);
+        if (caster.isCreative()) {
+            boolean successful = spell.cast(world, caster, hand, castingTick, modifiers);
+            CastPaymentService.recordCreative(
+                    caster,
+                    cost,
+                    paymentPolicy(caster, hand),
+                    spell.isContinuous,
+                    hand,
+                    spell.getRegistryName(),
+                    successful
+            );
+            return successful;
+        }
+        CastPaymentReservation reservation = CastPaymentService.reserve(
+                caster,
+                cost,
+                paymentPolicy(caster, hand),
+                spell.isContinuous,
+                hand,
+                spell.getRegistryName()
+        );
         if (reservation == null) {
+            CastPaymentPlan plan = CastPaymentService.preview(
+                    caster,
+                    cost,
+                    paymentPolicy(caster, hand),
+                    spell.isContinuous,
+                    hand,
+                    spell.getRegistryName()
+            );
             int available = ManaService.getAvailableMana(caster);
-            notifyInsufficient(caster, spell, hand, cost, available);
+            notifyInsufficient(caster, spell, hand, plan);
             CastingDiagnostics.trace(
                     "reservation_rejected",
                     caster,
@@ -235,6 +295,7 @@ public final class WizardryWandBridge {
         Spell spell = WandHelper.getCurrentSpell(stack);
         if (result.getType() != EnumActionResult.SUCCESS) {
             CastCostContextManager.clear(caster, hand);
+            CastPaymentContextManager.clear(caster, hand);
         }
         if (caster.world.isRemote) {
             return;
@@ -288,6 +349,7 @@ public final class WizardryWandBridge {
 
     public static void interruptContinuousCast(EntityPlayer caster, Spell spell, EnumHand hand) {
         CastCostContextManager.clear(caster, hand);
+        CastPaymentContextManager.clear(caster, hand);
         if (caster.world.isRemote || !spell.isContinuous) {
             return;
         }
@@ -339,6 +401,7 @@ public final class WizardryWandBridge {
 
     public static void finishContinuousCast(EntityPlayer caster, Spell spell, EnumHand hand) {
         CastCostContextManager.clear(caster, hand);
+        CastPaymentContextManager.clear(caster, hand);
         if (caster.world.isRemote || !spell.isContinuous) {
             return;
         }
@@ -364,6 +427,7 @@ public final class WizardryWandBridge {
         if (!caster.isHandActive()) {
             ManaService.finishContinuousCast(caster);
             CastCostContextManager.clearAll(caster);
+            CastPaymentContextManager.clearAll(caster);
             return;
         }
         EnumHand hand = caster.getActiveHand();
@@ -371,12 +435,14 @@ public final class WizardryWandBridge {
         if (!(stack.getItem() instanceof ItemWand)) {
             ManaService.finishContinuousCast(caster);
             CastCostContextManager.clearAll(caster);
+            CastPaymentContextManager.clearAll(caster);
             return;
         }
         Spell spell = WandHelper.getCurrentSpell(stack);
         if (!spell.isContinuous || !state.matchesContinuousCast(hand, spell.getRegistryName())) {
             ManaService.finishContinuousCast(caster);
             CastCostContextManager.clearAll(caster);
+            CastPaymentContextManager.clearAll(caster);
         }
     }
 
@@ -388,7 +454,7 @@ public final class WizardryWandBridge {
         Deque<CastAttempt> attempts = ATTEMPTS.get();
         while (attempts.size() > depth) {
             CastAttempt attempt = attempts.pop();
-            ManaService.releaseReservation(attempt.reservation);
+            CastPaymentService.release(caster, attempt.reservation);
             traceAttempt("reservation_cleanup", caster, attempt);
         }
         if (attempts.isEmpty()) {
@@ -416,14 +482,13 @@ public final class WizardryWandBridge {
         }
 
         if (spell.isContinuous) {
-            ManaService.completeSuccessfulContinuousPortion(
-                    caster,
-                    attempt.reservation,
-                    attempt.hand,
-                    attempt.spellId
+            CastPaymentService.commit(
+                    caster, attempt.reservation, true, attempt.hand, attempt.spellId
             );
         } else {
-            ManaService.completeSuccessfulWandCast(caster, attempt.reservation);
+            CastPaymentService.commit(
+                    caster, attempt.reservation, false, attempt.hand, attempt.spellId
+            );
         }
         attempts.pop();
         traceAttempt("reservation_committed", caster, attempt);
@@ -442,7 +507,7 @@ public final class WizardryWandBridge {
             throw new IllegalStateException("JAWMS wand reservation stack was corrupted.");
         }
         attempts.pop();
-        ManaService.releaseReservation(expected.reservation);
+        CastPaymentService.release(caster, expected.reservation);
         traceAttempt(event, caster, expected);
         if (attempts.isEmpty()) {
             ATTEMPTS.remove();
@@ -453,24 +518,47 @@ public final class WizardryWandBridge {
             EntityPlayer caster,
             Spell spell,
             EnumHand hand,
-            int required,
-            int available
+            CastPaymentPlan plan
     ) {
+        int required = plan.getCost();
+        int available = ManaService.getAvailableMana(caster);
         if (ManaService.shouldNotifyInsufficient(
                 caster,
                 caster.world.getTotalWorldTime(),
                 required,
                 available
         )) {
-            caster.sendStatusMessage(
-                    new TextComponentTranslation(
+            TextComponentTranslation message = plan.wasSealConsidered()
+                    ? new TextComponentTranslation(
+                            "message.jawms.insufficient_seal_payment",
+                            required,
+                            available,
+                            plan.getUsableHunger()
+                    )
+                    : new TextComponentTranslation(
                             "message.jawms.insufficient_mana",
                             required,
                             available
-                    ),
-                    true
-            );
+                    );
+            caster.sendStatusMessage(message, true);
         }
+    }
+
+    private static DemonicSealPolicy paymentPolicy(
+            EntityPlayer caster, EnumHand hand
+    ) {
+        return CastPaymentContextManager.captureIfAbsent(
+                caster, hand, integrationRules(caster)
+        );
+    }
+
+    private static WizardryIntegrationRules integrationRules(EntityPlayer caster) {
+        if (!caster.world.isRemote) {
+            return GameplayRulesManager.current().getWizardryIntegrationRules();
+        }
+        WizardryIntegrationRules rules = JustAnotherWizardryManaSystemMod.proxy
+                .getClientWizardryIntegrationRules();
+        return rules == null ? WizardryIntegrationRules.defaults(0L) : rules;
     }
 
     private static boolean equals(Object first, Object second) {
@@ -505,7 +593,7 @@ public final class WizardryWandBridge {
                     caster,
                     attempt.spellId,
                     attempt.hand,
-                    attempt.reservation.getAmount(),
+                    attempt.reservation.getPlan().getCost(),
                     ManaService.getAvailableMana(caster)
             );
         }
@@ -513,13 +601,13 @@ public final class WizardryWandBridge {
 
     private static final class CastAttempt {
 
-        private final ManaReservation reservation;
+        private final CastPaymentReservation reservation;
         private final ResourceLocation spellId;
         private final EnumHand hand;
         private final boolean trace;
 
         private CastAttempt(
-                ManaReservation reservation,
+                CastPaymentReservation reservation,
                 ResourceLocation spellId,
                 EnumHand hand,
                 boolean trace

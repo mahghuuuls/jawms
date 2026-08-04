@@ -9,6 +9,8 @@ import com.mahghuuuls.jawms.api.ManaStateChangeEvent;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import com.mahghuuuls.jawms.internal.integration.wizardry.WizardryPassiveContributionAdapter;
+import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentContextManager;
+import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentService;
 import com.mahghuuuls.jawms.internal.modifier.ActiveStackCollector;
 import com.mahghuuuls.jawms.internal.modifier.ManaProfileResolver;
 import com.mahghuuuls.jawms.internal.modifier.ManaProviderRegistry;
@@ -243,6 +245,47 @@ public final class ManaService implements IManaService {
         state.markContinuousCastSuccessful(hand, spellId);
     }
 
+    public static void completeSuccessfulCastPayment(
+            EntityPlayer player,
+            ManaReservation reservation,
+            int hunger,
+            int minimumHunger,
+            boolean continuous,
+            EnumHand hand,
+            ResourceLocation spellId
+    ) {
+        requireNonNegative(hunger);
+        requireNonNegative(minimumHunger);
+        if (minimumHunger > 20) {
+            throw new IllegalArgumentException("Minimum hunger must not exceed 20.");
+        }
+        ManaState state = requireMutableState(player);
+        if (reservation == null
+                || !reservation.belongsTo(state)
+                || !reservation.isActive()) {
+            throw new IllegalStateException(
+                    "Successful cast has no matching active mana reservation."
+            );
+        }
+        int currentHunger = player.getFoodStats().getFoodLevel();
+        if (currentHunger - hunger < minimumHunger) {
+            throw new IllegalStateException(
+                    "Successful cast payment would cross its captured hunger floor."
+            );
+        }
+        transition(player, ManaCauses.SPELL_COST, false, () -> {
+            state.commit(reservation);
+            if (hunger > 0) {
+                player.getFoodStats().addStats(-hunger, 0.0F);
+            }
+        });
+        if (continuous) {
+            state.markContinuousCastSuccessful(hand, spellId);
+        } else {
+            startRegenerationLockout(player, state);
+        }
+    }
+
     public static void beginContinuousCast(
             EntityPlayer player,
             EnumHand hand,
@@ -315,6 +358,8 @@ public final class ManaService implements IManaService {
         transition(player, ManaCauses.LIFECYCLE, force, state::clearTransientLifecycleState);
         ManaMutationCoordinator.clear(player.getUniqueID());
         CastCostContextManager.clearAll(player);
+        CastPaymentContextManager.clearAll(player);
+        CastPaymentService.clear(player);
     }
 
     public static void copyForClone(EntityPlayer replacementPlayer, ManaState original) {

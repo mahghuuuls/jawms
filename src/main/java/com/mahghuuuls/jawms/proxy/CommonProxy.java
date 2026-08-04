@@ -1,6 +1,7 @@
 package com.mahghuuuls.jawms.proxy;
 
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesMessage;
+import com.mahghuuuls.jawms.internal.rules.WizardryIntegrationRules;
 import electroblob.wizardry.spell.Spell;
 import electroblob.wizardry.util.SpellModifiers;
 import net.minecraft.util.EnumHand;
@@ -39,6 +40,10 @@ public class CommonProxy {
 
     public int getClientMissingMana() {
         return 0;
+    }
+
+    public WizardryIntegrationRules getClientWizardryIntegrationRules() {
+        return null;
     }
 
     public boolean isClientContinuousCastBlocked(

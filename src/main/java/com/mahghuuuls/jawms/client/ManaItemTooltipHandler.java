@@ -93,6 +93,25 @@ public final class ManaItemTooltipHandler {
                         "tooltip.jawms.condensing",
                         compact(rules.getCondensingRegenerationPerRing()));
                 return;
+            case "ebwizardry:charm_hunger_casting":
+                removeWizardryDescription(event, id);
+                if (!rules.isDemonicSealEnabled()) {
+                    addConfigInactive(event);
+                    return;
+                }
+                event.getToolTip().add(TextFormatting.BLUE
+                        + I18n.translateToLocalFormatted(
+                                "tooltip.jawms.demonic_seal",
+                                rules.getDemonicSealManaPerHunger(),
+                                rules.getDemonicSealMinimumHunger()
+                        ));
+                if (rules.isDemonicSealContinuous()) {
+                    event.getToolTip().add(TextFormatting.BLUE
+                            + I18n.translateToLocal(
+                                    "tooltip.jawms.demonic_seal_continuous"
+                            ));
+                }
+                return;
             default:
                 break;
         }

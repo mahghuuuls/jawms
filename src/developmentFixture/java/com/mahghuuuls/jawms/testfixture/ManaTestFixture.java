@@ -18,6 +18,8 @@ import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import com.mahghuuuls.jawms.internal.rules.WizardryIntegrationRules;
 import com.mahghuuuls.jawms.internal.integration.wizardry.WizardryPassiveContributionAdapter;
+import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentService;
+import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentContextManager;
 import electroblob.wizardry.event.SpellCastEvent;
 import electroblob.wizardry.item.ItemWand;
 import electroblob.wizardry.item.IManaStoringItem;
@@ -155,6 +157,8 @@ public final class ManaTestFixture {
                     + " | casting cancel-tick <true|false>"
                     + " | casting factor <positive-number>"
                     + " | casting factor-delay <positive-number> <ticks>"
+                    + " | casting payment <inspect|clear> | hunger set <0..20>"
+                    + " | rules reload-after-cast <ticks>"
                     + " | flask inspect | armor mana <head|chest|legs|feet> <amount>"
                     + " | wand set <main|off> <namespace:spell>"
                     + " | wand mana <main|off> <amount> | wand inspect <main|off>";
@@ -198,6 +202,26 @@ public final class ManaTestFixture {
                 inspectFlask(sender);
                 return;
             }
+            if (arguments.length == 3
+                    && "casting".equalsIgnoreCase(arguments[0])
+                    && "payment".equalsIgnoreCase(arguments[1])
+                    && "inspect".equalsIgnoreCase(arguments[2])) {
+                inspectCastPayment(sender);
+                return;
+            }
+            if (arguments.length == 3
+                    && "casting".equalsIgnoreCase(arguments[0])
+                    && "payment".equalsIgnoreCase(arguments[1])
+                    && "clear".equalsIgnoreCase(arguments[2])) {
+                clearCastPayment(sender);
+                return;
+            }
+            if (arguments.length == 3
+                    && "hunger".equalsIgnoreCase(arguments[0])
+                    && "set".equalsIgnoreCase(arguments[1])) {
+                setHunger(sender, arguments[2]);
+                return;
+            }
             if (arguments.length == 2
                     && "casting".equalsIgnoreCase(arguments[0])
                     && "debug".equalsIgnoreCase(arguments[1])) {
@@ -214,6 +238,12 @@ public final class ManaTestFixture {
                     && "casting".equalsIgnoreCase(arguments[0])
                     && "cancel-tick".equalsIgnoreCase(arguments[1])) {
                 inspectCastingTickCancellation(sender);
+                return;
+            }
+            if (arguments.length == 3
+                    && "rules".equalsIgnoreCase(arguments[0])
+                    && "reload-after-cast".equalsIgnoreCase(arguments[1])) {
+                scheduleRulesReload(sender, arguments[2]);
                 return;
             }
             if (arguments.length == 3
@@ -331,6 +361,43 @@ public final class ManaTestFixture {
                     "JAWMS mana set to " + service.getCurrentMana(player)
                             + " / " + service.getMaximumMana(player) + "."
             ));
+        }
+
+        private static void setHunger(ICommandSender sender, String amount)
+                throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            int target = parseInt(amount, 0, 20);
+            player.getFoodStats().setFoodLevel(target);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS hunger set to " + player.getFoodStats().getFoodLevel() + " / 20."
+            ));
+        }
+
+        private static void scheduleRulesReload(ICommandSender sender, String ticksValue)
+                throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            int ticks = parseInt(ticksValue, 1, 1200);
+            CAST_CANCELLATION.armRulesReloadFor(player, ticks);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS rules reload armed for " + ticks
+                            + " ticks after the next wand cast starts."
+            ));
+        }
+
+        private static void inspectCastPayment(ICommandSender sender)
+                throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS cast payment "
+                            + CastPaymentService.describeLastPayment(player) + "."
+            ));
+        }
+
+        private static void clearCastPayment(ICommandSender sender)
+                throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            CastPaymentService.clearLastPayment(player);
+            sender.sendMessage(new TextComponentString("JAWMS cast payment cleared."));
         }
 
         private static void inspectRules(ICommandSender sender) {
@@ -785,6 +852,8 @@ public final class ManaTestFixture {
                                     stack, electroblob.wizardry.registry.WizardryItems.melee_upgrade)
                             + ", food=" + player.getFoodStats().getFoodLevel()
                             + ", captured=" + CastCostContextManager.describe(player, hand)
+                            + ", sealPolicy={"
+                            + CastPaymentContextManager.describe(player, hand) + "}"
                             + "."
             ));
         }
@@ -887,6 +956,32 @@ public final class ManaTestFixture {
         private UUID scheduledFactorPlayerId;
         private float scheduledFactor = 1.0F;
         private int scheduledFactorTicks;
+        private UUID scheduledReloadPlayerId;
+        private int scheduledReloadTicks;
+        private UUID armedReloadPlayerId;
+        private int armedReloadTicks;
+
+        @SubscribeEvent(priority = EventPriority.LOWEST)
+        public void scheduleRulesReloadAfterCast(SpellCastEvent.Pre event) {
+            if (!(event.getCaster() instanceof EntityPlayerMP)
+                    || event.getSource() != SpellCastEvent.Source.WAND
+                    || armedReloadPlayerId == null
+                    || !armedReloadPlayerId.equals(event.getCaster().getUniqueID())) {
+                return;
+            }
+            EntityPlayerMP player = (EntityPlayerMP) event.getCaster();
+            scheduledReloadPlayerId = armedReloadPlayerId;
+            scheduledReloadTicks = armedReloadTicks;
+            armedReloadPlayerId = null;
+            armedReloadTicks = 0;
+            JustAnotherWizardryManaSystemMod.LOGGER.info(
+                    "JAWMS test rules reload scheduled from cast start: player={}, ticks={}, mainSeal={}, offSeal={}.",
+                    player.getUniqueID(),
+                    scheduledReloadTicks,
+                    CastPaymentContextManager.describe(player, EnumHand.MAIN_HAND),
+                    CastPaymentContextManager.describe(player, EnumHand.OFF_HAND)
+            );
+        }
 
         @SubscribeEvent(priority = EventPriority.HIGHEST)
         public void applyContextualCostFactor(SpellCastEvent.Pre event) {
@@ -923,6 +1018,28 @@ public final class ManaTestFixture {
                     factor,
                     CastCostContextManager.describe(player, EnumHand.MAIN_HAND),
                     CastCostContextManager.describe(player, EnumHand.OFF_HAND)
+            );
+        }
+
+        @SubscribeEvent
+        public void applyScheduledRulesReload(TickEvent.PlayerTickEvent event) {
+            if (event.phase != TickEvent.Phase.END
+                    || !(event.player instanceof EntityPlayerMP)
+                    || scheduledReloadPlayerId == null
+                    || !scheduledReloadPlayerId.equals(event.player.getUniqueID())) {
+                return;
+            }
+            if (--scheduledReloadTicks > 0) {
+                return;
+            }
+            EntityPlayerMP player = (EntityPlayerMP) event.player;
+            scheduledReloadPlayerId = null;
+            GameplayRulesManager.reload(player.getServer());
+            JustAnotherWizardryManaSystemMod.LOGGER.info(
+                    "JAWMS test rules reload fired during runtime: player={}, mainSeal={}, offSeal={}.",
+                    player.getUniqueID(),
+                    CastPaymentContextManager.describe(player, EnumHand.MAIN_HAND),
+                    CastPaymentContextManager.describe(player, EnumHand.OFF_HAND)
             );
         }
 
@@ -1011,6 +1128,11 @@ public final class ManaTestFixture {
             scheduledFactorTicks = ticks;
         }
 
+        private void armRulesReloadFor(EntityPlayerMP player, int ticks) {
+            armedReloadPlayerId = player.getUniqueID();
+            armedReloadTicks = ticks;
+        }
+
         private void clear() {
             playerId = null;
             tickPlayerId = null;
@@ -1019,6 +1141,10 @@ public final class ManaTestFixture {
             scheduledFactorPlayerId = null;
             scheduledFactor = 1.0F;
             scheduledFactorTicks = 0;
+            scheduledReloadPlayerId = null;
+            scheduledReloadTicks = 0;
+            armedReloadPlayerId = null;
+            armedReloadTicks = 0;
         }
     }
 }

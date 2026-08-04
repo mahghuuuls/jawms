@@ -4,6 +4,7 @@ import electroblob.wizardry.constants.Element;
 import java.util.EnumMap;
 import java.util.Map;
 import com.mahghuuuls.jawms.internal.casting.CastCostContextManager;
+import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentContextManager;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.network.FMLNetworkEvent;
 
@@ -79,6 +80,7 @@ public final class ClientManaState {
     @SubscribeEvent
     public void disconnected(FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
         CastCostContextManager.clearClientSide();
+        CastPaymentContextManager.clearClientSide();
         clear();
     }
 

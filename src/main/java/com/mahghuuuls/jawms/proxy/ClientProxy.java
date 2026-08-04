@@ -8,7 +8,9 @@ import com.mahghuuuls.jawms.client.ManaHudRenderer;
 import com.mahghuuuls.jawms.client.ManaItemTooltipHandler;
 import com.mahghuuuls.jawms.internal.casting.SpellCostService;
 import com.mahghuuuls.jawms.internal.casting.CastCostContextManager;
+import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentContextManager;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesMessage;
+import com.mahghuuuls.jawms.internal.rules.WizardryIntegrationRules;
 import electroblob.wizardry.item.ItemWand;
 import electroblob.wizardry.spell.Spell;
 import electroblob.wizardry.util.SpellModifiers;
@@ -71,6 +73,11 @@ public final class ClientProxy extends CommonProxy {
         return ClientManaState.isAvailable()
                 ? Math.max(0, ClientManaState.getMaximumMana() - ClientManaState.getCurrentMana())
                 : 0;
+    }
+
+    @Override
+    public WizardryIntegrationRules getClientWizardryIntegrationRules() {
+        return ClientGameplayRules.getIntegrationRules();
     }
 
     @Override
@@ -139,6 +146,7 @@ public final class ClientProxy extends CommonProxy {
             return;
         }
         CastCostContextManager.clear(player, hand);
+        CastPaymentContextManager.clear(player, hand);
         ItemStack stack = player.getHeldItem(hand);
         if (!(stack.getItem() instanceof ItemWand)) {
             return;
