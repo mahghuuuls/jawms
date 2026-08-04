@@ -4,10 +4,15 @@ import com.mahghuuuls.jawms.api.ManaContribution;
 import com.mahghuuuls.jawms.api.ManaTooltips;
 import com.mahghuuuls.jawms.internal.modifier.ActiveStackCollector;
 import com.mahghuuuls.jawms.internal.rules.ConfiguredItemRule;
+import com.mahghuuuls.jawms.internal.integration.wizardry.WizardryPassiveContributionAdapter;
 import net.minecraft.item.ItemArmor;
 import electroblob.wizardry.item.ItemWizardArmour;
 import electroblob.wizardry.item.ItemWand;
+import electroblob.wizardry.registry.WizardryItems;
+import electroblob.wizardry.util.WandHelper;
 import electroblob.wizardry.Wizardry;
+import com.mahghuuuls.jawms.internal.rules.WizardryIntegrationRules;
+import net.minecraft.client.Minecraft;
 import net.minecraft.util.text.Style;
 import net.minecraft.util.text.TextFormatting;
 import net.minecraft.item.ItemStack;
@@ -20,6 +25,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 public final class ManaItemTooltipHandler {
+
+    private static final int WIZARDRY_TOOLTIP_WRAP_WIDTH = 140;
 
     private static final Set<String> OBSOLETE_WAND_MANA_ITEMS = new HashSet<>(Arrays.asList(
             "ebwizardry:storage_upgrade",
@@ -37,7 +44,7 @@ public final class ManaItemTooltipHandler {
     public void tooltip(ItemTooltipEvent event) {
         removeWandDurabilityLine(event);
         removeSupersededWizardryCostLines(event);
-        addObsoleteWandManaNotice(event);
+        addWizardryIntegrationPresentation(event);
         ManaContribution contribution = contributionFor(event.getItemStack());
         if (contribution == null) {
             return;
@@ -60,13 +67,117 @@ public final class ManaItemTooltipHandler {
         }
     }
 
-    private static void addObsoleteWandManaNotice(ItemTooltipEvent event) {
-        if (event.getItemStack().getItem().getRegistryName() != null
-                && isObsoleteWandManaItem(
-                event.getItemStack().getItem().getRegistryName().toString())) {
-            event.getToolTip().add(TextFormatting.RED
-                    + I18n.translateToLocal("tooltip.jawms.inactive_wand_mana"));
+    private static void addWizardryIntegrationPresentation(ItemTooltipEvent event) {
+        ItemStack stack = event.getItemStack();
+        if (stack.getItem().getRegistryName() == null) {
+            return;
         }
+        String id = stack.getItem().getRegistryName().toString();
+        WizardryIntegrationRules rules = ClientGameplayRules.getIntegrationRules();
+        switch (id) {
+            case "ebwizardry:storage_upgrade":
+                removeWizardryDescription(event, id);
+                addEnabledOrInactive(event, rules.isStorageEnabled(),
+                        "tooltip.jawms.storage_per_level",
+                        compact(rules.getStorageManaIncreasePerLevel()));
+                return;
+            case "ebwizardry:condenser_upgrade":
+                removeWizardryDescription(event, id);
+                addEnabledOrInactive(event, rules.isCondenserEnabled(),
+                        "tooltip.jawms.condenser_per_level",
+                        compact(rules.getCondenserRegenerationIncreasePerLevel()));
+                return;
+            case "ebwizardry:ring_condensing":
+                removeWizardryDescription(event, id);
+                addEnabledOrInactive(event, rules.isCondensingEnabled(),
+                        "tooltip.jawms.condensing",
+                        compact(rules.getCondensingRegenerationPerRing()));
+                return;
+            default:
+                break;
+        }
+        if (stack.getItem() instanceof ItemWand) {
+            addHeldUpgradeLines(event, stack, rules);
+            return;
+        }
+        if (isObsoleteWandManaItem(id)) {
+            addInactive(event);
+        }
+    }
+
+    private static void addHeldUpgradeLines(
+            ItemTooltipEvent event, ItemStack stack, WizardryIntegrationRules rules
+    ) {
+        int storage = Math.max(0, WandHelper.getUpgradeLevel(
+                stack, WizardryItems.storage_upgrade
+        ));
+        if (storage > 0) {
+            if (rules.isStorageEnabled()) {
+                double value = WizardryPassiveContributionAdapter.storageMaximumIncrease(
+                        storage, rules
+                );
+                event.getToolTip().add(TextFormatting.BLUE + I18n.translateToLocalFormatted(
+                        "tooltip.jawms.storage_installed", compact(value), storage
+                ));
+            } else {
+                addConfigInactive(event);
+            }
+        }
+        int condenser = Math.max(0, WandHelper.getUpgradeLevel(
+                stack, WizardryItems.condenser_upgrade
+        ));
+        if (condenser > 0) {
+            if (rules.isCondenserEnabled()) {
+                event.getToolTip().add(TextFormatting.BLUE + I18n.translateToLocalFormatted(
+                        "tooltip.jawms.condenser_installed",
+                        compact(WizardryPassiveContributionAdapter.condenserRegenerationIncrease(
+                                condenser, rules
+                        )),
+                        condenser
+                ));
+            } else {
+                addConfigInactive(event);
+            }
+        }
+    }
+
+    private static void addEnabledOrInactive(
+            ItemTooltipEvent event, boolean enabled, String key, Object... values
+    ) {
+        if (!enabled) {
+            addConfigInactive(event);
+            return;
+        }
+        event.getToolTip().add(TextFormatting.BLUE
+                + I18n.translateToLocalFormatted(key, values));
+    }
+
+    private static void addInactive(ItemTooltipEvent event) {
+        String inactive = TextFormatting.RED
+                + I18n.translateToLocal("tooltip.jawms.inactive_wand_mana");
+        if (!event.getToolTip().contains(inactive)) {
+            event.getToolTip().add(inactive);
+        }
+    }
+
+    private static void addConfigInactive(ItemTooltipEvent event) {
+        String inactive = TextFormatting.RED
+                + I18n.translateToLocal("tooltip.jawms.disabled_in_config");
+        if (!event.getToolTip().contains(inactive)) {
+            event.getToolTip().add(inactive);
+        }
+    }
+
+    private static void removeWizardryDescription(ItemTooltipEvent event, String id) {
+        String key = "item." + id + ".desc";
+        java.util.List<String> lines = Minecraft.getMinecraft().fontRenderer
+                .listFormattedStringToWidth(
+                        Wizardry.proxy.translate(
+                                key, new Style().setColor(TextFormatting.GRAY)
+                        ),
+                        WIZARDRY_TOOLTIP_WRAP_WIDTH
+                );
+        event.getToolTip().removeAll(lines);
     }
 
     static boolean isObsoleteWandManaItem(String registryName) {
@@ -186,8 +297,9 @@ public final class ManaItemTooltipHandler {
         return null;
     }
 
-    private static String compact(double value) {
-        return value == Math.rint(value) ? Long.toString((long) value) : Double.toString(value);
+    static String compact(double value) {
+        return value == Math.rint(value) && value <= Long.MAX_VALUE && value >= Long.MIN_VALUE
+                ? Long.toString((long) value) : Double.toString(value);
     }
 
     static void insertAfter(java.util.List<String> tooltip, String heading, String replacement) {

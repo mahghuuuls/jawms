@@ -1,5 +1,6 @@
 package com.mahghuuuls.jawms.client;
 
+import com.mahghuuuls.jawms.internal.rules.WizardryIntegrationRules;
 import net.minecraft.util.text.translation.I18n;
 import org.junit.jupiter.api.Test;
 
@@ -55,5 +56,39 @@ class ManaItemTooltipHandlerTest {
         assertTrue(ManaItemTooltipHandler.isObsoleteWandManaItem("ebwizardry:charm_hunger_casting"));
         assertFalse(ManaItemTooltipHandler.isObsoleteWandManaItem("ebwizardry:amulet_arcane_defence"));
         assertFalse(ManaItemTooltipHandler.isObsoleteWandManaItem("ebwizardry:magic_crystal"));
+    }
+
+    @Test
+    void compactPresentationDoesNotOverflowPermittedLargeValues() {
+        assertEquals("2", ManaItemTooltipHandler.compact(2.0D));
+        assertEquals(Double.toString(Double.MAX_VALUE),
+                ManaItemTooltipHandler.compact(Double.MAX_VALUE));
+        assertEquals(Double.toString(Double.MAX_VALUE),
+                WizardryIntegrationPresentation.compact(Double.MAX_VALUE));
+    }
+
+    @Test
+    void disabledFontUsesTheConfigDisabledPresentationReason() {
+        WizardryIntegrationRules defaults = WizardryIntegrationRules.defaults(1L);
+        WizardryIntegrationRules disabledFont = new WizardryIntegrationRules(
+                defaults.getRevision(),
+                defaults.isStorageEnabled(), defaults.getStorageManaIncreasePerLevel(),
+                defaults.isCondenserEnabled(),
+                defaults.getCondenserRegenerationIncreasePerLevel(),
+                defaults.isSiphonEnabled(), defaults.getSiphonManaPerLevel(),
+                defaults.getHeldWandAggregation(), defaults.isMeleeEnabled(),
+                defaults.getMeleeDamagePerLevel(), defaults.getMeleeManaPerLevel(),
+                defaults.isCondensingEnabled(), defaults.getCondensingRegenerationPerRing(),
+                defaults.isSiphoningEnabled(), defaults.getSiphoningIncrease(),
+                defaults.isExtractionEnabled(), defaults.getExtractionMana(),
+                defaults.isPerfectionistEnabled(), defaults.getPerfectionistRefund(),
+                defaults.isDemonicSealEnabled(), defaults.getDemonicSealManaPerHunger(),
+                defaults.getDemonicSealMinimumHunger(), defaults.isDemonicSealContinuous(),
+                false, defaults.getFontRegenerationPerLevel(),
+                defaults.isFontLockoutPermission(), defaults.isFontContinuousPermission()
+        );
+
+        assertEquals("tooltip.jawms.disabled_in_config",
+                WizardryIntegrationPresentation.fontInformationKey(disabledFont));
     }
 }

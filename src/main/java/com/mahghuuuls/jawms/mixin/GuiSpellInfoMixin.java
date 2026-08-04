@@ -1,6 +1,7 @@
 package com.mahghuuuls.jawms.mixin;
 
 import com.mahghuuuls.jawms.client.ClientSpellCostPresentation;
+import com.mahghuuuls.jawms.client.WizardryIntegrationPresentation;
 import electroblob.wizardry.client.gui.GuiSpellInfo;
 import electroblob.wizardry.spell.Spell;
 import net.minecraft.client.resources.I18n;
@@ -65,6 +66,24 @@ public abstract class GuiSpellInfoMixin {
                         ? "gui.jawms.spell_book.base_mana_cost_continuous"
                         : "gui.jawms.spell_book.base_mana_cost",
                 cost
+        );
+    }
+
+    @Redirect(
+            method = DRAW_FOREGROUND,
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lelectroblob/wizardry/spell/Spell;getDescription()Ljava/lang/String;",
+                    ordinal = 0,
+                    remap = false
+            ),
+            require = 1,
+            expect = 1,
+            remap = false
+    )
+    private String jawms$appendIntegrationSpellInformation(Spell spell) {
+        return WizardryIntegrationPresentation.appendSpellInformation(
+                spell, spell.getDescription()
         );
     }
 }

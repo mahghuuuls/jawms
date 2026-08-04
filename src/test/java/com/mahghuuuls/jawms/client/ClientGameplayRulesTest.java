@@ -3,6 +3,7 @@ package com.mahghuuuls.jawms.client;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesMessage;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorProfile;
+import com.mahghuuuls.jawms.internal.rules.WizardryIntegrationRules;
 import com.mahghuuuls.jawms.internal.integration.wizardry.WizardryFlaskBridge;
 import electroblob.wizardry.item.ItemManaFlask;
 import org.junit.jupiter.api.AfterEach;
@@ -27,8 +28,8 @@ class ClientGameplayRulesTest {
         ClientGameplayRules.accept(first);
 
         assertEquals(0L, ClientGameplayRules.getRevision());
-        assertEquals(50, ClientGameplayRules.getBaseMaximum());
-        assertEquals(2.0D, ClientGameplayRules.getBaseRegeneration());
+        assertEquals(60, ClientGameplayRules.getBaseMaximum());
+        assertEquals(2.4D, ClientGameplayRules.getBaseRegeneration());
         assertEquals(40L, ClientGameplayRules.getLockoutTicks());
         assertEquals(20, ClientGameplayRules.getSmallFlask());
         assertEquals(
@@ -46,15 +47,24 @@ class ClientGameplayRulesTest {
 
     @Test
     void refreshesCapacitiesOnlyForAcceptedClientRevisions() {
-        ClientGameplayRules.accept(new GameplayRulesMessage(rules(2L, 21, 51, 101)));
+        GameplayRules accepted = rules(2L, 21, 51, 101)
+                .withWizardryIntegrationRules(WizardryIntegrationRules.defaults(7L));
+        ClientGameplayRules.accept(new GameplayRulesMessage(accepted));
         assertEquals(21, ItemManaFlask.Size.SMALL.capacity);
         assertEquals(51, ItemManaFlask.Size.MEDIUM.capacity);
         assertEquals(101, ItemManaFlask.Size.LARGE.capacity);
+        assertEquals(7L, ClientGameplayRules.getIntegrationRules().getRevision());
 
-        ClientGameplayRules.accept(new GameplayRulesMessage(rules(1L, 1, 2, 3)));
+        GameplayRules stale = rules(1L, 1, 2, 3)
+                .withWizardryIntegrationRules(WizardryIntegrationRules.defaults(99L));
+        ClientGameplayRules.accept(new GameplayRulesMessage(stale));
         assertEquals(21, ItemManaFlask.Size.SMALL.capacity);
         assertEquals(51, ItemManaFlask.Size.MEDIUM.capacity);
         assertEquals(101, ItemManaFlask.Size.LARGE.capacity);
+        assertEquals(7L, ClientGameplayRules.getIntegrationRules().getRevision());
+
+        ClientGameplayRules.clear();
+        assertEquals(0L, ClientGameplayRules.getIntegrationRules().getRevision());
     }
 
     private static GameplayRules rules(

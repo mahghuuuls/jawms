@@ -56,14 +56,14 @@ class ActiveStackCollectorTest {
         );
 
         ResolvedManaProfile profile = ManaProfileResolver.resolve(
-                50,
-                2.0D,
+                60,
+                2.4D,
                 2.0D,
                 Arrays.asList(helmet, chest, legs, boots)
         );
 
         assertEquals(100, profile.getMaximumMana());
-        assertEquals(4.0D, profile.getRegeneration());
+        assertEquals(4.0D, profile.getRegeneration(), 0.000000001D);
         assertEquals(0.0D, helmet.getMaximumManaIncrease());
         assertEquals(0.0D, helmet.getGlobalSpellEfficiency());
     }

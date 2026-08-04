@@ -16,33 +16,38 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class GameplayRulesManager {
 
     private static final AtomicLong NEXT_REVISION = new AtomicLong(1L);
+    private static final AtomicLong NEXT_INTEGRATION_REVISION = new AtomicLong(1L);
     private static volatile GameplayRules current = GameplayRules.initialDefaults();
     private static File configurationFile;
+    private static File integrationConfigurationFile;
 
     private GameplayRulesManager() {
     }
 
-    public static synchronized void configure(File file) {
-        if (file == null) {
-            throw new NullPointerException("file");
+    public static synchronized void configure(File file, File integrationFile) {
+        if (file == null || integrationFile == null) {
+            throw new NullPointerException("file and integrationFile must not be null");
         }
         configurationFile = file;
+        integrationConfigurationFile = integrationFile;
     }
 
     public static synchronized void initialize() {
-        if (configurationFile == null) {
-            throw new IllegalStateException("Gameplay rules configuration file was not configured.");
+        if (configurationFile == null || integrationConfigurationFile == null) {
+            throw new IllegalStateException("Gameplay and integration rules files were not configured.");
         }
         BuildResult result = build(current);
         current = result.rules;
         WizardryFlaskBridge.refreshCapacities(result.rules);
         JustAnotherWizardryManaSystemMod.LOGGER.info(
                 "Published initial JAWMS gameplay rules revision {}: baseMaximum={}, baseRegeneration={}, "
-                        + "lockoutTicks={}, spellCosts={}, itemRules={}, disabledProviders={}, warnings={}.",
+                        + "lockoutTicks={}, integrationRevision={}, spellCosts={}, itemRules={}, "
+                        + "disabledProviders={}, warnings={}.",
                 result.rules.getRevision(),
                 result.rules.getBaseMaximum(),
                 result.rules.getBaseRegeneration(),
                 result.rules.getRegenerationLockoutTicks(),
+                result.rules.getWizardryIntegrationRules().getRevision(),
                 result.rules.getSpellCosts().size(),
                 result.rules.getConfiguredItemRules().size(),
                 result.rules.getDisabledProviderIds().size(),
@@ -98,13 +103,21 @@ public final class GameplayRulesManager {
 
     private static BuildResult build(GameplayRules previous) {
         List<String> warnings = new ArrayList<>();
-        GameplayRules rules = GameplayRulesLoader.load(
+        GameplayRules mainCandidate = GameplayRulesLoader.load(
                 configurationFile,
                 previous,
                 NEXT_REVISION.getAndIncrement(),
                 collectSpells(),
                 warnings::add
         );
+        long candidateRevision = NEXT_INTEGRATION_REVISION.getAndIncrement();
+        WizardryIntegrationRules integration = loadIntegrationCandidate(
+                integrationConfigurationFile,
+                previous.getWizardryIntegrationRules(),
+                candidateRevision,
+                warnings
+        );
+        GameplayRules rules = mainCandidate.withWizardryIntegrationRules(integration);
         for (String warning : warnings) {
             JustAnotherWizardryManaSystemMod.LOGGER.warn(
                     "JAWMS rules revision {}: {}",
@@ -113,6 +126,28 @@ public final class GameplayRulesManager {
             );
         }
         return new BuildResult(rules, warnings.size());
+    }
+
+    static WizardryIntegrationRules loadIntegrationCandidate(
+            File file,
+            WizardryIntegrationRules previous,
+            long candidateRevision,
+            List<String> warnings
+    ) {
+        try {
+            return WizardryIntegrationRulesLoader.load(file, candidateRevision);
+        } catch (WizardryIntegrationRulesLoader.InvalidIntegrationRulesException exception) {
+            for (String error : exception.getErrors()) {
+                warnings.add("Rejected integration candidate " + candidateRevision + ": " + error
+                        + "; retaining integration revision " + previous.getRevision() + ".");
+            }
+            return previous;
+        } catch (RuntimeException exception) {
+            warnings.add("Rejected integration candidate " + candidateRevision
+                    + " because it could not be parsed: " + exception.getMessage()
+                    + "; retaining integration revision " + previous.getRevision() + ".");
+            return previous;
+        }
     }
 
     private static List<SpellCostCompiler.SpellDefinition> collectSpells() {

@@ -20,9 +20,9 @@ class ManaStateTest {
     void newStateStartsFull() {
         ManaState state = new ManaState();
 
-        assertEquals(50, state.getCurrentMana());
-        assertEquals(50, state.getMaximumMana());
-        assertEquals(2.0D, state.getEffectiveRegeneration());
+        assertEquals(60, state.getCurrentMana());
+        assertEquals(60, state.getMaximumMana());
+        assertEquals(2.4D, state.getEffectiveRegeneration());
     }
 
     @Test
@@ -30,10 +30,10 @@ class ManaStateTest {
         ManaState state = new ManaState();
 
         assertTrue(state.tryConsume(30));
-        assertFalse(state.tryConsume(30));
-        assertEquals(20, state.getCurrentMana());
+        assertFalse(state.tryConsume(31));
+        assertEquals(30, state.getCurrentMana());
         assertEquals(30, state.restore(5000));
-        assertEquals(50, state.getCurrentMana());
+        assertEquals(60, state.getCurrentMana());
     }
 
     @Test
@@ -41,10 +41,10 @@ class ManaStateTest {
         ManaState state = new ManaState();
         ManaReservation reservation = state.reserve(30);
 
-        assertEquals(50, state.getCurrentMana());
-        assertEquals(20, state.getAvailableMana());
-        assertFalse(state.tryConsume(21));
-        assertTrue(state.tryConsume(20));
+        assertEquals(60, state.getCurrentMana());
+        assertEquals(30, state.getAvailableMana());
+        assertFalse(state.tryConsume(31));
+        assertTrue(state.tryConsume(30));
         assertEquals(30, state.getCurrentMana());
         assertEquals(0, state.getAvailableMana());
 
@@ -57,16 +57,16 @@ class ManaStateTest {
     @Test
     void failedAndNestedReservationsReleaseWithoutVisibleConsumption() {
         ManaState state = new ManaState();
-        ManaReservation outer = state.reserve(30);
+        ManaReservation outer = state.reserve(40);
         ManaReservation inner = state.reserve(20);
 
         assertEquals(0, state.getAvailableMana());
         state.release(inner);
         assertEquals(20, state.getAvailableMana());
-        assertEquals(50, state.getCurrentMana());
+        assertEquals(60, state.getCurrentMana());
         state.release(outer);
-        assertEquals(50, state.getAvailableMana());
-        assertEquals(50, state.getCurrentMana());
+        assertEquals(60, state.getAvailableMana());
+        assertEquals(60, state.getCurrentMana());
     }
 
     @Test
@@ -76,7 +76,7 @@ class ManaStateTest {
 
         state.commit(reservation);
 
-        assertEquals(50, state.getCurrentMana());
+        assertEquals(60, state.getCurrentMana());
         assertThrows(IllegalStateException.class, () -> state.commit(reservation));
         assertThrows(IllegalStateException.class, () -> state.release(reservation));
     }
@@ -98,7 +98,7 @@ class ManaStateTest {
 
         assertThrows(IllegalArgumentException.class, () -> state.restore(-1));
         assertThrows(IllegalArgumentException.class, () -> state.tryConsume(-1));
-        assertEquals(50, state.getCurrentMana());
+        assertEquals(60, state.getCurrentMana());
     }
 
     @Test
@@ -109,26 +109,23 @@ class ManaStateTest {
         for (int tick = 0; tick < 39; tick++) {
             state.regenerateTick(0.5D);
         }
-        assertEquals(48, state.getCurrentMana());
+        assertEquals(58, state.getCurrentMana());
 
         state.regenerateTick(0.5D);
-        assertEquals(49, state.getCurrentMana());
+        assertEquals(59, state.getCurrentMana());
     }
 
     @Test
-    void defaultRegenerationRestoresTwoManaAfterTwentyTicks() {
+    void defaultRegenerationRestoresTwoWholeManaAfterTwentyTicks() {
         ManaState state = new ManaState();
         state.tryConsume(2);
 
-        for (int tick = 0; tick < 9; tick++) {
-            assertEquals(0, state.regenerateTick(state.getEffectiveRegeneration()));
+        int restored = 0;
+        for (int tick = 0; tick < 20; tick++) {
+            restored += state.regenerateTick(state.getEffectiveRegeneration());
         }
-        assertEquals(1, state.regenerateTick(state.getEffectiveRegeneration()));
-        for (int tick = 0; tick < 9; tick++) {
-            assertEquals(0, state.regenerateTick(state.getEffectiveRegeneration()));
-        }
-        assertEquals(1, state.regenerateTick(state.getEffectiveRegeneration()));
-        assertEquals(50, state.getCurrentMana());
+        assertEquals(2, restored);
+        assertEquals(60, state.getCurrentMana());
     }
 
     @Test
@@ -143,11 +140,11 @@ class ManaStateTest {
 
         ManaState restored = new ManaState();
         restored.deserializeIntrinsicState(saved);
-        assertEquals(30, restored.getCurrentMana());
+        assertEquals(40, restored.getCurrentMana());
 
         saved.setInteger("currentMana", 5000);
         restored.deserializeIntrinsicState(saved);
-        assertEquals(50, restored.getCurrentMana());
+        assertEquals(60, restored.getCurrentMana());
     }
 
     @Test
@@ -158,7 +155,7 @@ class ManaStateTest {
 
         clone.copyFrom(original);
 
-        assertEquals(25, clone.getCurrentMana());
+        assertEquals(35, clone.getCurrentMana());
         assertTrue(clone.getRevision() > original.getRevision());
     }
 

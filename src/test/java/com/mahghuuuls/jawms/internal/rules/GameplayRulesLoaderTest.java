@@ -71,8 +71,8 @@ class GameplayRulesLoaderTest {
         );
 
         assertTrue(file.isFile());
-        assertEquals(50, rules.getBaseMaximum());
-        assertEquals(2.0D, rules.getBaseRegeneration());
+        assertEquals(60, rules.getBaseMaximum());
+        assertEquals(2.4D, rules.getBaseRegeneration());
         assertEquals(40L, rules.getRegenerationLockoutTicks());
         assertEquals(20, rules.getSmallFlask());
         assertEquals(50, rules.getMediumFlask());
@@ -100,8 +100,8 @@ class GameplayRulesLoaderTest {
         );
         Configuration configuration = new Configuration(file);
         configuration.load();
-        configuration.get("mana", "baseMaximum", "50").set("-4");
-        configuration.get("mana", "baseRegeneration", "2.0").set("NaN");
+        configuration.get("mana", "baseMaximum", "60").set("-4");
+        configuration.get("mana", "baseRegeneration", "2.4").set("NaN");
         configuration.get("mana", "regenerationLockoutSeconds", "2.0").set("0.01");
         configuration.get("spells", "formula", GameplayRules.DEFAULT_COST_FORMULA).set("original_cost +");
         configuration.get("spells", "overrides", new String[0]).set(new String[]{
@@ -125,8 +125,8 @@ class GameplayRulesLoaderTest {
                 warnings::add
         );
 
-        assertEquals(50, rules.getBaseMaximum());
-        assertEquals(2.0D, rules.getBaseRegeneration());
+        assertEquals(60, rules.getBaseMaximum());
+        assertEquals(2.4D, rules.getBaseRegeneration());
         assertEquals(1L, rules.getRegenerationLockoutTicks());
         assertEquals(25, rules.getSmallFlask());
         assertEquals(10.0D, rules.getSpellCosts().get(id("novice")));

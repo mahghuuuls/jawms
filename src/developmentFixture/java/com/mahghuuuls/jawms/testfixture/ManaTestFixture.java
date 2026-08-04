@@ -16,12 +16,16 @@ import com.mahghuuuls.jawms.internal.mana.ManaState;
 import com.mahghuuuls.jawms.internal.modifier.ActiveStackCollector;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
+import com.mahghuuuls.jawms.internal.rules.WizardryIntegrationRules;
+import com.mahghuuuls.jawms.internal.integration.wizardry.WizardryPassiveContributionAdapter;
 import electroblob.wizardry.event.SpellCastEvent;
 import electroblob.wizardry.item.ItemWand;
 import electroblob.wizardry.item.IManaStoringItem;
 import electroblob.wizardry.item.ItemManaFlask;
 import electroblob.wizardry.item.ItemWizardArmour;
 import electroblob.wizardry.spell.Spell;
+import electroblob.wizardry.registry.WizardryItems;
+import electroblob.wizardry.registry.WizardryPotions;
 import electroblob.wizardry.util.SpellModifiers;
 import electroblob.wizardry.util.WandHelper;
 import net.minecraft.command.CommandBase;
@@ -29,6 +33,7 @@ import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
+import net.minecraft.potion.PotionEffect;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.text.TextComponentString;
@@ -141,6 +146,7 @@ public final class ManaTestFixture {
         @Override
         public String getUsage(ICommandSender sender) {
             return "/jawms-test mana set <amount> | mana inspect | rules inspect"
+                    + " | integration inspect | regen pause <true|false>"
                     + " | mana restore <amount> | mana consume <amount> | mana drain <amount>"
                     + " | mana regen <true|false>"
                     + " | mana events <true|false> | mana event-inspect"
@@ -166,6 +172,12 @@ public final class ManaTestFixture {
                     && "rules".equalsIgnoreCase(arguments[0])
                     && "inspect".equalsIgnoreCase(arguments[1])) {
                 inspectRules(sender);
+                return;
+            }
+            if (arguments.length == 2
+                    && "integration".equalsIgnoreCase(arguments[0])
+                    && "inspect".equalsIgnoreCase(arguments[1])) {
+                inspectIntegration(sender);
                 return;
             }
             if (arguments.length == 2
@@ -238,6 +250,12 @@ public final class ManaTestFixture {
                     && "mana".equalsIgnoreCase(arguments[0])
                     && "regen".equalsIgnoreCase(arguments[1])) {
                 setManaRegeneration(sender, arguments[2]);
+                return;
+            }
+            if (arguments.length == 3
+                    && "regen".equalsIgnoreCase(arguments[0])
+                    && "pause".equalsIgnoreCase(arguments[1])) {
+                setRegenerationPaused(sender, arguments[2]);
                 return;
             }
             if (arguments.length == 3
@@ -337,6 +355,65 @@ public final class ManaTestFixture {
                             + ", sageNonmatching="
                             + rules.getArmorEfficiencyProfile().getSageNonmatchingFullSet() + "."
             ));
+        }
+
+        private static void inspectIntegration(ICommandSender sender) throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            GameplayRules rules = GameplayRulesManager.current();
+            WizardryIntegrationRules integration = rules.getWizardryIntegrationRules();
+            int storage = WizardryPassiveContributionAdapter.aggregateHeldUpgrade(
+                    player, WizardryItems.storage_upgrade, integration.getHeldWandAggregation()
+            );
+            int condenser = WizardryPassiveContributionAdapter.aggregateHeldUpgrade(
+                    player, WizardryItems.condenser_upgrade, integration.getHeldWandAggregation()
+            );
+            int condensingCount = integration.isCondensingEnabled()
+                    ? WizardryPassiveContributionAdapter.activeCondensingRingCount(player)
+                    : 0;
+            PotionEffect font = WizardryPotions.font_of_mana == null
+                    ? null : player.getActivePotionEffect(WizardryPotions.font_of_mana);
+            int fontLevel = font == null ? 0 : Math.max(1, font.getAmplifier() + 1);
+            ManaPublicState state = ManaApi.getManaService().getState(player);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS integration compositeRevision=" + rules.getRevision()
+                            + ", integrationRevision=" + integration.getRevision()
+                            + ", heldAggregation=" + integration.getHeldWandAggregation()
+                            + ", storage=" + integration.isStorageEnabled() + "@"
+                            + integration.getStorageManaIncreasePerLevel() + "%"
+                            + ", condenser=" + integration.isCondenserEnabled() + "@"
+                            + integration.getCondenserRegenerationIncreasePerLevel() + "%"
+                            + ", condensing=" + integration.isCondensingEnabled() + "@"
+                            + integration.getCondensingRegenerationPerRing()
+                            + ", font=" + integration.isFontEnabled() + "@"
+                            + integration.getFontRegenerationPerLevel()
+                            + ", fontGates=" + integration.isFontLockoutPermission() + "/"
+                            + integration.isFontContinuousPermission() + "."
+            ));
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS integration inputs storageMain/Off="
+                            + heldUpgradeLevel(player.getHeldItemMainhand(), WizardryItems.storage_upgrade)
+                            + "/"
+                            + heldUpgradeLevel(player.getHeldItemOffhand(), WizardryItems.storage_upgrade)
+                            + ", condenserMain/Off="
+                            + heldUpgradeLevel(player.getHeldItemMainhand(), WizardryItems.condenser_upgrade)
+                            + "/"
+                            + heldUpgradeLevel(player.getHeldItemOffhand(), WizardryItems.condenser_upgrade)
+                            + ", storageLevel=" + storage
+                            + ", condenserLevel=" + condenser
+                            + ", condensingCount=" + condensingCount
+                            + ", fontLevel=" + fontLevel
+                            + ", resolvedMaximum=" + state.getMaximumMana()
+                            + ", resolvedRegeneration=" + state.getEffectiveRegeneration()
+                            + ", lockoutPermission="
+                            + state.canRegenerateDuringPostCastLockout()
+                            + ", continuousPermission="
+                            + state.canRegenerateDuringContinuousCasting() + "."
+            ));
+        }
+
+        private static int heldUpgradeLevel(ItemStack stack, net.minecraft.item.Item upgrade) {
+            return stack.getItem() instanceof ItemWand
+                    ? Math.max(0, WandHelper.getUpgradeLevel(stack, upgrade)) : 0;
         }
 
         private static void inspectMana(ICommandSender sender) throws CommandException {
@@ -471,6 +548,24 @@ public final class ManaTestFixture {
             ManaApi.invalidateModifierCache(player);
             sender.sendMessage(new TextComponentString(
                     "JAWMS test mana regeneration enabled=" + enabled + "."
+            ));
+        }
+
+        private static void setRegenerationPaused(ICommandSender sender, String value)
+                throws CommandException {
+            if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
+                throw new CommandException("Expected true or false.");
+            }
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            boolean paused = Boolean.parseBoolean(value);
+            if (paused) {
+                REGENERATION_DISABLED.add(player.getUniqueID());
+            } else {
+                REGENERATION_DISABLED.remove(player.getUniqueID());
+            }
+            ManaApi.invalidateModifierCache(player);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS test mana regeneration paused=" + paused + "."
             ));
         }
 
@@ -678,6 +773,8 @@ public final class ManaTestFixture {
                             + ", rawWandDamage=" + stack.getItemDamage()
                             + ", rawWandMana="
                             + (wand.getManaCapacity(stack) - stack.getItemDamage())
+                            + ", currentCooldown=" + WandHelper.getCurrentCooldown(stack)
+                            + ", maximumCooldown=" + WandHelper.getCurrentMaxCooldown(stack)
                             + ", storage=" + WandHelper.getUpgradeLevel(
                                     stack, electroblob.wizardry.registry.WizardryItems.storage_upgrade)
                             + ", condenser=" + WandHelper.getUpgradeLevel(

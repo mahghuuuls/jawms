@@ -237,17 +237,17 @@ public final class GameplayRulesLoader {
         );
         return new WizardryArmorProfile(
                 enabled,
-                signedInt(configuration, "helmetMaximum", 15, previous.getHelmetMaximum(), warning),
-                signedDouble(configuration, "helmetFlatRegeneration", 0.5D,
+                signedInt(configuration, "helmetMaximum", 10, previous.getHelmetMaximum(), warning),
+                signedDouble(configuration, "helmetFlatRegeneration", 0.4D,
                         previous.getHelmetRegeneration(), warning),
-                signedInt(configuration, "chestMaximum", 15, previous.getChestMaximum(), warning),
-                signedDouble(configuration, "chestFlatRegeneration", 0.5D,
+                signedInt(configuration, "chestMaximum", 10, previous.getChestMaximum(), warning),
+                signedDouble(configuration, "chestFlatRegeneration", 0.4D,
                         previous.getChestRegeneration(), warning),
                 signedInt(configuration, "legsMaximum", 10, previous.getLegsMaximum(), warning),
-                signedDouble(configuration, "legsFlatRegeneration", 0.5D,
+                signedDouble(configuration, "legsFlatRegeneration", 0.4D,
                         previous.getLegsRegeneration(), warning),
                 signedInt(configuration, "bootsMaximum", 10, previous.getBootsMaximum(), warning),
-                signedDouble(configuration, "bootsFlatRegeneration", 0.5D,
+                signedDouble(configuration, "bootsFlatRegeneration", 0.4D,
                         previous.getBootsRegeneration(), warning)
         );
     }

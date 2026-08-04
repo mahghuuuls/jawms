@@ -35,6 +35,7 @@ public final class GameplayRulesMessage implements IMessage {
     private List<ResourceLocation> generatedWizardryArmorIds = new ArrayList<>();
     private double efficiencyScale = GameplayRules.DEFAULT_EFFICIENCY_SCALE;
     private WizardryArmorEfficiencyProfile armorEfficiencyProfile = WizardryArmorEfficiencyProfile.DEFAULT;
+    private WizardryIntegrationRules integrationRules = WizardryIntegrationRules.defaults(0L);
     private boolean malformed;
 
     public GameplayRulesMessage() {
@@ -54,6 +55,7 @@ public final class GameplayRulesMessage implements IMessage {
         generatedWizardryArmorIds = new ArrayList<>(rules.getGeneratedWizardryArmorIds());
         efficiencyScale = rules.getEfficiencyScale();
         armorEfficiencyProfile = rules.getArmorEfficiencyProfile();
+        integrationRules = rules.getWizardryIntegrationRules();
     }
 
     @Override
@@ -106,6 +108,7 @@ public final class GameplayRulesMessage implements IMessage {
                     buffer.readBoolean(), buffer.readDouble(), buffer.readDouble(),
                     buffer.readDouble(), buffer.readDouble(), buffer.readDouble()
             );
+            integrationRules = readIntegrationRules(buffer);
         } catch (RuntimeException exception) {
             malformed = true;
             spellCosts.clear();
@@ -156,6 +159,7 @@ public final class GameplayRulesMessage implements IMessage {
         buffer.writeDouble(armorEfficiencyProfile.getBattlemage());
         buffer.writeDouble(armorEfficiencyProfile.getWarlock());
         buffer.writeDouble(armorEfficiencyProfile.getSageNonmatchingFullSet());
+        writeIntegrationRules(buffer, integrationRules);
     }
 
     public boolean isValid() {
@@ -233,6 +237,70 @@ public final class GameplayRulesMessage implements IMessage {
 
     public WizardryArmorEfficiencyProfile getArmorEfficiencyProfile() {
         return armorEfficiencyProfile;
+    }
+
+    public WizardryIntegrationRules getIntegrationRules() {
+        return integrationRules;
+    }
+
+    private static void writeIntegrationRules(
+            ByteBuf buffer, WizardryIntegrationRules rules
+    ) {
+        buffer.writeLong(rules.getRevision());
+        buffer.writeBoolean(rules.isStorageEnabled());
+        buffer.writeDouble(rules.getStorageManaIncreasePerLevel());
+        buffer.writeBoolean(rules.isCondenserEnabled());
+        buffer.writeDouble(rules.getCondenserRegenerationIncreasePerLevel());
+        buffer.writeBoolean(rules.isSiphonEnabled());
+        buffer.writeInt(rules.getSiphonManaPerLevel());
+        buffer.writeByte(rules.getHeldWandAggregation().ordinal());
+        buffer.writeBoolean(rules.isMeleeEnabled());
+        buffer.writeDouble(rules.getMeleeDamagePerLevel());
+        buffer.writeInt(rules.getMeleeManaPerLevel());
+        buffer.writeBoolean(rules.isCondensingEnabled());
+        buffer.writeDouble(rules.getCondensingRegenerationPerRing());
+        buffer.writeBoolean(rules.isSiphoningEnabled());
+        buffer.writeDouble(rules.getSiphoningIncrease());
+        buffer.writeBoolean(rules.isExtractionEnabled());
+        buffer.writeInt(rules.getExtractionMana());
+        buffer.writeBoolean(rules.isPerfectionistEnabled());
+        buffer.writeDouble(rules.getPerfectionistRefund());
+        buffer.writeBoolean(rules.isDemonicSealEnabled());
+        buffer.writeInt(rules.getDemonicSealManaPerHunger());
+        buffer.writeInt(rules.getDemonicSealMinimumHunger());
+        buffer.writeBoolean(rules.isDemonicSealContinuous());
+        buffer.writeBoolean(rules.isFontEnabled());
+        buffer.writeDouble(rules.getFontRegenerationPerLevel());
+        buffer.writeBoolean(rules.isFontLockoutPermission());
+        buffer.writeBoolean(rules.isFontContinuousPermission());
+    }
+
+    private static WizardryIntegrationRules readIntegrationRules(ByteBuf buffer) {
+        long integrationRevision = buffer.readLong();
+        boolean storageEnabled = buffer.readBoolean();
+        double storageIncrease = buffer.readDouble();
+        boolean condenserEnabled = buffer.readBoolean();
+        double condenserIncrease = buffer.readDouble();
+        boolean siphonEnabled = buffer.readBoolean();
+        int siphonMana = buffer.readInt();
+        int aggregationOrdinal = buffer.readUnsignedByte();
+        if (aggregationOrdinal >= WizardryIntegrationRules.HeldWandAggregation.values().length) {
+            throw new IllegalArgumentException("Invalid held-wand aggregation ordinal.");
+        }
+        return new WizardryIntegrationRules(
+                integrationRevision,
+                storageEnabled, storageIncrease,
+                condenserEnabled, condenserIncrease,
+                siphonEnabled, siphonMana,
+                WizardryIntegrationRules.HeldWandAggregation.values()[aggregationOrdinal],
+                buffer.readBoolean(), buffer.readDouble(), buffer.readInt(),
+                buffer.readBoolean(), buffer.readDouble(),
+                buffer.readBoolean(), buffer.readDouble(),
+                buffer.readBoolean(), buffer.readInt(),
+                buffer.readBoolean(), buffer.readDouble(),
+                buffer.readBoolean(), buffer.readInt(), buffer.readInt(), buffer.readBoolean(),
+                buffer.readBoolean(), buffer.readDouble(), buffer.readBoolean(), buffer.readBoolean()
+        );
     }
 
     private static int boundedCount(int count) {

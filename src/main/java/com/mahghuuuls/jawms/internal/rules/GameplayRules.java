@@ -15,8 +15,8 @@ import java.util.Set;
 
 public final class GameplayRules {
 
-    public static final int DEFAULT_BASE_MAXIMUM = 50;
-    public static final double DEFAULT_BASE_REGENERATION = 2.0D;
+    public static final int DEFAULT_BASE_MAXIMUM = 60;
+    public static final double DEFAULT_BASE_REGENERATION = 2.4D;
     public static final double DEFAULT_LOCKOUT_SECONDS = 2.0D;
     public static final double DEFAULT_EFFICIENCY_SCALE = 100.0D;
     public static final String DEFAULT_COST_FORMULA = "min(original_cost, tier * 25)";
@@ -40,6 +40,7 @@ public final class GameplayRules {
     private final Set<ResourceLocation> disabledProviderIds;
     private final double efficiencyScale;
     private final WizardryArmorEfficiencyProfile armorEfficiencyProfile;
+    private final WizardryIntegrationRules wizardryIntegrationRules;
 
     public GameplayRules(
             long revision,
@@ -99,6 +100,32 @@ public final class GameplayRules {
             double efficiencyScale,
             WizardryArmorEfficiencyProfile armorEfficiencyProfile
     ) {
+        this(
+                revision, baseMaximum, baseRegeneration, regenerationLockoutSeconds,
+                costFormula, smallFlask, mediumFlask, largeFlask, spellCosts,
+                configuredItemRules, armorProfile, disabledProviderIds,
+                efficiencyScale, armorEfficiencyProfile,
+                WizardryIntegrationRules.defaults(0L)
+        );
+    }
+
+    public GameplayRules(
+            long revision,
+            int baseMaximum,
+            double baseRegeneration,
+            double regenerationLockoutSeconds,
+            String costFormula,
+            int smallFlask,
+            int mediumFlask,
+            int largeFlask,
+            Map<ResourceLocation, Double> spellCosts,
+            List<ConfiguredItemRule> configuredItemRules,
+            WizardryArmorProfile armorProfile,
+            Set<ResourceLocation> disabledProviderIds,
+            double efficiencyScale,
+            WizardryArmorEfficiencyProfile armorEfficiencyProfile,
+            WizardryIntegrationRules wizardryIntegrationRules
+    ) {
         if (revision < 0L) {
             throw new IllegalArgumentException("Revision must be non-negative.");
         }
@@ -136,6 +163,10 @@ public final class GameplayRules {
         );
         this.efficiencyScale = efficiencyScale;
         this.armorEfficiencyProfile = armorEfficiencyProfile;
+        if (wizardryIntegrationRules == null) {
+            throw new NullPointerException("wizardryIntegrationRules");
+        }
+        this.wizardryIntegrationRules = wizardryIntegrationRules;
     }
 
     public GameplayRules(
@@ -259,6 +290,21 @@ public final class GameplayRules {
 
     public WizardryArmorEfficiencyProfile getArmorEfficiencyProfile() {
         return armorEfficiencyProfile;
+    }
+
+    public WizardryIntegrationRules getWizardryIntegrationRules() {
+        return wizardryIntegrationRules;
+    }
+
+    public GameplayRules withWizardryIntegrationRules(
+            WizardryIntegrationRules replacement
+    ) {
+        return new GameplayRules(
+                revision, baseMaximum, baseRegeneration, regenerationLockoutSeconds,
+                costFormula, smallFlask, mediumFlask, largeFlask, spellCosts,
+                configuredItemRules, armorProfile, disabledProviderIds,
+                efficiencyScale, armorEfficiencyProfile, replacement
+        );
     }
 
     public boolean hasGeneratedWizardryArmor(ItemStack stack) {

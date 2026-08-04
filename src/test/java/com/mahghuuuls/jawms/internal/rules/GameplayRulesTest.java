@@ -11,17 +11,21 @@ class GameplayRulesTest {
     void approvedDefaultsAreAvailableBeforeConfigurationLoads() {
         GameplayRules rules = GameplayRules.initialDefaults();
 
-        assertEquals(50, rules.getBaseMaximum());
-        assertEquals(2.0D, rules.getBaseRegeneration());
+        assertEquals(60, rules.getBaseMaximum());
+        assertEquals(2.4D, rules.getBaseRegeneration());
         assertEquals(40L, rules.getRegenerationLockoutTicks());
         assertEquals("min(original_cost, tier * 25)", rules.getCostFormula());
         assertEquals(20, rules.getSmallFlask());
         assertEquals(50, rules.getMediumFlask());
         assertEquals(100, rules.getLargeFlask());
-        assertEquals(15, rules.getArmorProfile().getHelmetMaximum());
-        assertEquals(15, rules.getArmorProfile().getChestMaximum());
+        assertEquals(10, rules.getArmorProfile().getHelmetMaximum());
+        assertEquals(10, rules.getArmorProfile().getChestMaximum());
         assertEquals(10, rules.getArmorProfile().getLegsMaximum());
         assertEquals(10, rules.getArmorProfile().getBootsMaximum());
+        assertEquals(0.4D, rules.getArmorProfile().getHelmetRegeneration());
+        assertEquals(0.4D, rules.getArmorProfile().getChestRegeneration());
+        assertEquals(0.4D, rules.getArmorProfile().getLegsRegeneration());
+        assertEquals(0.4D, rules.getArmorProfile().getBootsRegeneration());
     }
 
     @Test

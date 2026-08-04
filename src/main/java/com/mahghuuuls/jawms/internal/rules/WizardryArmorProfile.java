@@ -4,14 +4,14 @@ public final class WizardryArmorProfile {
 
     public static final WizardryArmorProfile DEFAULT = new WizardryArmorProfile(
             true,
-            15,
-            0.5D,
-            15,
-            0.5D,
             10,
-            0.5D,
+            0.4D,
             10,
-            0.5D
+            0.4D,
+            10,
+            0.4D,
+            10,
+            0.4D
     );
 
     private final boolean enabled;

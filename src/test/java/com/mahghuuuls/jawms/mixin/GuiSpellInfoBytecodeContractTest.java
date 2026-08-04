@@ -33,6 +33,7 @@ class GuiSpellInfoBytecodeContractTest {
         assertTrue(visitor.foregroundFound);
         assertEquals(6, visitor.translationCalls);
         assertEquals(2, visitor.spellCostCalls);
+        assertEquals(1, visitor.spellDescriptionCalls);
     }
 
     private static final class ContractVisitor extends ClassVisitor {
@@ -40,6 +41,7 @@ class GuiSpellInfoBytecodeContractTest {
         private boolean foregroundFound;
         private int translationCalls;
         private int spellCostCalls;
+        private int spellDescriptionCalls;
 
         private ContractVisitor() {
             super(Opcodes.ASM5);
@@ -74,6 +76,10 @@ class GuiSpellInfoBytecodeContractTest {
                     if ("electroblob/wizardry/spell/Spell".equals(owner)
                             && "getCost".equals(invokedName)) {
                         spellCostCalls++;
+                    }
+                    if ("electroblob/wizardry/spell/Spell".equals(owner)
+                            && "getDescription".equals(invokedName)) {
+                        spellDescriptionCalls++;
                     }
                 }
             };

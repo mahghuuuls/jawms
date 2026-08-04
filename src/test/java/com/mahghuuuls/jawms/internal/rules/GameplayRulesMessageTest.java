@@ -54,6 +54,7 @@ class GameplayRulesMessageTest {
                 )),
                 WizardryArmorProfile.DEFAULT
         );
+        rules = rules.withWizardryIntegrationRules(WizardryIntegrationRules.defaults(4L));
         GameplayRulesMessage encoded = new GameplayRulesMessage(rules);
         ByteBuf buffer = Unpooled.buffer();
         encoded.toBytes(buffer);
@@ -79,9 +80,12 @@ class GameplayRulesMessageTest {
         assertEquals(1.5D, contribution.getElementSpellCostMultiplier(Element.FIRE));
         assertTrue(contribution.canRegenerateDuringPostCastLockout());
         assertTrue(contribution.canRegenerateDuringContinuousCasting());
-        assertEquals(15, decoded.getArmorProfile().getHelmetMaximum());
+        assertEquals(10, decoded.getArmorProfile().getHelmetMaximum());
         assertEquals(100.0D, decoded.getEfficiencyScale());
         assertEquals(20.0D, decoded.getArmorEfficiencyProfile().getSage());
+        assertEquals(4L, decoded.getIntegrationRules().getRevision());
+        assertEquals(10.0D, decoded.getIntegrationRules().getStorageManaIncreasePerLevel());
+        assertTrue(decoded.getIntegrationRules().isFontLockoutPermission());
     }
 
     @Test

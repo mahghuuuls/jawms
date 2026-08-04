@@ -88,17 +88,17 @@ class ManaServiceTest {
         ManaMutationResult drain = service.drainMana(fixture.player, 5000, cause);
 
         assertTrue(set.isSuccessful());
-        assertEquals(-30, set.getActualDelta());
+        assertEquals(-40, set.getActualDelta());
         assertFalse(failedConsume.isSuccessful());
         assertEquals(0, failedConsume.getActualDelta());
         assertTrue(exactConsume.isSuccessful());
         assertEquals(-20, exactConsume.getActualDelta());
-        assertEquals(50, restore.getActualAmount());
-        assertEquals(50, drain.getActualAmount());
+        assertEquals(60, restore.getActualAmount());
+        assertEquals(60, drain.getActualAmount());
         assertEquals(0, service.getCurrentMana(fixture.player));
         assertEquals(4, listener.events.size());
         assertEquals(cause, listener.events.get(0).getCause());
-        assertEquals(-30, listener.events.get(0).getActualManaDelta());
+        assertEquals(-40, listener.events.get(0).getActualManaDelta());
     }
 
     @Test
@@ -113,7 +113,7 @@ class ManaServiceTest {
         );
 
         assertTrue(result.isSuccessful());
-        assertEquals(40, result.getNewState().getCurrentMana());
+        assertEquals(50, result.getNewState().getCurrentMana());
         assertEquals(0L, result.getNewState().getRemainingLockoutTicks());
     }
 
@@ -127,12 +127,12 @@ class ManaServiceTest {
                 0,
                 new ResourceLocation("test", "reserved_set")
         ));
-        assertEquals(50, fixture.state.getCurrentMana());
-        assertEquals(45, fixture.state.getAvailableMana());
+        assertEquals(60, fixture.state.getCurrentMana());
+        assertEquals(55, fixture.state.getAvailableMana());
 
         ManaService.completeSuccessfulWandCast(fixture.player, reservation);
-        assertEquals(45, fixture.state.getCurrentMana());
-        assertEquals(45, fixture.state.getAvailableMana());
+        assertEquals(55, fixture.state.getCurrentMana());
+        assertEquals(55, fixture.state.getAvailableMana());
     }
 
     @Test
@@ -152,7 +152,7 @@ class ManaServiceTest {
         assertThrows(NullPointerException.class,
                 () -> service.restoreMana(fixture.player, 1, null));
 
-        assertEquals(50, fixture.state.getCurrentMana());
+        assertEquals(60, fixture.state.getCurrentMana());
     }
 
     @Test
@@ -162,9 +162,9 @@ class ManaServiceTest {
         fixture.state.startRegenerationLockout(20L);
         ManaPublicState state = new ManaService().getState(fixture.player);
 
-        assertEquals(49, state.getCurrentMana());
-        assertEquals(50, state.getMaximumMana());
-        assertEquals(2.0D, state.getEffectiveRegeneration());
+        assertEquals(59, state.getCurrentMana());
+        assertEquals(60, state.getMaximumMana());
+        assertEquals(2.4D, state.getEffectiveRegeneration());
         assertEquals(40L, state.getEffectiveLockoutTicks());
         assertEquals(20L, state.getRemainingLockoutTicks());
         assertFalse(state.isRegenerationEligible());
@@ -180,12 +180,12 @@ class ManaServiceTest {
 
         try (ManaEvaluationGuard.Scope ignored =
                      ManaEvaluationGuard.begin(fixture.player.getUniqueID())) {
-            assertEquals(50, service.getCurrentMana(fixture.player));
+            assertEquals(60, service.getCurrentMana(fixture.player));
             assertThrows(IllegalStateException.class,
                     () -> service.consumeMana(fixture.player, 1, cause));
         }
 
-        assertEquals(50, fixture.state.getCurrentMana());
+        assertEquals(60, fixture.state.getCurrentMana());
     }
 
     @Test
@@ -227,9 +227,9 @@ class ManaServiceTest {
 
         assertEquals(1, listener.events.size());
         ManaStateChangeEvent event = listener.events.get(0);
-        assertEquals(50, event.getOldState().getCurrentMana());
-        assertEquals(50, event.getOldState().getMaximumMana());
-        assertEquals(50, event.getNewState().getCurrentMana());
+        assertEquals(60, event.getOldState().getCurrentMana());
+        assertEquals(60, event.getOldState().getMaximumMana());
+        assertEquals(60, event.getNewState().getCurrentMana());
         assertEquals(100, event.getNewState().getMaximumMana());
         assertEquals(0, event.getActualManaDelta());
     }
@@ -269,10 +269,10 @@ class ManaServiceTest {
         assertEquals(1, listener.events.size());
         ManaStateChangeEvent event = listener.events.get(0);
         assertEquals(ManaCauses.LIFECYCLE, event.getCause());
-        assertEquals(40, event.getOldState().getCurrentMana());
+        assertEquals(50, event.getOldState().getCurrentMana());
         assertEquals(20L, event.getOldState().getRemainingLockoutTicks());
         assertTrue(event.getOldState().isContinuousCastActive());
-        assertEquals(40, event.getNewState().getCurrentMana());
+        assertEquals(50, event.getNewState().getCurrentMana());
         assertEquals(0L, event.getNewState().getRemainingLockoutTicks());
         assertFalse(event.getNewState().isContinuousCastActive());
     }
@@ -307,7 +307,7 @@ class ManaServiceTest {
         );
 
         assertTrue(result.isSuccessful());
-        assertEquals(40, fixture.state.getCurrentMana());
+        assertEquals(50, fixture.state.getCurrentMana());
         assertEquals(1, listener.calls);
     }
 

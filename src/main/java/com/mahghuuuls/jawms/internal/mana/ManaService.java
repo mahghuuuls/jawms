@@ -8,6 +8,7 @@ import com.mahghuuuls.jawms.api.ManaPublicState;
 import com.mahghuuuls.jawms.api.ManaStateChangeEvent;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
+import com.mahghuuuls.jawms.internal.integration.wizardry.WizardryPassiveContributionAdapter;
 import com.mahghuuuls.jawms.internal.modifier.ActiveStackCollector;
 import com.mahghuuuls.jawms.internal.modifier.ManaProfileResolver;
 import com.mahghuuuls.jawms.internal.modifier.ManaProviderRegistry;
@@ -532,6 +533,9 @@ public final class ManaService implements IManaService {
         java.util.List<com.mahghuuuls.jawms.api.ManaContribution> contributions =
                 ActiveStackCollector.collect(player, rules);
         contributions.addAll(ManaProviderRegistry.instance().evaluateContextual(player, rules));
+        contributions.addAll(WizardryPassiveContributionAdapter.collect(
+                player, rules.getWizardryIntegrationRules()
+        ));
         return ManaProfileResolver.resolve(
                 rules.getBaseMaximum(),
                 rules.getBaseRegeneration(),

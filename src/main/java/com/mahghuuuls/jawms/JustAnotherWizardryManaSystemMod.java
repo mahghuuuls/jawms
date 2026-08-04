@@ -55,8 +55,16 @@ public final class JustAnotherWizardryManaSystemMod {
                             + configurationDirectory.getAbsolutePath()
             );
         }
+        File integrationsDirectory = new File(configurationDirectory, "integrations");
+        if (!integrationsDirectory.isDirectory() && !integrationsDirectory.mkdirs()) {
+            throw new IllegalStateException(
+                    "Could not create JAWMS integrations directory: "
+                            + integrationsDirectory.getAbsolutePath()
+            );
+        }
         GameplayRulesManager.configure(
-                new File(configurationDirectory, Tags.MOD_ID + ".cfg")
+                new File(configurationDirectory, Tags.MOD_ID + ".cfg"),
+                new File(integrationsDirectory, "ebwizardry.cfg")
         );
         ActiveSlotSources.initialize();
         ManaBootstrap.initialize();

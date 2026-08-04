@@ -212,7 +212,7 @@ class ManaProviderRegistryTest {
 
         assertEquals(1, mutationRejections.get());
         assertEquals(1, invalidationRejections.get());
-        assertEquals(50, priorMaximum.get());
+        assertEquals(60, priorMaximum.get());
         assertEquals(before, fixture.state.getCurrentMana());
     }
 
