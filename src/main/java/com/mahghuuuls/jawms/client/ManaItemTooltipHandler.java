@@ -94,6 +94,13 @@ public final class ManaItemTooltipHandler {
                         "tooltip.jawms.siphon_per_level",
                         rules.getSiphonManaPerLevel());
                 return;
+            case "ebwizardry:melee_upgrade":
+                removeWizardryDescription(event, id);
+                addEnabledOrInactive(event, rules.isMeleeEnabled(),
+                        "tooltip.jawms.melee_per_level",
+                        compact(rules.getMeleeDamagePerLevel()),
+                        rules.getMeleeManaPerLevel());
+                return;
             case "ebwizardry:ring_condensing":
                 removeWizardryDescription(event, id);
                 addEnabledOrInactive(event, rules.isCondensingEnabled(),
@@ -188,6 +195,21 @@ public final class ManaItemTooltipHandler {
                                 siphon, rules.getSiphonManaPerLevel(), false, 0.0D
                         ),
                         siphon
+                ));
+            } else {
+                addConfigInactive(event);
+            }
+        }
+        int melee = Math.max(0, WandHelper.getUpgradeLevel(
+                stack, WizardryItems.melee_upgrade
+        ));
+        if (melee > 0) {
+            if (rules.isMeleeEnabled()) {
+                event.getToolTip().add(TextFormatting.BLUE + I18n.translateToLocalFormatted(
+                        "tooltip.jawms.melee_installed",
+                        compact(melee * rules.getMeleeDamagePerLevel()),
+                        melee * rules.getMeleeManaPerLevel(),
+                        melee
                 ));
             } else {
                 addConfigInactive(event);

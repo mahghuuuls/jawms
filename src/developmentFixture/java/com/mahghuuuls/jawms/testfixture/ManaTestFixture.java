@@ -19,6 +19,7 @@ import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import com.mahghuuuls.jawms.internal.rules.WizardryIntegrationRules;
 import com.mahghuuuls.jawms.internal.integration.wizardry.WizardryPassiveContributionAdapter;
 import com.mahghuuuls.jawms.internal.integration.wizardry.effect.WizardryKillManaService;
+import com.mahghuuuls.jawms.internal.integration.wizardry.effect.WizardryMeleeManaService;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentService;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentContextManager;
 import electroblob.wizardry.event.SpellCastEvent;
@@ -35,13 +36,19 @@ import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.SharedMonsterAttributes;
+import net.minecraft.entity.passive.EntityPig;
 import net.minecraft.item.ItemStack;
 import net.minecraft.potion.PotionEffect;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -49,6 +56,8 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 import java.util.UUID;
 import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.lang.reflect.Field;
 
@@ -71,6 +80,9 @@ public final class ManaTestFixture {
     private static boolean developmentProviderRegistered;
     private static final BalanceRecorder BALANCE_RECORDER = new BalanceRecorder();
     private static boolean balanceRecorderRegistered;
+    private static final MeleeDamageFixture MELEE_DAMAGE_FIXTURE = new MeleeDamageFixture();
+    private static boolean meleeDamageFixtureRegistered;
+    private static final Map<UUID, UUID> MELEE_TARGETS = new HashMap<>();
 
     private ManaTestFixture() {
     }
@@ -102,6 +114,8 @@ public final class ManaTestFixture {
         REGENERATION_DISABLED.clear();
         BALANCE_PERCENT_BOOST.clear();
         BALANCE_RECORDER.clear();
+        MELEE_DAMAGE_FIXTURE.clear();
+        MELEE_TARGETS.clear();
         if (!cancellationFixtureRegistered) {
             MinecraftForge.EVENT_BUS.register(CAST_CANCELLATION);
             cancellationFixtureRegistered = true;
@@ -114,6 +128,10 @@ public final class ManaTestFixture {
         if (!balanceRecorderRegistered) {
             MinecraftForge.EVENT_BUS.register(BALANCE_RECORDER);
             balanceRecorderRegistered = true;
+        }
+        if (!meleeDamageFixtureRegistered) {
+            MinecraftForge.EVENT_BUS.register(MELEE_DAMAGE_FIXTURE);
+            meleeDamageFixtureRegistered = true;
         }
         event.registerServerCommand(new SetManaCommand());
         event.registerServerCommand(new BalanceCommand(BALANCE_RECORDER));
@@ -136,7 +154,49 @@ public final class ManaTestFixture {
         UUID playerId = player.getUniqueID();
         REGENERATION_DISABLED.remove(playerId);
         BALANCE_PERCENT_BOOST.remove(playerId);
+        MELEE_DAMAGE_FIXTURE.remove(playerId);
+        MELEE_TARGETS.remove(playerId);
         ManaApi.invalidateModifierCache(player);
+    }
+
+    private static final class MeleeDamageFixture {
+        private final Map<UUID, Mode> modes = new HashMap<>();
+
+        private void clear() {
+            modes.clear();
+        }
+
+        private void remove(UUID playerId) {
+            modes.remove(playerId);
+        }
+
+        private void set(UUID playerId, Mode mode) {
+            if (mode == Mode.NORMAL) {
+                modes.remove(playerId);
+            } else {
+                modes.put(playerId, mode);
+            }
+        }
+
+        @SubscribeEvent(priority = EventPriority.LOWEST)
+        public void onLivingDamage(LivingDamageEvent event) {
+            if (!(event.getSource().getTrueSource() instanceof EntityPlayerMP)) {
+                return;
+            }
+            EntityPlayerMP player = (EntityPlayerMP) event.getSource().getTrueSource();
+            Mode mode = modes.get(player.getUniqueID());
+            if (mode == Mode.CANCEL) {
+                event.setCanceled(true);
+            } else if (mode == Mode.ZERO) {
+                event.setAmount(0.0F);
+            }
+        }
+
+        private enum Mode {
+            NORMAL,
+            CANCEL,
+            ZERO
+        }
     }
 
     private static final class SetManaCommand extends CommandBase {
@@ -150,7 +210,8 @@ public final class ManaTestFixture {
         public String getUsage(ICommandSender sender) {
             return "/jawms-test mana set <amount> | mana inspect | rules inspect"
                     + " | integration inspect | integration last-effect"
-                    + " | integration clear-last-effect | regen pause <true|false>"
+                    + " | integration clear-last-effect | integration last-melee"
+                    + " | integration clear-last-melee | regen pause <true|false>"
                     + " | mana restore <amount> | mana consume <amount> | mana drain <amount>"
                     + " | mana regen <true|false>"
                     + " | mana events <true|false> | mana event-inspect"
@@ -164,6 +225,9 @@ public final class ManaTestFixture {
                     + " | flask inspect | armor mana <head|chest|legs|feet> <amount>"
                     + " | wand set <main|off> <namespace:spell>"
                     + " | wand siphon <main|off> <0..3>"
+                    + " | wand melee <main|off> <0..3>"
+                    + " | melee event <normal|cancel|zero>"
+                    + " | melee target <health> | melee target-inspect"
                     + " | wand mana <main|off> <amount> | wand inspect <main|off>";
         }
 
@@ -197,6 +261,24 @@ public final class ManaTestFixture {
                     && "integration".equalsIgnoreCase(arguments[0])
                     && "clear-last-effect".equalsIgnoreCase(arguments[1])) {
                 clearLastIntegrationEffect(sender);
+                return;
+            }
+            if (arguments.length == 2
+                    && "integration".equalsIgnoreCase(arguments[0])
+                    && "last-melee".equalsIgnoreCase(arguments[1])) {
+                inspectLastMelee(sender);
+                return;
+            }
+            if (arguments.length == 2
+                    && "integration".equalsIgnoreCase(arguments[0])
+                    && "clear-last-melee".equalsIgnoreCase(arguments[1])) {
+                clearLastMelee(sender);
+                return;
+            }
+            if (arguments.length == 2
+                    && "melee".equalsIgnoreCase(arguments[0])
+                    && "target-inspect".equalsIgnoreCase(arguments[1])) {
+                inspectMeleeTarget(sender);
                 return;
             }
             if (arguments.length == 2
@@ -340,6 +422,18 @@ public final class ManaTestFixture {
                 return;
             }
             if (arguments.length == 3
+                    && "melee".equalsIgnoreCase(arguments[0])
+                    && "event".equalsIgnoreCase(arguments[1])) {
+                setMeleeEvent(sender, arguments[2]);
+                return;
+            }
+            if (arguments.length == 3
+                    && "melee".equalsIgnoreCase(arguments[0])
+                    && "target".equalsIgnoreCase(arguments[1])) {
+                createMeleeTarget(sender, arguments[2]);
+                return;
+            }
+            if (arguments.length == 3
                     && "mana".equalsIgnoreCase(arguments[0])
                     && "set".equalsIgnoreCase(arguments[1])) {
                 setMana(sender, arguments[2]);
@@ -361,6 +455,12 @@ public final class ManaTestFixture {
                     && "wand".equalsIgnoreCase(arguments[0])
                     && "siphon".equalsIgnoreCase(arguments[1])) {
                 setWandSiphon(sender, arguments[2], arguments[3]);
+                return;
+            }
+            if (arguments.length == 4
+                    && "wand".equalsIgnoreCase(arguments[0])
+                    && "melee".equalsIgnoreCase(arguments[1])) {
+                setWandMelee(sender, arguments[2], arguments[3]);
                 return;
             }
             if (arguments.length == 4
@@ -513,6 +613,90 @@ public final class ManaTestFixture {
             WizardryKillManaService.clearLastEffect(player);
             sender.sendMessage(new TextComponentString(
                     "JAWMS integration last-effect cleared."
+            ));
+        }
+
+        private static void inspectLastMelee(ICommandSender sender)
+                throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            sender.sendMessage(new TextComponentString(
+                    WizardryMeleeManaService.describeLastMelee(player)
+            ));
+        }
+
+        private static void clearLastMelee(ICommandSender sender)
+                throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            WizardryMeleeManaService.clearLastMelee(player);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS integration last-melee cleared."
+            ));
+        }
+
+        private static void setMeleeEvent(ICommandSender sender, String value)
+                throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            MeleeDamageFixture.Mode mode;
+            try {
+                mode = MeleeDamageFixture.Mode.valueOf(value.toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException exception) {
+                throw new CommandException("Expected normal, cancel, or zero.");
+            }
+            MELEE_DAMAGE_FIXTURE.set(player.getUniqueID(), mode);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS melee final-damage fixture=" + mode + "."
+            ));
+        }
+
+        private static void createMeleeTarget(ICommandSender sender, String healthValue)
+                throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            float health = (float) parseDouble(healthValue, 1.0D, 1024.0D);
+            WorldServer world = player.getServerWorld();
+            UUID previous = MELEE_TARGETS.remove(player.getUniqueID());
+            if (previous != null) {
+                Entity old = world.getEntityFromUuid(previous);
+                if (old != null) {
+                    old.setDead();
+                }
+            }
+            EntityPig target = new EntityPig(world);
+            Vec3d position = player.getPositionVector().add(player.getLookVec().scale(3.0D));
+            target.setPosition(position.x, player.posY, position.z);
+            target.setNoAI(true);
+            target.enablePersistence();
+            target.setCustomNameTag("JAWMS Melee Target");
+            target.getEntityAttribute(SharedMonsterAttributes.MAX_HEALTH)
+                    .setBaseValue(health);
+            target.setHealth(health);
+            if (!world.spawnEntity(target)) {
+                throw new CommandException("Could not spawn the melee target.");
+            }
+            MELEE_TARGETS.put(player.getUniqueID(), target.getUniqueID());
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS melee target id=" + target.getEntityId()
+                            + ", health=" + target.getHealth() + "/"
+                            + target.getMaxHealth() + "."
+            ));
+        }
+
+        private static void inspectMeleeTarget(ICommandSender sender)
+                throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            UUID targetId = MELEE_TARGETS.get(player.getUniqueID());
+            Entity entity = targetId == null ? null
+                    : player.getServerWorld().getEntityFromUuid(targetId);
+            if (!(entity instanceof EntityPig) || entity.isDead) {
+                sender.sendMessage(new TextComponentString(
+                        "JAWMS melee target=missing-or-dead."
+                ));
+                return;
+            }
+            EntityPig target = (EntityPig) entity;
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS melee target id=" + target.getEntityId()
+                            + ", health=" + target.getHealth() + "/"
+                            + target.getMaxHealth() + "."
             ));
         }
 
@@ -850,6 +1034,26 @@ public final class ManaTestFixture {
                     "JAWMS test Siphon " + hand + "="
                             + WandHelper.getUpgradeLevel(
                             stack, WizardryItems.siphon_upgrade
+                    ) + "."
+            ));
+        }
+
+        private static void setWandMelee(
+                ICommandSender sender, String handName, String levelValue
+        ) throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EnumHand hand = parseHand(handName);
+            ItemStack stack = player.getHeldItem(hand);
+            if (!(stack.getItem() instanceof ItemWand)) {
+                throw new CommandException("Hold a Wizardry wand in the selected hand.");
+            }
+            int level = parseInt(levelValue, 0, 3);
+            stack.getOrCreateSubCompound(WandHelper.UPGRADES_KEY)
+                    .setInteger("melee", level);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS test Melee " + hand + "="
+                            + WandHelper.getUpgradeLevel(
+                            stack, WizardryItems.melee_upgrade
                     ) + "."
             ));
         }
