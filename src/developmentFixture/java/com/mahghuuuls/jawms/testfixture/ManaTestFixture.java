@@ -18,6 +18,7 @@ import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import com.mahghuuuls.jawms.internal.rules.WizardryIntegrationRules;
 import com.mahghuuuls.jawms.internal.integration.wizardry.WizardryPassiveContributionAdapter;
+import com.mahghuuuls.jawms.internal.integration.wizardry.effect.WizardryKillManaService;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentService;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentContextManager;
 import electroblob.wizardry.event.SpellCastEvent;
@@ -148,7 +149,8 @@ public final class ManaTestFixture {
         @Override
         public String getUsage(ICommandSender sender) {
             return "/jawms-test mana set <amount> | mana inspect | rules inspect"
-                    + " | integration inspect | regen pause <true|false>"
+                    + " | integration inspect | integration last-effect"
+                    + " | integration clear-last-effect | regen pause <true|false>"
                     + " | mana restore <amount> | mana consume <amount> | mana drain <amount>"
                     + " | mana regen <true|false>"
                     + " | mana events <true|false> | mana event-inspect"
@@ -161,6 +163,7 @@ public final class ManaTestFixture {
                     + " | rules reload-after-cast <ticks>"
                     + " | flask inspect | armor mana <head|chest|legs|feet> <amount>"
                     + " | wand set <main|off> <namespace:spell>"
+                    + " | wand siphon <main|off> <0..3>"
                     + " | wand mana <main|off> <amount> | wand inspect <main|off>";
         }
 
@@ -182,6 +185,18 @@ public final class ManaTestFixture {
                     && "integration".equalsIgnoreCase(arguments[0])
                     && "inspect".equalsIgnoreCase(arguments[1])) {
                 inspectIntegration(sender);
+                return;
+            }
+            if (arguments.length == 2
+                    && "integration".equalsIgnoreCase(arguments[0])
+                    && "last-effect".equalsIgnoreCase(arguments[1])) {
+                inspectLastIntegrationEffect(sender);
+                return;
+            }
+            if (arguments.length == 2
+                    && "integration".equalsIgnoreCase(arguments[0])
+                    && "clear-last-effect".equalsIgnoreCase(arguments[1])) {
+                clearLastIntegrationEffect(sender);
                 return;
             }
             if (arguments.length == 2
@@ -343,6 +358,12 @@ public final class ManaTestFixture {
                 return;
             }
             if (arguments.length == 4
+                    && "wand".equalsIgnoreCase(arguments[0])
+                    && "siphon".equalsIgnoreCase(arguments[1])) {
+                setWandSiphon(sender, arguments[2], arguments[3]);
+                return;
+            }
+            if (arguments.length == 4
                     && "armor".equalsIgnoreCase(arguments[0])
                     && "mana".equalsIgnoreCase(arguments[1])) {
                 setArmorMana(sender, arguments[2], arguments[3]);
@@ -475,6 +496,23 @@ public final class ManaTestFixture {
                             + state.canRegenerateDuringPostCastLockout()
                             + ", continuousPermission="
                             + state.canRegenerateDuringContinuousCasting() + "."
+            ));
+        }
+
+        private static void inspectLastIntegrationEffect(ICommandSender sender)
+                throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            sender.sendMessage(new TextComponentString(
+                    WizardryKillManaService.describeLastEffect(player)
+            ));
+        }
+
+        private static void clearLastIntegrationEffect(ICommandSender sender)
+                throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            WizardryKillManaService.clearLastEffect(player);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS integration last-effect cleared."
             ));
         }
 
@@ -793,6 +831,26 @@ public final class ManaTestFixture {
                             + (wand.getManaCapacity(stack) - stack.getItemDamage())
                             + " / " + wand.getManaCapacity(stack)
                             + ", reported=" + wand.getMana(stack) + "."
+            ));
+        }
+
+        private static void setWandSiphon(
+                ICommandSender sender, String handName, String levelValue
+        ) throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EnumHand hand = parseHand(handName);
+            ItemStack stack = player.getHeldItem(hand);
+            if (!(stack.getItem() instanceof ItemWand)) {
+                throw new CommandException("Hold a Wizardry wand in the selected hand.");
+            }
+            int level = parseInt(levelValue, 0, 3);
+            stack.getOrCreateSubCompound(WandHelper.UPGRADES_KEY)
+                    .setInteger("siphon", level);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS test Siphon " + hand + "="
+                            + WandHelper.getUpgradeLevel(
+                            stack, WizardryItems.siphon_upgrade
+                    ) + "."
             ));
         }
 

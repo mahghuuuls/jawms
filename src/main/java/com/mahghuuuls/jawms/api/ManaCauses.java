@@ -8,6 +8,8 @@ public final class ManaCauses {
     public static final ResourceLocation SPELL_COST = cause("spell_cost");
     public static final ResourceLocation REGENERATION = cause("regeneration");
     public static final ResourceLocation FLASK = cause("flask");
+    public static final ResourceLocation WIZARDRY_SIPHON = cause("wizardry_siphon");
+    public static final ResourceLocation WIZARDRY_EXTRACTION = cause("wizardry_extraction");
     public static final ResourceLocation COMMAND = cause("command");
     public static final ResourceLocation RULES_UPDATE = cause("rules_update");
     public static final ResourceLocation STAT_CLAMP = cause("stat_clamp");

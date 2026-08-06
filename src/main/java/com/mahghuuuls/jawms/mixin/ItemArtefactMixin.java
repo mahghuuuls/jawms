@@ -52,4 +52,23 @@ public abstract class ItemArtefactMixin {
     ) {
         // JAWMS player mana is authoritative; Hunger Casting must not replace it.
     }
+
+    @Redirect(
+            method = "lambda$onLivingHurtEvent$26"
+                    + "(Lnet/minecraft/world/World;Lnet/minecraft/item/ItemStack;)V",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lelectroblob/wizardry/item/IManaStoringItem;"
+                            + "rechargeMana(Lnet/minecraft/item/ItemStack;I)V",
+                    remap = false
+            ),
+            require = 1,
+            expect = 1,
+            remap = false
+    )
+    private static void jawms$disableOriginalExtractionRecharge(
+            IManaStoringItem manaItem, ItemStack stack, int amount
+    ) {
+        // JAWMS restores player mana only after a conservatively attributable kill.
+    }
 }

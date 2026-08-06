@@ -5,6 +5,7 @@ import com.mahghuuuls.jawms.api.ManaTooltips;
 import com.mahghuuuls.jawms.internal.modifier.ActiveStackCollector;
 import com.mahghuuuls.jawms.internal.rules.ConfiguredItemRule;
 import com.mahghuuuls.jawms.internal.integration.wizardry.WizardryPassiveContributionAdapter;
+import com.mahghuuuls.jawms.internal.integration.wizardry.effect.WizardryKillManaService;
 import net.minecraft.item.ItemArmor;
 import electroblob.wizardry.item.ItemWizardArmour;
 import electroblob.wizardry.item.ItemWand;
@@ -87,11 +88,29 @@ public final class ManaItemTooltipHandler {
                         "tooltip.jawms.condenser_per_level",
                         compact(rules.getCondenserRegenerationIncreasePerLevel()));
                 return;
+            case "ebwizardry:siphon_upgrade":
+                removeWizardryDescription(event, id);
+                addEnabledOrInactive(event, rules.isSiphonEnabled(),
+                        "tooltip.jawms.siphon_per_level",
+                        rules.getSiphonManaPerLevel());
+                return;
             case "ebwizardry:ring_condensing":
                 removeWizardryDescription(event, id);
                 addEnabledOrInactive(event, rules.isCondensingEnabled(),
                         "tooltip.jawms.condensing",
                         compact(rules.getCondensingRegenerationPerRing()));
+                return;
+            case "ebwizardry:ring_siphoning":
+                removeWizardryDescription(event, id);
+                addEnabledOrInactive(event, rules.isSiphoningEnabled(),
+                        "tooltip.jawms.siphoning",
+                        compact(rules.getSiphoningIncrease()));
+                return;
+            case "ebwizardry:ring_extraction":
+                removeWizardryDescription(event, id);
+                addEnabledOrInactive(event, rules.isExtractionEnabled(),
+                        "tooltip.jawms.extraction",
+                        rules.getExtractionMana());
                 return;
             case "ebwizardry:charm_hunger_casting":
                 removeWizardryDescription(event, id);
@@ -153,6 +172,22 @@ public final class ManaItemTooltipHandler {
                                 condenser, rules
                         )),
                         condenser
+                ));
+            } else {
+                addConfigInactive(event);
+            }
+        }
+        int siphon = Math.max(0, WandHelper.getUpgradeLevel(
+                stack, WizardryItems.siphon_upgrade
+        ));
+        if (siphon > 0) {
+            if (rules.isSiphonEnabled()) {
+                event.getToolTip().add(TextFormatting.BLUE + I18n.translateToLocalFormatted(
+                        "tooltip.jawms.siphon_installed",
+                        WizardryKillManaService.calculateSiphonRestoration(
+                                siphon, rules.getSiphonManaPerLevel(), false, 0.0D
+                        ),
+                        siphon
                 ));
             } else {
                 addConfigInactive(event);
