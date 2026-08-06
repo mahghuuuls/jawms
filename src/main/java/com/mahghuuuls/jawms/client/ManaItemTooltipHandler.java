@@ -119,6 +119,12 @@ public final class ManaItemTooltipHandler {
                         "tooltip.jawms.extraction",
                         rules.getExtractionMana());
                 return;
+            case "ebwizardry:ring_mana_return":
+                removeWizardryDescription(event, id);
+                addEnabledOrInactive(event, rules.isPerfectionistEnabled(),
+                        "tooltip.jawms.perfectionist",
+                        compact(rules.getPerfectionistRefund()));
+                return;
             case "ebwizardry:charm_hunger_casting":
                 removeWizardryDescription(event, id);
                 if (!rules.isDemonicSealEnabled()) {

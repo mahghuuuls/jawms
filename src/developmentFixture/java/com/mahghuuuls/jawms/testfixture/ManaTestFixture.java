@@ -22,7 +22,9 @@ import com.mahghuuuls.jawms.internal.integration.wizardry.effect.WizardryKillMan
 import com.mahghuuuls.jawms.internal.integration.wizardry.effect.WizardryMeleeManaService;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentService;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentContextManager;
+import com.mahghuuuls.jawms.internal.integration.wizardry.projectile.ForceArrowRefundTracker;
 import electroblob.wizardry.event.SpellCastEvent;
+import electroblob.wizardry.event.ArtefactCheckEvent;
 import electroblob.wizardry.item.ItemWand;
 import electroblob.wizardry.item.IManaStoringItem;
 import electroblob.wizardry.item.ItemManaFlask;
@@ -51,6 +53,7 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
+import net.minecraftforge.fml.common.eventhandler.Event;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 
@@ -228,6 +231,10 @@ public final class ManaTestFixture {
                     + " | wand melee <main|off> <0..3>"
                     + " | melee event <normal|cancel|zero>"
                     + " | melee target <health> | melee target-inspect"
+                    + " | projectile <inspect|clear-last>"
+                    + " | projectile activation <normal|active|inactive>"
+                    + " | projectile activation-after-cast <active|inactive> <ticks>"
+                    + " | projectile mana-after-cast <amount> <ticks>"
                     + " | wand mana <main|off> <amount> | wand inspect <main|off>";
         }
 
@@ -279,6 +286,24 @@ public final class ManaTestFixture {
                     && "melee".equalsIgnoreCase(arguments[0])
                     && "target-inspect".equalsIgnoreCase(arguments[1])) {
                 inspectMeleeTarget(sender);
+                return;
+            }
+            if (arguments.length == 2
+                    && "projectile".equalsIgnoreCase(arguments[0])
+                    && "inspect".equalsIgnoreCase(arguments[1])) {
+                inspectProjectile(sender);
+                return;
+            }
+            if (arguments.length == 3
+                    && "projectile".equalsIgnoreCase(arguments[0])
+                    && "activation".equalsIgnoreCase(arguments[1])) {
+                setProjectileActivation(sender, arguments[2]);
+                return;
+            }
+            if (arguments.length == 2
+                    && "projectile".equalsIgnoreCase(arguments[0])
+                    && "clear-last".equalsIgnoreCase(arguments[1])) {
+                clearLastProjectile(sender);
                 return;
             }
             if (arguments.length == 2
@@ -437,6 +462,18 @@ public final class ManaTestFixture {
                     && "mana".equalsIgnoreCase(arguments[0])
                     && "set".equalsIgnoreCase(arguments[1])) {
                 setMana(sender, arguments[2]);
+                return;
+            }
+            if (arguments.length == 4
+                    && "projectile".equalsIgnoreCase(arguments[0])
+                    && "activation-after-cast".equalsIgnoreCase(arguments[1])) {
+                scheduleProjectileActivation(sender, arguments[2], arguments[3]);
+                return;
+            }
+            if (arguments.length == 4
+                    && "projectile".equalsIgnoreCase(arguments[0])
+                    && "mana-after-cast".equalsIgnoreCase(arguments[1])) {
+                scheduleProjectileMana(sender, arguments[2], arguments[3]);
                 return;
             }
             if (arguments.length == 4
@@ -759,6 +796,67 @@ public final class ManaTestFixture {
                             + ItemManaFlask.Size.LARGE.capacity
                             + ", lastEvent={" + MANA_EVENT_PROBE.describe(player) + "}."
             ));
+        }
+
+        private static void inspectProjectile(ICommandSender sender) throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            sender.sendMessage(new TextComponentString(
+                    ForceArrowRefundTracker.describe(player)
+            ));
+        }
+
+        private static void clearLastProjectile(ICommandSender sender) throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            ForceArrowRefundTracker.clearLast(player);
+            inspectProjectile(sender);
+        }
+
+        private static void setProjectileActivation(
+                ICommandSender sender, String mode
+        ) throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            CAST_CANCELLATION.setPerfectionistOverride(player, parseActivation(mode, true));
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS test Perfectionist effective activation=" + mode.toLowerCase() + "."
+            ));
+        }
+
+        private static void scheduleProjectileActivation(
+                ICommandSender sender, String mode, String ticksValue
+        ) throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            Boolean active = parseActivation(mode, false);
+            int ticks = parseInt(ticksValue, 1, 20);
+            CAST_CANCELLATION.armPerfectionistOverride(player, active, ticks);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS test Perfectionist activation=" + mode.toLowerCase()
+                            + " armed for " + ticks + " ticks after the next wand cast starts."
+            ));
+        }
+
+        private static void scheduleProjectileMana(
+                ICommandSender sender, String amountValue, String ticksValue
+        ) throws CommandException {
+            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            int amount = parseInt(
+                    amountValue, 0, ManaApi.getManaService().getMaximumMana(player)
+            );
+            int ticks = parseInt(ticksValue, 1, 20);
+            CAST_CANCELLATION.armProjectileMana(player, amount, ticks);
+            sender.sendMessage(new TextComponentString(
+                    "JAWMS test mana=" + amount + " armed for " + ticks
+                            + " ticks after the next wand cast starts."
+            ));
+        }
+
+        private static Boolean parseActivation(String mode, boolean allowNormal)
+                throws CommandException {
+            if ("active".equalsIgnoreCase(mode)) return Boolean.TRUE;
+            if ("inactive".equalsIgnoreCase(mode)) return Boolean.FALSE;
+            if (allowNormal && "normal".equalsIgnoreCase(mode)) return null;
+            throw new CommandException(allowNormal
+                    ? "Expected normal, active, or inactive."
+                    : "Expected active or inactive.");
         }
 
         private static void setArmorMana(
@@ -1222,6 +1320,67 @@ public final class ManaTestFixture {
         private int scheduledReloadTicks;
         private UUID armedReloadPlayerId;
         private int armedReloadTicks;
+        private UUID perfectionistOverridePlayerId;
+        private Boolean perfectionistOverride;
+        private UUID armedPerfectionistPlayerId;
+        private Boolean armedPerfectionistOverride;
+        private int armedPerfectionistTicks;
+        private UUID scheduledPerfectionistPlayerId;
+        private Boolean scheduledPerfectionistOverride;
+        private int scheduledPerfectionistTicks;
+        private UUID armedProjectileManaPlayerId;
+        private int armedProjectileMana;
+        private int armedProjectileManaTicks;
+        private UUID scheduledProjectileManaPlayerId;
+        private int scheduledProjectileMana;
+        private int scheduledProjectileManaTicks;
+
+        @SubscribeEvent(priority = EventPriority.HIGHEST)
+        public void overridePerfectionistActivation(ArtefactCheckEvent event) {
+            if (!(event.getPlayer() instanceof EntityPlayerMP)
+                    || event.getArtefact() != WizardryItems.ring_mana_return
+                    || perfectionistOverridePlayerId == null
+                    || !perfectionistOverridePlayerId.equals(event.getPlayer().getUniqueID())) {
+                return;
+            }
+            if (Boolean.TRUE.equals(perfectionistOverride)) {
+                event.setResult(Event.Result.ALLOW);
+            } else {
+                event.setCanceled(true);
+            }
+        }
+
+        @SubscribeEvent(priority = EventPriority.LOWEST)
+        public void schedulePerfectionistOverrideAfterCast(SpellCastEvent.Pre event) {
+            if (!(event.getCaster() instanceof EntityPlayerMP)
+                    || event.getSource() != SpellCastEvent.Source.WAND
+                    || armedPerfectionistPlayerId == null
+                    || !armedPerfectionistPlayerId.equals(event.getCaster().getUniqueID())) {
+                return;
+            }
+            scheduledPerfectionistPlayerId = armedPerfectionistPlayerId;
+            scheduledPerfectionistOverride = armedPerfectionistOverride;
+            scheduledPerfectionistTicks = armedPerfectionistTicks;
+            armedPerfectionistPlayerId = null;
+            armedPerfectionistOverride = null;
+            armedPerfectionistTicks = 0;
+        }
+
+        @SubscribeEvent(priority = EventPriority.LOWEST)
+        public void scheduleProjectileManaAfterCast(SpellCastEvent.Pre event) {
+            if (!(event.getCaster() instanceof EntityPlayerMP)
+                    || event.getSource() != SpellCastEvent.Source.WAND
+                    || armedProjectileManaPlayerId == null
+                    || !armedProjectileManaPlayerId.equals(event.getCaster().getUniqueID())) {
+                return;
+            }
+            scheduledProjectileManaPlayerId = armedProjectileManaPlayerId;
+            scheduledProjectileMana = armedProjectileMana;
+            scheduledProjectileManaTicks = armedProjectileManaTicks;
+            armedProjectileManaPlayerId = null;
+            armedProjectileMana = 0;
+            armedProjectileManaTicks = 0;
+        }
 
         @SubscribeEvent(priority = EventPriority.LOWEST)
         public void scheduleRulesReloadAfterCast(SpellCastEvent.Pre event) {
@@ -1302,6 +1461,51 @@ public final class ManaTestFixture {
                     player.getUniqueID(),
                     CastPaymentContextManager.describe(player, EnumHand.MAIN_HAND),
                     CastPaymentContextManager.describe(player, EnumHand.OFF_HAND)
+            );
+        }
+
+        @SubscribeEvent
+        public void applyScheduledPerfectionistOverride(TickEvent.PlayerTickEvent event) {
+            if (event.phase != TickEvent.Phase.END
+                    || !(event.player instanceof EntityPlayerMP)
+                    || scheduledPerfectionistPlayerId == null
+                    || !scheduledPerfectionistPlayerId.equals(event.player.getUniqueID())) {
+                return;
+            }
+            if (--scheduledPerfectionistTicks > 0) {
+                return;
+            }
+            EntityPlayerMP player = (EntityPlayerMP) event.player;
+            setPerfectionistOverride(player, scheduledPerfectionistOverride);
+            scheduledPerfectionistPlayerId = null;
+            scheduledPerfectionistOverride = null;
+            JustAnotherWizardryManaSystemMod.LOGGER.info(
+                    "JAWMS test Perfectionist activation changed after launch: player={}, active={}.",
+                    player.getUniqueID(), perfectionistOverride
+            );
+        }
+
+        @SubscribeEvent
+        public void applyScheduledProjectileMana(TickEvent.PlayerTickEvent event) {
+            if (event.phase != TickEvent.Phase.END
+                    || !(event.player instanceof EntityPlayerMP)
+                    || scheduledProjectileManaPlayerId == null
+                    || !scheduledProjectileManaPlayerId.equals(event.player.getUniqueID())) {
+                return;
+            }
+            if (--scheduledProjectileManaTicks > 0) {
+                return;
+            }
+            EntityPlayerMP player = (EntityPlayerMP) event.player;
+            int maximum = ManaApi.getManaService().getMaximumMana(player);
+            int target = Math.min(scheduledProjectileMana, maximum);
+            ManaApi.getManaService().setCurrentMana(
+                    player, target, ManaCauses.DEVELOPMENT_COMMAND
+            );
+            scheduledProjectileManaPlayerId = null;
+            JustAnotherWizardryManaSystemMod.LOGGER.info(
+                    "JAWMS test mana changed after launch: player={}, mana={}/{}.",
+                    player.getUniqueID(), target, maximum
             );
         }
 
@@ -1395,6 +1599,30 @@ public final class ManaTestFixture {
             armedReloadTicks = ticks;
         }
 
+        private void setPerfectionistOverride(EntityPlayerMP player, Boolean active) {
+            if (active == null) {
+                perfectionistOverridePlayerId = null;
+                perfectionistOverride = null;
+            } else {
+                perfectionistOverridePlayerId = player.getUniqueID();
+                perfectionistOverride = active;
+            }
+        }
+
+        private void armPerfectionistOverride(
+                EntityPlayerMP player, Boolean active, int ticks
+        ) {
+            armedPerfectionistPlayerId = player.getUniqueID();
+            armedPerfectionistOverride = active;
+            armedPerfectionistTicks = ticks;
+        }
+
+        private void armProjectileMana(EntityPlayerMP player, int amount, int ticks) {
+            armedProjectileManaPlayerId = player.getUniqueID();
+            armedProjectileMana = amount;
+            armedProjectileManaTicks = ticks;
+        }
+
         private void clear() {
             playerId = null;
             tickPlayerId = null;
@@ -1407,6 +1635,20 @@ public final class ManaTestFixture {
             scheduledReloadTicks = 0;
             armedReloadPlayerId = null;
             armedReloadTicks = 0;
+            perfectionistOverridePlayerId = null;
+            perfectionistOverride = null;
+            armedPerfectionistPlayerId = null;
+            armedPerfectionistOverride = null;
+            armedPerfectionistTicks = 0;
+            scheduledPerfectionistPlayerId = null;
+            scheduledPerfectionistOverride = null;
+            scheduledPerfectionistTicks = 0;
+            armedProjectileManaPlayerId = null;
+            armedProjectileMana = 0;
+            armedProjectileManaTicks = 0;
+            scheduledProjectileManaPlayerId = null;
+            scheduledProjectileMana = 0;
+            scheduledProjectileManaTicks = 0;
         }
     }
 }

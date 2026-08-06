@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.Inject;
 import java.lang.reflect.Method;
 
 class MixinConfigurationTest {
@@ -26,6 +27,8 @@ class MixinConfigurationTest {
         assertTrue(json.contains("\"ItemManaFlaskMixin\""));
         assertTrue(json.contains("\"ItemWandClientMixin\""));
         assertTrue(json.contains("\"ItemManaFlaskClientMixin\""));
+        assertTrue(json.contains("\"ForceArrowMixin\""));
+        assertTrue(json.contains("\"EntityForceArrowMixin\""));
         assertTrue(json.contains("\"defaultRequire\": 1"));
         assertTrue(json.contains("\"refmap\": \"mixins.jawms.refmap.json\""));
 
@@ -59,6 +62,38 @@ class MixinConfigurationTest {
         assertEquals(1, hunger.require());
     }
 
+    @Test
+    void forceArrowHooksPinCreationTerminalsAndLegacyRecharge() {
+        Inject capture = inject(ForceArrowMixin.class, "jawms$capturePendingForceArrow");
+        assertEquals(1, capture.require());
+        assertEquals(1, capture.expect());
+        assertEquals(1, capture.at().length);
+        assertEquals("TAIL", capture.at()[0].value());
+
+        Inject living = inject(EntityForceArrowMixin.class, "jawms$consumeRefundOnLivingHit");
+        Inject block = inject(EntityForceArrowMixin.class, "jawms$refundOnBlockHit");
+        Inject expiry = inject(EntityForceArrowMixin.class, "jawms$refundOnExpiry");
+        assertEquals(1, living.at().length);
+        assertEquals(1, block.at().length);
+        assertEquals("HEAD", living.at()[0].value());
+        assertEquals("HEAD", block.at()[0].value());
+        assertEquals(1, living.require());
+        assertEquals(1, block.require());
+        assertEquals(1, expiry.require());
+        assertEquals(1, expiry.at().length);
+        assertEquals("INVOKE", expiry.at()[0].value());
+        assertEquals("Lelectroblob/wizardry/entity/projectile/EntityForceArrow;"
+                + "returnManaToCaster()V", expiry.at()[0].target());
+
+        Redirect legacy = redirect(
+                EntityForceArrowMixin.class, "jawms$disableLegacyWandManaRefund"
+        );
+        assertEquals(1, legacy.require());
+        assertEquals("Lelectroblob/wizardry/item/IManaStoringItem;"
+                + "rechargeMana(Lnet/minecraft/item/ItemStack;I)V",
+                legacy.at().target());
+    }
+
     private static Redirect redirect(Class<?> owner, String name) {
         for (Method method : owner.getDeclaredMethods()) {
             if (method.getName().equals(name)) {
@@ -68,6 +103,17 @@ class MixinConfigurationTest {
             }
         }
         throw new AssertionError("Missing redirect " + name);
+    }
+
+    private static Inject inject(Class<?> owner, String name) {
+        for (Method method : owner.getDeclaredMethods()) {
+            if (method.getName().equals(name)) {
+                Inject inject = method.getAnnotation(Inject.class);
+                assertNotNull(inject);
+                return inject;
+            }
+        }
+        throw new AssertionError("Missing inject " + name);
     }
 
     private String readResource(String path) throws IOException {

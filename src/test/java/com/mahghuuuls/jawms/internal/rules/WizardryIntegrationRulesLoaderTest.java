@@ -34,6 +34,7 @@ class WizardryIntegrationRulesLoaderTest {
         assertEquals(10.0D, rules.getCondenserRegenerationIncreasePerLevel());
         assertEquals(WizardryIntegrationRules.HeldWandAggregation.HIGHEST,
                 rules.getHeldWandAggregation());
+        assertTrue(rules.isPerfectionistEnabled());
         assertEquals(100.0D, rules.getPerfectionistRefund());
         assertEquals(5, rules.getDemonicSealManaPerHunger());
         assertEquals(6, rules.getDemonicSealMinimumHunger());

@@ -11,6 +11,8 @@ public final class ManaCauses {
     public static final ResourceLocation WIZARDRY_SIPHON = cause("wizardry_siphon");
     public static final ResourceLocation WIZARDRY_EXTRACTION = cause("wizardry_extraction");
     public static final ResourceLocation WIZARDRY_MELEE = cause("wizardry_melee");
+    public static final ResourceLocation WIZARDRY_PERFECTIONIST =
+            cause("wizardry_perfectionist");
     public static final ResourceLocation COMMAND = cause("command");
     public static final ResourceLocation RULES_UPDATE = cause("rules_update");
     public static final ResourceLocation STAT_CLAMP = cause("stat_clamp");

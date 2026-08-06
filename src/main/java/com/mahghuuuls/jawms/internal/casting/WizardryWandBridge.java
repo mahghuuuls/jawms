@@ -9,14 +9,21 @@ import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentPla
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentReservation;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentService;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.DemonicSealPolicy;
+import com.mahghuuuls.jawms.internal.integration.wizardry.projectile.ForceArrowRefundTracker;
+import com.mahghuuuls.jawms.internal.integration.wizardry.projectile.PerfectionistPolicy;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import com.mahghuuuls.jawms.internal.rules.WizardryIntegrationRules;
+import electroblob.wizardry.entity.projectile.EntityForceArrow;
+import electroblob.wizardry.item.ItemArtefact;
 import electroblob.wizardry.item.ItemWand;
+import electroblob.wizardry.registry.Spells;
+import electroblob.wizardry.registry.WizardryItems;
 import electroblob.wizardry.spell.Spell;
 import electroblob.wizardry.util.SpellModifiers;
 import electroblob.wizardry.util.WandHelper;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.EnumActionResult;
@@ -26,7 +33,10 @@ import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
+import java.util.UUID;
 
 public final class WizardryWandBridge {
 
@@ -246,7 +256,9 @@ public final class WizardryWandBridge {
                 reservation,
                 spell.getRegistryName(),
                 hand,
-                !spell.isContinuous || cost > 0
+                !spell.isContinuous || cost > 0,
+                caster.getUniqueID(),
+                perfectionistPolicy(caster, spell)
         );
         ATTEMPTS.get().push(attempt);
         traceAttempt("reservation_created", caster, attempt);
@@ -450,10 +462,31 @@ public final class WizardryWandBridge {
         return ATTEMPTS.get().size();
     }
 
+    public static void capturePendingForceArrow(
+            EntityForceArrow arrow, EntityLivingBase caster
+    ) {
+        if (!(caster instanceof EntityPlayerMP) || caster.world.isRemote
+                || arrow.getCaster() != caster) {
+            return;
+        }
+        CastAttempt attempt = ATTEMPTS.get().peek();
+        EntityPlayerMP player = (EntityPlayerMP) caster;
+        if (attempt == null
+                || !attempt.ownerId.equals(player.getUniqueID())
+                || !equals(attempt.spellId, Spells.force_arrow.getRegistryName())) {
+            return;
+        }
+        UUID projectileId = ForceArrowRefundTracker.capturePending(
+                arrow, player, attempt.perfectionistPolicy
+        );
+        attempt.pendingForceArrows.add(projectileId);
+    }
+
     public static void cleanupToDepth(EntityPlayer caster, int depth) {
         Deque<CastAttempt> attempts = ATTEMPTS.get();
         while (attempts.size() > depth) {
             CastAttempt attempt = attempts.pop();
+            discardPendingForceArrows(attempt);
             CastPaymentService.release(caster, attempt.reservation);
             traceAttempt("reservation_cleanup", caster, attempt);
         }
@@ -490,6 +523,17 @@ public final class WizardryWandBridge {
                     caster, attempt.reservation, false, attempt.hand, attempt.spellId
             );
         }
+        if (caster instanceof EntityPlayerMP) {
+            for (UUID projectileId : attempt.pendingForceArrows) {
+                ForceArrowRefundTracker.promote(
+                        projectileId,
+                        (EntityPlayerMP) caster,
+                        attempt.reservation.getPaidMana()
+                );
+            }
+        } else {
+            discardPendingForceArrows(attempt);
+        }
         attempts.pop();
         traceAttempt("reservation_committed", caster, attempt);
         if (attempts.isEmpty()) {
@@ -507,6 +551,7 @@ public final class WizardryWandBridge {
             throw new IllegalStateException("JAWMS wand reservation stack was corrupted.");
         }
         attempts.pop();
+        discardPendingForceArrows(expected);
         CastPaymentService.release(caster, expected.reservation);
         traceAttempt(event, caster, expected);
         if (attempts.isEmpty()) {
@@ -550,6 +595,28 @@ public final class WizardryWandBridge {
         return CastPaymentContextManager.captureIfAbsent(
                 caster, hand, integrationRules(caster)
         );
+    }
+
+    private static PerfectionistPolicy perfectionistPolicy(
+            EntityPlayer caster, Spell spell
+    ) {
+        WizardryIntegrationRules rules = integrationRules(caster);
+        if (spell != Spells.force_arrow || !(caster instanceof EntityPlayerMP)) {
+            return PerfectionistPolicy.inactive(rules.getRevision());
+        }
+        boolean active = WizardryItems.ring_mana_return instanceof ItemArtefact
+                && ItemArtefact.isArtefactActive(
+                        caster, WizardryItems.ring_mana_return
+                );
+        return PerfectionistPolicy.capture(rules, active);
+    }
+
+    private static void discardPendingForceArrows(CastAttempt attempt) {
+        for (UUID projectileId : attempt.pendingForceArrows) {
+            ForceArrowRefundTracker.discardPending(
+                    projectileId, ForceArrowRefundTracker.Terminal.FAILED_CAST
+            );
+        }
     }
 
     private static WizardryIntegrationRules integrationRules(EntityPlayer caster) {
@@ -605,17 +672,24 @@ public final class WizardryWandBridge {
         private final ResourceLocation spellId;
         private final EnumHand hand;
         private final boolean trace;
+        private final UUID ownerId;
+        private final PerfectionistPolicy perfectionistPolicy;
+        private final List<UUID> pendingForceArrows = new ArrayList<>();
 
         private CastAttempt(
                 CastPaymentReservation reservation,
                 ResourceLocation spellId,
                 EnumHand hand,
-                boolean trace
+                boolean trace,
+                UUID ownerId,
+                PerfectionistPolicy perfectionistPolicy
         ) {
             this.reservation = reservation;
             this.spellId = spellId;
             this.hand = hand;
             this.trace = trace;
+            this.ownerId = ownerId;
+            this.perfectionistPolicy = perfectionistPolicy;
         }
     }
 }
