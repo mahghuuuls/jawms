@@ -1,34 +1,32 @@
-# Just Another Wizardry Mana System
+<span style="color:#d6a100">**Beta release:**</span> JAWMS has received extensive automated and in-game testing, but its broad configuration and integration surface still needs wider use across real modpacks. Public API `1.2` has compatibility coverage through separately compiled fixtures, but it has not yet been exercised by an independently developed addon.
 
-> **Beta release:** JAWMS has received extensive automated and in-game testing, but its broad configuration and integration surface still needs wider use across real modpacks. Public API `1.2` has compatibility coverage through separately compiled fixtures, but it has not yet been exercised by an independently developed addon.
+<span style="color:#e05252">**Temporary Cleanroom note (August 7, 2026):**</span> Cleanroom `0.6.8-alpha` reports its built-in MixinBooter as `11.8`, while JAWMS requires `11.11`. In `config/forge_early.cfg`, use:
 
-> **Temporary Cleanroom note — August 7, 2026:** Cleanroom `0.6.8-alpha` reports its built-in MixinBooter as `11.8`, while JAWMS requires `11.11`. In `config/forge_early.cfg`, use:
->
-> ```properties
-> B:CUSTOM_BUILT_IN_MOD_VERSION=true
-> S:MIXIN_BOOTER_VERSION=11.11
-> ```
->
-> This temporary override has been tested successfully and should become unnecessary when Cleanroom updates its reported MixinBooter version.
+```properties
+B:CUSTOM_BUILT_IN_MOD_VERSION=true
+S:MIXIN_BOOTER_VERSION=11.11
+```
+
+This temporary override has been tested successfully and should become unnecessary when Cleanroom updates its reported MixinBooter version.
+
+---
 
 There are already good mods that give Electroblob's Wizardry a player mana pool, including [Wizardry Player Mana](https://www.curseforge.com/minecraft/mc-mods/wizardry-player-mana) and [Wizardry Player Mana Tweaked](https://www.curseforge.com/minecraft/mc-mods/wizardryplayermanatweaked). Those solutions work well for their intended scope. JAWMS is for players, modpack authors, and addon developers who want a more extensive and configurable mana system instead of only replacing where mana is stored.
 
 JAWMS completely replaces wand mana for player-cast Wizardry spells with one persistent player mana pool. Stored wand mana is preserved, but it is ignored for casting and its obsolete displays are hidden, while Wizardry's spell selection, tiers, cooldowns, progression, charge-up behavior, and spell effects remain in place. Its intentionally opinionated defaults follow the author's preference for smaller mana numbers, relatively quick regeneration, a short punishment window after casting, and equipment that makes a prepared wizard meaningfully stronger. They are a starting point rather than a universal balance prescription: server and modpack owners can tune the mana economy, spell costs, equipment, flasks, and Wizardry replacements to fit a different playstyle.
 
-<p style="color:#d6a100"><strong>AI usage disclaimer:</strong> This mod was developed with AI-agent assistance using <a href="https://github.com/mahghuuuls/minecraft-1.12.2-mod-agent-workflow">this agent workflow</a>. The project owner reviewed the work during development.</p>
+<span style="color:#d6a100">**AI usage disclaimer:** This mod was developed with AI-agent assistance using [this agent workflow](https://github.com/mahghuuuls/minecraft-1.12.2-mod-agent-workflow). The project owner reviewed the work during development.</span>
 
 ## The Mana System
 
 JAWMS provides several distinct stats that equipment, configuration, and addons can change:
 
-| Stat | What it does |
-| --- | --- |
-| Mana | The player's current casting resource. |
-| Maximum Mana | Sets the size of the player mana pool. |
-| Mana Regen | Restores mana over time when regeneration is allowed. |
-| Mana Regen Delay | Controls how long regeneration is blocked after casting. |
-| Spell Efficiency | Reduces spell costs with diminishing returns instead of allowing additive reductions to approach free casting. |
-| Spell Cost Multiplier | Independently raises or lowers final spell costs and can apply globally or to one Wizardry element. |
+- **Mana:** The player's current casting resource.
+- **Maximum Mana:** Sets the size of the player mana pool.
+- **Mana Regen:** Restores mana over time when regeneration is allowed.
+- **Mana Regen Delay:** Controls how long regeneration is blocked after casting.
+- **Spell Efficiency:** Reduces spell costs with diminishing returns instead of allowing additive reductions to approach free casting.
+- **Spell Cost Multiplier:** Independently raises or lowers final spell costs and can apply globally or to one Wizardry element.
 
 Maximum mana, mana regeneration, and regeneration delay support flat changes, percentage increases, and independent percentage reductions. Addons can also allow regeneration during the post-cast delay or during continuous casting, making room for equipment and effects with meaningful advantages and drawbacks.
 
