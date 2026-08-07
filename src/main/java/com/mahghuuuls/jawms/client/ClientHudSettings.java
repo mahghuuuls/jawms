@@ -4,6 +4,7 @@ public final class ClientHudSettings {
 
     public static final ClientHudSettings DEFAULT = new ClientHudSettings(
             true,
+            true,
             TextDisplay.CURRENT,
             0.65F,
             Anchor.BOTTOM_LEFT,
@@ -14,6 +15,7 @@ public final class ClientHudSettings {
             7
     );
 
+    private final boolean enabled;
     private final boolean hideWhenFull;
     private final TextDisplay textDisplay;
     private final float textScale;
@@ -25,6 +27,7 @@ public final class ClientHudSettings {
     private final int thickness;
 
     public ClientHudSettings(
+            boolean enabled,
             boolean hideWhenFull,
             TextDisplay textDisplay,
             float textScale,
@@ -50,6 +53,7 @@ public final class ClientHudSettings {
         if (!Float.isFinite(textScale) || textScale < 0.5F || textScale > 3.0F) {
             throw new IllegalArgumentException("HUD text scale must be from 0.5 through 3.0.");
         }
+        this.enabled = enabled;
         this.hideWhenFull = hideWhenFull;
         this.textDisplay = textDisplay;
         this.textScale = textScale;
@@ -59,6 +63,10 @@ public final class ClientHudSettings {
         this.fillDirection = fillDirection;
         this.length = length;
         this.thickness = thickness;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
     }
 
     public boolean isHideWhenFull() {

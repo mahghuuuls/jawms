@@ -1,5 +1,6 @@
 package com.mahghuuuls.jawms.client;
 
+import com.mahghuuuls.jawms.api.client.ClientManaSnapshot;
 import electroblob.wizardry.constants.Element;
 import java.util.EnumMap;
 import java.util.Map;
@@ -19,6 +20,7 @@ public final class ClientManaState {
     private static final EnumMap<Element, Double> elementSpellEfficiency = new EnumMap<>(Element.class);
     private static double globalSpellCostMultiplier = 1.0D;
     private static final EnumMap<Element, Double> elementSpellCostMultiplier = new EnumMap<>(Element.class);
+    private static volatile ClientManaSnapshot snapshot = ClientManaSnapshot.unavailable();
 
     public static void accept(int current, int maximum, double regeneration, long incomingRevision) {
         accept(current, maximum, regeneration, incomingRevision, 0.0D,
@@ -48,7 +50,12 @@ public final class ClientManaState {
             elementSpellCostMultiplier.clear();
             elementSpellCostMultiplier.putAll(elementCostMultiplier);
             available = true;
+            snapshot = ClientManaSnapshot.available(current, maximum, regeneration);
         }
+    }
+
+    static ClientManaSnapshot snapshot() {
+        return snapshot;
     }
 
     public static boolean isAvailable() {
@@ -94,5 +101,6 @@ public final class ClientManaState {
         elementSpellEfficiency.clear();
         globalSpellCostMultiplier = 1.0D;
         elementSpellCostMultiplier.clear();
+        snapshot = ClientManaSnapshot.unavailable();
     }
 }

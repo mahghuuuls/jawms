@@ -1,5 +1,8 @@
 package com.mahghuuuls.jawms.api;
 
+import com.mahghuuuls.jawms.api.client.ClientManaApi;
+import com.mahghuuuls.jawms.api.client.ClientManaSnapshot;
+import com.mahghuuuls.jawms.api.client.ManaHudRenderEvent;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -12,9 +15,9 @@ class ApiBoundaryTest {
 
     @Test
     void apiVersionAndSurfaceAreStableAndServerSafe() {
-        assertEquals("1.1", ManaApi.API_VERSION);
+        assertEquals("1.2", ManaApi.API_VERSION);
         assertEquals(1, ManaApiVersion.MAJOR);
-        assertEquals(1, ManaApiVersion.MINOR);
+        assertEquals(2, ManaApiVersion.MINOR);
 
         assertPublicSignaturesDoNotExposeImplementation(ManaApi.class);
         assertPublicSignaturesDoNotExposeImplementation(IManaService.class);
@@ -26,6 +29,9 @@ class ApiBoundaryTest {
         assertPublicSignaturesDoNotExposeImplementation(ManaTooltips.class);
         assertPublicSignaturesDoNotExposeImplementation(IItemManaModifierProvider.class);
         assertPublicSignaturesDoNotExposeImplementation(IContextualManaModifierProvider.class);
+        assertPublicSignaturesDoNotExposeImplementation(ClientManaApi.class);
+        assertPublicSignaturesDoNotExposeImplementation(ClientManaSnapshot.class);
+        assertPublicSignaturesDoNotExposeImplementation(ManaHudRenderEvent.class);
     }
 
     private static void assertPublicSignaturesDoNotExposeImplementation(Class<?> apiType) {

@@ -24,6 +24,7 @@ import net.minecraft.util.text.TextComponentString;
 import net.minecraft.init.Items;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.common.SidedProxy;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -42,6 +43,14 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class ApiConsumerFixture {
 
     public static final String MOD_ID = "jawms_api_fixture";
+
+    @SidedProxy(
+            modId = MOD_ID,
+            clientSide = "example.jawmsaddon.ClientApiFixtureProxy",
+            serverSide = "example.jawmsaddon.CommonApiFixtureProxy"
+    )
+    public static CommonApiFixtureProxy proxy;
+
     private static final ResourceLocation CAUSE =
             new ResourceLocation("exampleaddon", "fixture_operation");
     private static final AtomicInteger ITEM_CALLS = new AtomicInteger();
@@ -60,6 +69,7 @@ public final class ApiConsumerFixture {
 
     @Mod.EventHandler
     public void initialize(FMLInitializationEvent event) {
+        proxy.initialize();
         ManaApi.registerItemProvider(
                 new ResourceLocation(MOD_ID, "stick_first"),
                 Items.STICK,

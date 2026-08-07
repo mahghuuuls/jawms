@@ -142,6 +142,7 @@ class HudLayoutTest {
     ) {
         return new ClientHudSettings(
                 true,
+                true,
                 ClientHudSettings.TextDisplay.CURRENT_AND_MAXIMUM,
                 1.0F,
                 anchor,

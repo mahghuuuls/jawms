@@ -304,7 +304,10 @@ tasks.register('verifyApiCompatibilityFixture') {
                     'assets/jawms/lang/en_us.lang',
                     'LICENSE',
                     'THIRD-PARTY-NOTICES.md',
-                    'com/mahghuuuls/jawms/api/ManaApi.class'
+                    'com/mahghuuuls/jawms/api/ManaApi.class',
+                    'com/mahghuuuls/jawms/api/client/ClientManaApi.class',
+                    'com/mahghuuuls/jawms/api/client/ClientManaSnapshot.class',
+                    'com/mahghuuuls/jawms/api/client/ManaHudRenderEvent.class'
             ]
             def missingEntries = requiredEntries.findAll { archive.getEntry(it) == null }
             if (!missingEntries.empty) {
@@ -343,6 +346,18 @@ tasks.register('verifyApiCompatibilityFixture') {
             }
             if (!nonJava8Entries.empty) {
                 throw new GradleException("Production jar contains non-Java-8 classes: ${nonJava8Entries*.name}")
+            }
+
+            def clientOnlyApiReferences = archive.entries().findAll { entry ->
+                !entry.directory
+                        && entry.name.startsWith('com/mahghuuuls/jawms/api/client/')
+                        && entry.name.endsWith('.class')
+                        && new String(archive.getInputStream(entry).bytes, 'ISO-8859-1')
+                        .contains('net/minecraft/client/')
+            }*.name
+            if (!clientOnlyApiReferences.empty) {
+                throw new GradleException(
+                        "Public client API bytecode links client-only Minecraft classes: ${clientOnlyApiReferences}")
             }
         } finally {
             archive.close()

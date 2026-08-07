@@ -33,6 +33,7 @@ class ClientHudConfigManagerTest {
                 ClientHudSettings.DEFAULT
         );
 
+        assertTrue(settings.isEnabled());
         assertEquals(ClientHudSettings.TextDisplay.CURRENT, settings.getTextDisplay());
         assertEquals(0.65F, settings.getTextScale());
         assertEquals(ClientHudSettings.Anchor.BOTTOM_LEFT, settings.getAnchor());
@@ -61,6 +62,7 @@ class ClientHudConfigManagerTest {
                 Files.readAllBytes(generated.toPath()),
                 StandardCharsets.UTF_8
         );
+        assertTrue(text.contains("B:enabled=true"));
         assertTrue(text.contains("B:hideWhenFull=true"));
         assertTrue(text.contains("S:textDisplay=CURRENT"));
         assertTrue(text.contains("textScale=0.65"));
@@ -74,6 +76,7 @@ class ClientHudConfigManagerTest {
     @Test
     void validValuesApplyAndInvalidEnumKeepsPreviousValue() throws IOException {
         Configuration configuration = configuration("changed.cfg");
+        configuration.get("hud", "enabled", true).set(false);
         configuration.get("hud", "hideWhenFull", true).set(false);
         configuration.get("hud", "showNumbers", true).set(false);
         configuration.get("hud", "anchor", "invalid").set("invalid");
@@ -86,6 +89,7 @@ class ClientHudConfigManagerTest {
         configuration.get("hud", "textScale", 1.0D).set(1.5D);
 
         ClientHudSettings previous = new ClientHudSettings(
+                true,
                 true,
                 ClientHudSettings.TextDisplay.CURRENT,
                 1.0F,
@@ -101,6 +105,7 @@ class ClientHudConfigManagerTest {
                 previous
         );
 
+        assertFalse(settings.isEnabled());
         assertFalse(settings.isHideWhenFull());
         assertEquals(ClientHudSettings.TextDisplay.NONE, settings.getTextDisplay());
         assertTrue(configuration.hasKey("hud", "textDisplay"));

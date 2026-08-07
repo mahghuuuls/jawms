@@ -1,5 +1,6 @@
 package com.mahghuuuls.jawms.client;
 
+import com.mahghuuuls.jawms.api.client.ClientManaSnapshot;
 import electroblob.wizardry.constants.Element;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,10 @@ class ClientManaStateTest {
         assertTrue(ClientManaState.isAvailable());
         assertEquals(40, ClientManaState.getCurrentMana());
         assertEquals(2.0D, ClientManaState.getEffectiveRegeneration());
+        ClientManaSnapshot first = ClientManaState.snapshot();
+        assertEquals(40, first.getCurrentMana());
+        assertEquals(50, first.getMaximumMana());
+        assertEquals(2.0D, first.getEffectiveRegeneration());
 
         ClientManaState.accept(20, 50, 3.0D, 5);
         assertEquals(20, ClientManaState.getCurrentMana());
@@ -50,6 +55,7 @@ class ClientManaStateTest {
         ClientManaState.clear();
 
         assertFalse(ClientManaState.isAvailable());
+        assertFalse(ClientManaState.snapshot().isAvailable());
         assertEquals(1.0D, ClientManaState.getSpellCostMultiplier(Element.FIRE));
     }
 

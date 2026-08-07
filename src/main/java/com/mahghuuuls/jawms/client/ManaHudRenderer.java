@@ -1,10 +1,14 @@
 package com.mahghuuuls.jawms.client;
 
+import com.mahghuuuls.jawms.api.client.ClientManaApi;
+import com.mahghuuuls.jawms.api.client.ClientManaSnapshot;
+import com.mahghuuuls.jawms.api.client.ManaHudRenderEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
 public final class ManaHudRenderer {
@@ -13,26 +17,40 @@ public final class ManaHudRenderer {
     private static final int BACKGROUND_COLOR = 0xA0000000;
     private static final int MANA_COLOR = 0xFF2F7BFF;
 
-    @SubscribeEvent
-    public void render(RenderGameOverlayEvent.Post event) {
-        if (event.getType() != RenderGameOverlayEvent.ElementType.ALL) {
-            return;
-        }
-
+    @SubscribeEvent(receiveCanceled = true)
+    public void render(RenderGameOverlayEvent.Chat event) {
         Minecraft minecraft = Minecraft.getMinecraft();
-        ClientHudSettings settings = ClientHudConfigManager.current();
-        if (minecraft.player == null || !HudLayout.shouldRender(
-                ClientManaState.isAvailable(),
-                minecraft.gameSettings.hideGUI,
-                minecraft.player.isSpectator(),
-                settings.isHideWhenFull(),
-                ClientManaState.getCurrentMana(),
-                ClientManaState.getMaximumMana()
-        )) {
+        ClientManaSnapshot snapshot = ClientManaApi.getSnapshot();
+        if (minecraft.player == null
+                || !snapshot.isAvailable()
+                || minecraft.gameSettings.hideGUI
+                || minecraft.player.isSpectator()) {
             return;
         }
 
         ScaledResolution resolution = new ScaledResolution(minecraft);
+        ManaHudRenderEvent hudEvent = new ManaHudRenderEvent(
+                snapshot,
+                event.getPartialTicks(),
+                resolution.getScaledWidth(),
+                resolution.getScaledHeight()
+        );
+        if (MinecraftForge.EVENT_BUS.post(hudEvent)) {
+            return;
+        }
+
+        ClientHudSettings settings = ClientHudConfigManager.current();
+        if (!settings.isEnabled() || !HudLayout.shouldRender(
+                true,
+                false,
+                false,
+                settings.isHideWhenFull(),
+                snapshot.getCurrentMana(),
+                snapshot.getMaximumMana()
+        )) {
+            return;
+        }
+
         HudLayout.Rectangle bar = HudLayout.resolve(
                 settings,
                 resolution.getScaledWidth(),
@@ -56,8 +74,8 @@ public final class ManaHudRenderer {
         HudLayout.Rectangle fill = HudLayout.fill(
                 bar,
                 settings.getFillDirection(),
-                ClientManaState.getCurrentMana(),
-                ClientManaState.getMaximumMana()
+                snapshot.getCurrentMana(),
+                snapshot.getMaximumMana()
         );
         if (fill.getWidth() > 0 && fill.getHeight() > 0) {
             Gui.drawRect(
@@ -70,19 +88,21 @@ public final class ManaHudRenderer {
         }
 
         if (settings.getTextDisplay() != ClientHudSettings.TextDisplay.NONE) {
-            drawNumbers(minecraft, resolution, bar, settings);
+            drawNumbers(minecraft, resolution, bar, settings, snapshot);
         }
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     private static void drawNumbers(
             Minecraft minecraft,
             ScaledResolution resolution,
             HudLayout.Rectangle bar,
-            ClientHudSettings settings
+            ClientHudSettings settings,
+            ClientManaSnapshot snapshot
     ) {
         String text = settings.getTextDisplay().format(
-                ClientManaState.getCurrentMana(),
-                ClientManaState.getMaximumMana()
+                snapshot.getCurrentMana(),
+                snapshot.getMaximumMana()
         );
         HudTextLayout.Result textLayout = HudTextLayout.resolve(
                 minecraft.fontRenderer.getStringWidth(text),

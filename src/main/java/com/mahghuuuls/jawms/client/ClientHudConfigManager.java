@@ -68,6 +68,12 @@ public final class ClientHudConfigManager {
     ) {
         source.setCategoryLanguageKey(CATEGORY, "config.jawms.hud.category");
 
+        boolean enabled = source.getBoolean(
+                "enabled",
+                CATEGORY,
+                ClientHudSettings.DEFAULT.isEnabled(),
+                "Show the built-in JAWMS mana HUD. Synchronization remains active when disabled."
+        );
         boolean hideWhenFull = source.getBoolean(
                 "hideWhenFull",
                 CATEGORY,
@@ -132,6 +138,7 @@ public final class ClientHudConfigManager {
                 "Bar thickness in scaled GUI pixels. Range: 3 through 4096."
         );
         return new ClientHudSettings(
+                enabled,
                 hideWhenFull,
                 textDisplay,
                 textScale,
