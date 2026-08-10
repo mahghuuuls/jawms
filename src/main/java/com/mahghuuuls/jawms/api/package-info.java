@@ -1,9 +1,10 @@
 /**
- * Public, Java 8-compatible JAWMS API, version 1.
+ * Public, Java 8-compatible JAWMS API, version 1.3.
  *
- * <p>Addons should depend only on types in this package. The API exposes
+ * <p>Addons should depend only on types in this package and its documented
+ * {@code client} package. The root API exposes
  * server-authoritative reads and mutations, deterministic modifier providers,
  * immutable equipped-slot contexts, and optional server-safe tooltip text;
- * capability and automatic client presentation types remain internal.</p>
+ * capability and automatic presentation implementations remain internal.</p>
  */
 package com.mahghuuuls.jawms.api;

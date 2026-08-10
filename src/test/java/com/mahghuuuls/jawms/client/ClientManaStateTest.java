@@ -31,10 +31,16 @@ class ClientManaStateTest {
         assertEquals(40, first.getCurrentMana());
         assertEquals(50, first.getMaximumMana());
         assertEquals(2.0D, first.getEffectiveRegeneration());
+        assertTrue(first.hasKnownRevision());
+        assertEquals(4L, first.getRevision());
+
+        ClientManaState.accept(10, 50, 4.0D, 4);
+        assertEquals(first, ClientManaState.snapshot());
 
         ClientManaState.accept(20, 50, 3.0D, 5);
         assertEquals(20, ClientManaState.getCurrentMana());
         assertEquals(3.0D, ClientManaState.getEffectiveRegeneration());
+        assertEquals(5L, ClientManaState.snapshot().getRevision());
     }
 
     @Test
@@ -46,6 +52,7 @@ class ClientManaStateTest {
         assertTrue(ClientManaState.isAvailable());
         assertEquals(30, ClientManaState.getCurrentMana());
         assertEquals(50, ClientManaState.getMaximumMana());
+        assertEquals(1L, ClientManaState.snapshot().getRevision());
     }
 
     @Test
@@ -56,6 +63,8 @@ class ClientManaStateTest {
 
         assertFalse(ClientManaState.isAvailable());
         assertFalse(ClientManaState.snapshot().isAvailable());
+        assertFalse(ClientManaState.snapshot().hasKnownRevision());
+        assertEquals(ClientManaSnapshot.UNKNOWN_REVISION, ClientManaState.snapshot().getRevision());
         assertEquals(1.0D, ClientManaState.getSpellCostMultiplier(Element.FIRE));
     }
 

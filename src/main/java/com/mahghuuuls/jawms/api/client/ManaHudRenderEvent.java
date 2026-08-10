@@ -11,44 +11,60 @@ import net.minecraftforge.fml.common.eventhandler.Event;
 public final class ManaHudRenderEvent extends Event {
 
     private final ClientManaSnapshot snapshot;
-    private final float partialTicks;
-    private final int scaledWidth;
-    private final int scaledHeight;
+    private final ClientHudContext context;
 
+    /**
+     * Retained API 1.2 constructor. Creative-mode state is unknown because it
+     * was not part of that contract.
+     */
     public ManaHudRenderEvent(
             ClientManaSnapshot snapshot,
             float partialTicks,
             int scaledWidth,
             int scaledHeight
     ) {
-        if (snapshot == null) {
-            throw new NullPointerException("snapshot");
+        this(
+                requireSnapshot(snapshot),
+                ClientHudContext.unknown(partialTicks, scaledWidth, scaledHeight)
+        );
+    }
+
+    /** Creates an event carrying the captured snapshot and render context. */
+    public ManaHudRenderEvent(
+            ClientManaSnapshot snapshot,
+            ClientHudContext context
+    ) {
+        this.snapshot = requireSnapshot(snapshot);
+        if (context == null) {
+            throw new NullPointerException("context");
         }
-        if (!Float.isFinite(partialTicks)) {
-            throw new IllegalArgumentException("Partial ticks must be finite.");
-        }
-        if (scaledWidth < 0 || scaledHeight < 0) {
-            throw new IllegalArgumentException("Scaled dimensions must be non-negative.");
-        }
-        this.snapshot = snapshot;
-        this.partialTicks = partialTicks;
-        this.scaledWidth = scaledWidth;
-        this.scaledHeight = scaledHeight;
+        this.context = context;
     }
 
     public ClientManaSnapshot getSnapshot() {
         return snapshot;
     }
 
+    public ClientHudContext getContext() {
+        return context;
+    }
+
     public float getPartialTicks() {
-        return partialTicks;
+        return context.getPartialTicks();
     }
 
     public int getScaledWidth() {
-        return scaledWidth;
+        return context.getScaledWidth();
     }
 
     public int getScaledHeight() {
-        return scaledHeight;
+        return context.getScaledHeight();
+    }
+
+    private static ClientManaSnapshot requireSnapshot(ClientManaSnapshot snapshot) {
+        if (snapshot == null) {
+            throw new NullPointerException("snapshot");
+        }
+        return snapshot;
     }
 }

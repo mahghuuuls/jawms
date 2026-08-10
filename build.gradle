@@ -171,13 +171,27 @@ sourceSets {
         java.srcDir 'src/apiCompatibilityFixture/java'
         runtimeClasspath += output + sourceSets.main.runtimeClasspath
     }
+    api12BinaryFixture {
+        java.srcDir 'src/api12BinaryFixture/java'
+    }
 }
 
 configurations {
+    api12PublishedArtifact {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
     developmentFixtureImplementation.extendsFrom implementation
     developmentFixtureCompileOnly.extendsFrom compileOnly
     apiCompatibilityFixtureImplementation.extendsFrom implementation
     apiCompatibilityFixtureCompileOnly.extendsFrom compileOnly
+}
+
+dependencies {
+    api12PublishedArtifact 'curse.maven:just-another-wizardry-mana-system-1643697:8597828'
+    api12BinaryFixtureCompileOnly rfg.deobf(
+            'curse.maven:just-another-wizardry-mana-system-1643697:8597828')
 }
 
 tasks.named(sourceSets.developmentFixture.compileJavaTaskName, JavaCompile).configure {
@@ -186,12 +200,15 @@ tasks.named(sourceSets.developmentFixture.compileJavaTaskName, JavaCompile).conf
 }
 
 tasks.named('compileTestJava', JavaCompile).configure {
-    dependsOn sourceSets.developmentFixture.classesTaskName
+    dependsOn sourceSets.developmentFixture.classesTaskName,
+            sourceSets.apiCompatibilityFixture.classesTaskName
     classpath += sourceSets.developmentFixture.output
+    classpath += sourceSets.apiCompatibilityFixture.output
 }
 
 tasks.named('test', Test).configure {
     classpath += sourceSets.developmentFixture.output
+    classpath += sourceSets.apiCompatibilityFixture.output
 }
 
 tasks.named(sourceSets.apiCompatibilityFixture.compileJavaTaskName, JavaCompile).configure {
@@ -199,6 +216,41 @@ tasks.named(sourceSets.apiCompatibilityFixture.compileJavaTaskName, JavaCompile)
     classpath = tasks.named('compileJava', JavaCompile).get().classpath + sourceSets.main.output
     sourceCompatibility = targetCompatibility = 8
 }
+
+def compileApi12BinaryFixture = tasks.named(
+        sourceSets.api12BinaryFixture.compileJavaTaskName,
+        JavaCompile
+)
+compileApi12BinaryFixture.configure {
+    dependsOn tasks.named(sourceSets.main.compileJavaTaskName)
+    classpath = tasks.named('compileJava', JavaCompile).get().classpath +
+            configurations.api12BinaryFixtureCompileClasspath
+    sourceCompatibility = targetCompatibility = 8
+    doFirst {
+        def candidateOutputs = sourceSets.main.output.files.collect { it.canonicalFile }
+        def leakedCandidateOutputs = classpath.files.collect { it.canonicalFile }.findAll {
+            candidateOutputs.contains(it)
+        }
+        if (!leakedCandidateOutputs.empty) {
+            throw new GradleException(
+                    "API 1.2 binary fixture classpath includes candidate output: ${leakedCandidateOutputs}")
+        }
+    }
+}
+
+def api12BinaryFixtureJar = tasks.register('api12BinaryFixtureJar', Jar) {
+    group = 'verification'
+    description = 'Packages the deobfuscated API 1.2 old-binary fixture.'
+    dependsOn sourceSets.api12BinaryFixture.classesTaskName
+    from sourceSets.api12BinaryFixture.output
+    archiveBaseName.set('jawms-api-binary-fixture')
+    archiveVersion.set('1.2')
+    archiveClassifier.set('dev')
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+
+def reobfApi12BinaryFixtureJar = tasks.named('reobfApi12BinaryFixtureJar')
 
 def apiCompatibilityFixtureJar = tasks.register('apiCompatibilityFixtureJar', Jar) {
     group = 'verification'
@@ -216,8 +268,294 @@ def reobfApiCompatibilityFixtureJar = tasks.named('reobfApiCompatibilityFixtureJ
 
 tasks.register('verifyApiCompatibilityFixture') {
     group = 'verification'
-    dependsOn reobfApiCompatibilityFixtureJar, tasks.named('reobfJar')
+    dependsOn reobfApiCompatibilityFixtureJar,
+            reobfApi12BinaryFixtureJar,
+            tasks.named('reobfJar')
     doLast {
+        def publishedApi12Files = configurations.api12PublishedArtifact.incoming.artifactView {
+            attributes {
+                attribute(
+                        Attribute.of('rfgDeobfuscatorTransformed', Boolean),
+                        false
+                )
+            }
+        }.files.files
+        if (publishedApi12Files.size() != 1) {
+            throw new GradleException(
+                    "Expected one published API 1.2 artifact, found ${publishedApi12Files}")
+        }
+        def publishedApi12 = publishedApi12Files.first()
+        def publishedDigest = java.security.MessageDigest.getInstance('SHA-256')
+                .digest(publishedApi12.bytes).encodeHex().toString().toUpperCase(Locale.ROOT)
+        if (publishedApi12.length() != 307772L
+                || publishedDigest != '41D03253AC43B241CEFD2011463975319F68F3BEA0B3D87AFD1E14B4A0DCA009') {
+            throw new GradleException(
+                    "Published API 1.2 artifact identity mismatch: ${publishedApi12}, "
+                            + "size=${publishedApi12.length()}, sha256=${publishedDigest}")
+        }
+
+        def readPublicApiClass = { byte[] bytes ->
+            def input = new DataInputStream(new ByteArrayInputStream(bytes))
+            if ((input.readInt() & 0xffffffffL) != 0xCAFEBABEL) {
+                throw new GradleException('Invalid class-file magic in API descriptor audit')
+            }
+            input.readUnsignedShort()
+            input.readUnsignedShort()
+            int constantPoolCount = input.readUnsignedShort()
+            def utf8 = new String[constantPoolCount]
+            def classNameIndexes = new int[constantPoolCount]
+            int index = 1
+            while (index < constantPoolCount) {
+                int tag = input.readUnsignedByte()
+                switch (tag) {
+                    case 1:
+                        utf8[index] = input.readUTF()
+                        break
+                    case 3:
+                    case 4:
+                        input.skipBytes(4)
+                        break
+                    case 5:
+                    case 6:
+                        input.skipBytes(8)
+                        index++
+                        break
+                    case 7:
+                        classNameIndexes[index] = input.readUnsignedShort()
+                        break
+                    case 8:
+                    case 16:
+                    case 19:
+                    case 20:
+                        input.skipBytes(2)
+                        break
+                    case 9:
+                    case 10:
+                    case 11:
+                    case 12:
+                    case 17:
+                    case 18:
+                        input.skipBytes(4)
+                        break
+                    case 15:
+                        input.skipBytes(3)
+                        break
+                    default:
+                        throw new GradleException("Unsupported constant-pool tag ${tag}")
+                }
+                index++
+            }
+
+            int classAccess = input.readUnsignedShort()
+            int thisClass = input.readUnsignedShort()
+            int superClass = input.readUnsignedShort()
+            String className = utf8[classNameIndexes[thisClass]]
+            String superName = superClass == 0 ? null : utf8[classNameIndexes[superClass]]
+            int interfaceCount = input.readUnsignedShort()
+            def interfaces = [] as Set
+            interfaceCount.times {
+                interfaces.add(utf8[classNameIndexes[input.readUnsignedShort()]])
+            }
+
+            def members = [:]
+            def readMembers = { String kind ->
+                int count = input.readUnsignedShort()
+                count.times {
+                    int access = input.readUnsignedShort()
+                    String name = utf8[input.readUnsignedShort()]
+                    String descriptor = utf8[input.readUnsignedShort()]
+                    int attributeCount = input.readUnsignedShort()
+                    attributeCount.times {
+                        input.readUnsignedShort()
+                        int length = input.readInt()
+                        int remaining = length
+                        while (remaining > 0) {
+                            int skipped = input.skipBytes(remaining)
+                            if (skipped <= 0) {
+                                input.readByte()
+                                skipped = 1
+                            }
+                            remaining -= skipped
+                        }
+                    }
+                    if ((access & (0x0001 | 0x0004)) != 0) {
+                        members.put("${kind} ${name} ${descriptor}".toString(), access)
+                    }
+                }
+            }
+            readMembers('F')
+            readMembers('M')
+            [
+                    name: className,
+                    publicClass: (classAccess & 0x0001) != 0,
+                    kind: classAccess & (0x0200 | 0x2000 | 0x4000),
+                    access: classAccess,
+                    superName: superName,
+                    interfaces: interfaces,
+                    members: members
+            ]
+        }
+
+        def candidateApi12 = tasks.named('reobfJar').get().archiveFile.get().asFile
+        def publishedArchive = new java.util.zip.ZipFile(publishedApi12)
+        def candidateArchive = new java.util.zip.ZipFile(candidateApi12)
+        try {
+            def oldApiEntries = publishedArchive.entries().findAll {
+                !it.directory
+                        && it.name.startsWith('com/mahghuuuls/jawms/api/')
+                        && it.name.endsWith('.class')
+            }
+            oldApiEntries.each { oldEntry ->
+                def oldClass = readPublicApiClass(
+                        publishedArchive.getInputStream(oldEntry).bytes)
+                if (!oldClass.publicClass) {
+                    return
+                }
+                def candidateEntry = candidateArchive.getEntry(oldEntry.name)
+                if (candidateEntry == null) {
+                    throw new GradleException(
+                            "Candidate removed public API 1.2 class ${oldClass.name}")
+                }
+                def candidateClass = readPublicApiClass(
+                        candidateArchive.getInputStream(candidateEntry).bytes)
+                if (!candidateClass.publicClass || candidateClass.kind != oldClass.kind) {
+                    throw new GradleException(
+                            "Candidate changed public API 1.2 class kind/visibility for ${oldClass.name}")
+                }
+                if (candidateClass.superName != oldClass.superName
+                        || candidateClass.interfaces != oldClass.interfaces) {
+                    throw new GradleException(
+                            "Candidate changed API 1.2 hierarchy for ${oldClass.name}: "
+                                    + "published=${oldClass.superName}/${oldClass.interfaces}, "
+                                    + "candidate=${candidateClass.superName}/${candidateClass.interfaces}")
+                }
+                if ((oldClass.access & 0x0010) == 0 && (candidateClass.access & 0x0010) != 0) {
+                    throw new GradleException(
+                            "Candidate made API 1.2 class final: ${oldClass.name}")
+                }
+                if ((oldClass.access & 0x0400) == 0 && (candidateClass.access & 0x0400) != 0) {
+                    throw new GradleException(
+                            "Candidate made API 1.2 class abstract: ${oldClass.name}")
+                }
+
+                def missingDescriptors = []
+                oldClass.members.each { descriptor, oldAccess ->
+                    Integer candidateAccess = candidateClass.members[descriptor]
+                    if (candidateAccess == null) {
+                        missingDescriptors.add(descriptor)
+                        return
+                    }
+                    boolean visibilityReduced = (oldAccess & 0x0001) != 0
+                            && (candidateAccess & 0x0001) == 0
+                    boolean staticChanged = (oldAccess & 0x0008) != (candidateAccess & 0x0008)
+                    boolean newlyFinal = (oldAccess & 0x0010) == 0
+                            && (candidateAccess & 0x0010) != 0
+                    boolean newlyAbstract = (oldAccess & 0x0400) == 0
+                            && (candidateAccess & 0x0400) != 0
+                    if (visibilityReduced || staticChanged || newlyFinal || newlyAbstract) {
+                        missingDescriptors.add(
+                                "${descriptor} (published access=${oldAccess}, candidate access=${candidateAccess})")
+                    }
+                }
+                if (!missingDescriptors.empty) {
+                    throw new GradleException(
+                            "Candidate removed or incompatibly changed API 1.2 descriptors from "
+                                    + "${oldClass.name}: ${missingDescriptors}")
+                }
+
+                def addedAbstractInstanceMethods = candidateClass.members.findAll {
+                    descriptor, candidateAccess ->
+                        descriptor.startsWith('M ')
+                                && !oldClass.members.containsKey(descriptor)
+                                && (candidateAccess & 0x0400) != 0
+                                && (candidateAccess & 0x0008) == 0
+                }.keySet()
+                if (!addedAbstractInstanceMethods.empty) {
+                    throw new GradleException(
+                            "Candidate added required abstract methods to API 1.2 type "
+                                    + "${oldClass.name}: ${addedAbstractInstanceMethods}")
+                }
+            }
+        } finally {
+            publishedArchive.close()
+            candidateArchive.close()
+        }
+
+        def candidateOutputs = sourceSets.main.output.files.collect { it.canonicalFile }
+        def api12CompileClasspath = compileApi12BinaryFixture.get().classpath.files
+                .collect { it.canonicalFile }
+        def leakedCandidateOutputs = api12CompileClasspath.findAll {
+            candidateOutputs.contains(it)
+        }
+        if (!leakedCandidateOutputs.empty) {
+            throw new GradleException(
+                    "API 1.2 binary fixture used candidate output: ${leakedCandidateOutputs}")
+        }
+
+        def api12Classes = sourceSets.api12BinaryFixture.output.classesDirs.asFileTree.matching {
+            include '**/*.class'
+        }.files
+        if (api12Classes.empty) {
+            throw new GradleException('API 1.2 binary fixture contains no classes')
+        }
+        def nonJava8Api12Classes = api12Classes.findAll { classFile ->
+            byte[] bytes = classFile.bytes
+            bytes.length < 8 || (((bytes[6] & 0xff) << 8) | (bytes[7] & 0xff)) != 52
+        }
+        if (!nonJava8Api12Classes.empty) {
+            throw new GradleException(
+                    "API 1.2 binary fixture is not Java 8 bytecode: ${nonJava8Api12Classes}")
+        }
+        def api12Bytecode = api12Classes.collect {
+            new String(it.bytes, 'ISO-8859-1')
+        }.join('\n')
+        def forbiddenApi13Names = [
+                'ClientHudContext', 'hasKnownRevision', 'getRevision', 'getContext'
+        ].findAll { api12Bytecode.contains(it) }
+        if (!forbiddenApi13Names.empty) {
+            throw new GradleException(
+                    "API 1.2 binary fixture references API 1.3 names: ${forbiddenApi13Names}")
+        }
+
+        def reobfuscatedApi12 = reobfApi12BinaryFixtureJar.get().archiveFile.get().asFile
+        def frozenApi12Digest = java.security.MessageDigest.getInstance('SHA-256')
+                .digest(reobfuscatedApi12.bytes).encodeHex().toString().toUpperCase(Locale.ROOT)
+        if (reobfuscatedApi12.length() != 4309L
+                || frozenApi12Digest != 'D5C39AAFD96A2497B76CD369102EBA1A4A9AAC368EBF46D2638774BC05529596') {
+            throw new GradleException(
+                    "Frozen reobfuscated API 1.2 fixture changed: ${reobfuscatedApi12}, "
+                            + "size=${reobfuscatedApi12.length()}, sha256=${frozenApi12Digest}")
+        }
+        def api12Archive = new java.util.zip.ZipFile(reobfuscatedApi12)
+        try {
+            def api12Entries = api12Archive.entries().findAll {
+                !it.directory && it.name.endsWith('.class')
+            }
+            if (api12Entries.empty) {
+                throw new GradleException('Reobfuscated API 1.2 fixture contains no classes')
+            }
+            def invalidApi12Entries = api12Entries.findAll { entry ->
+                byte[] bytes = api12Archive.getInputStream(entry).bytes
+                bytes.length < 8 || (((bytes[6] & 0xff) << 8) | (bytes[7] & 0xff)) != 52
+            }*.name
+            if (!invalidApi12Entries.empty) {
+                throw new GradleException(
+                        "Reobfuscated API 1.2 fixture is not Java 8 bytecode: ${invalidApi12Entries}")
+            }
+            def reobfuscatedApi12Bytecode = api12Entries.collect { entry ->
+                new String(api12Archive.getInputStream(entry).bytes, 'ISO-8859-1')
+            }.join('\n')
+            def leakedApi13Names = [
+                    'ClientHudContext', 'hasKnownRevision', 'getRevision', 'getContext'
+            ].findAll { reobfuscatedApi12Bytecode.contains(it) }
+            if (!leakedApi13Names.empty) {
+                throw new GradleException(
+                        "Reobfuscated API 1.2 fixture references API 1.3 names: ${leakedApi13Names}")
+            }
+        } finally {
+            api12Archive.close()
+        }
+
         def forbiddenImports = sourceSets.apiCompatibilityFixture.allJava.files.findAll { source ->
             def text = source.getText('UTF-8')
             text.contains('com.mahghuuuls.jawms.internal.')
@@ -288,6 +626,7 @@ tasks.register('verifyApiCompatibilityFixture') {
         def packagedFixtures = zipTree(tasks.named('reobfJar').get().archiveFile.get().asFile).matching {
             include 'com/mahghuuuls/jawms/testfixture/**'
             include 'example/jawmsaddon/**'
+            include 'example/jawmsapi12/**'
         }.files
         if (!packagedFixtures.empty) {
             throw new GradleException("Development/API fixture leaked into the production jar: ${packagedFixtures}")
@@ -306,6 +645,7 @@ tasks.register('verifyApiCompatibilityFixture') {
                     'THIRD-PARTY-NOTICES.md',
                     'com/mahghuuuls/jawms/api/ManaApi.class',
                     'com/mahghuuuls/jawms/api/client/ClientManaApi.class',
+                    'com/mahghuuuls/jawms/api/client/ClientHudContext.class',
                     'com/mahghuuuls/jawms/api/client/ClientManaSnapshot.class',
                     'com/mahghuuuls/jawms/api/client/ManaHudRenderEvent.class'
             ]
@@ -389,10 +729,12 @@ tasks.named('check').configure {
 ['runClient', 'runServer'].each { runTaskName ->
     tasks.named(runTaskName).configure {
         dependsOn sourceSets.developmentFixture.classesTaskName,
-                sourceSets.apiCompatibilityFixture.classesTaskName
+                sourceSets.apiCompatibilityFixture.classesTaskName,
+                reobfApi12BinaryFixtureJar
         doFirst {
             classpath += sourceSets.developmentFixture.output
             classpath += sourceSets.apiCompatibilityFixture.output
+            classpath += files(reobfApi12BinaryFixtureJar.get().archiveFile.get().asFile)
         }
     }
 }

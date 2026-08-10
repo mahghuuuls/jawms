@@ -1,6 +1,7 @@
 package com.mahghuuuls.jawms.client;
 
 import com.mahghuuuls.jawms.api.client.ClientManaApi;
+import com.mahghuuuls.jawms.api.client.ClientHudContext;
 import com.mahghuuuls.jawms.api.client.ClientManaSnapshot;
 import com.mahghuuuls.jawms.api.client.ManaHudRenderEvent;
 import net.minecraft.client.Minecraft;
@@ -31,9 +32,12 @@ public final class ManaHudRenderer {
         ScaledResolution resolution = new ScaledResolution(minecraft);
         ManaHudRenderEvent hudEvent = new ManaHudRenderEvent(
                 snapshot,
-                event.getPartialTicks(),
-                resolution.getScaledWidth(),
-                resolution.getScaledHeight()
+                ClientHudContext.known(
+                        minecraft.player.capabilities.isCreativeMode,
+                        event.getPartialTicks(),
+                        resolution.getScaledWidth(),
+                        resolution.getScaledHeight()
+                )
         );
         if (MinecraftForge.EVENT_BUS.post(hudEvent)) {
             return;

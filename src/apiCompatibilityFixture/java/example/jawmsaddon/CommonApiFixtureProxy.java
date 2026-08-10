@@ -14,9 +14,11 @@ public class CommonApiFixtureProxy {
     public void initialize() {
         ClientManaSnapshot snapshot = ClientManaApi.getSnapshot();
         LOGGER.info(
-                "JAWMS side-safe client API probe: api={}, available={}",
+                "JAWMS side-safe client API probe: api={}, available={}, revisionKnown={}, revision={}",
                 ManaApi.API_VERSION,
-                snapshot.isAvailable()
+                snapshot.isAvailable(),
+                snapshot.hasKnownRevision(),
+                snapshot.hasKnownRevision() ? Long.toString(snapshot.getRevision()) : "unknown"
         );
     }
 }

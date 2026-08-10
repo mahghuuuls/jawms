@@ -10,7 +10,8 @@ public final class ClientManaApi {
 
     /**
      * Returns one immutable snapshot. It is unavailable before initial client
-     * synchronization, after disconnect, and on a dedicated server.
+     * synchronization, after disconnect, and on a dedicated server. A known
+     * revision identifies accepted state only within the current connection.
      */
     public static ClientManaSnapshot getSnapshot() {
         return ClientManaViewBridge.getSnapshot();

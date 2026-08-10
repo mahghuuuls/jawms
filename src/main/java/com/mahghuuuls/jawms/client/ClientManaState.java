@@ -50,7 +50,12 @@ public final class ClientManaState {
             elementSpellCostMultiplier.clear();
             elementSpellCostMultiplier.putAll(elementCostMultiplier);
             available = true;
-            snapshot = ClientManaSnapshot.available(current, maximum, regeneration);
+            snapshot = ClientManaSnapshot.available(
+                    current,
+                    maximum,
+                    regeneration,
+                    incomingRevision
+            );
         }
     }
 
