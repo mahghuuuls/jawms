@@ -1,4 +1,4 @@
-<span style="color:#d6a100">**Beta release:**</span> JAWMS has received extensive automated and in-game testing, but its broad configuration and integration surface still needs wider use across real modpacks. Public API `1.2` has compatibility coverage through separately compiled fixtures, but it has not yet been exercised by an independently developed addon.
+<span style="color:#d6a100">**Beta release:**</span> JAWMS has received extensive automated and in-game testing, but its broad configuration and integration surface still needs wider use across real modpacks. Published `0.1.0` exposes API `1.2`; the additive API `1.3` development candidate has compatibility coverage through separately compiled fixtures, but it has no published file identity and has not yet been exercised by a completed independently developed addon.
 
 <span style="color:#e05252">**Temporary Cleanroom note (August 7, 2026):**</span> Cleanroom `0.6.8-alpha` reports its built-in MixinBooter as `11.8`, while JAWMS requires `11.11`. In `config/forge_early.cfg`, use:
 
@@ -195,7 +195,7 @@ JAWMS includes a Java 8 API for addon mods. Addons can:
 - Observe mana-state changes and provide synchronized tooltip text.
 - Read synchronized client mana state and replace the built-in HUD without depending on internal implementation classes.
 
-The supported API is version `1.2` under `com.mahghuuuls.jawms.api` and its documented client subpackage.
+Published JAWMS `0.1.0` provides API `1.2`; the current development candidate provides additive API `1.3`, with direct distribution testing pending a real published file identity. The canonical [Addon Development Guide](https://github.com/mahghuuuls/jawms/blob/main/docs/ADDON-DEVELOPMENT.md) contains the exact dependency recipe, release/API matrix, lifecycle rules, and replacement-HUD rendering contract. The supported package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`.
 
 ## Requirements
 

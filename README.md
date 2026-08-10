@@ -11,7 +11,7 @@ The current `0.1.0` release is a public beta. See the [detailed mod page](MOD-PA
 - Maximum mana, mana regeneration, post-cast regeneration delay, flasks, Wizardry armor, and equipped-item modifiers are configurable.
 - Storage, Condenser, Siphon, Melee, four mana artefacts, Demonic Seal, and Font of Mana have configurable player-mana replacements.
 - The built-in blue HUD supports visibility, text, scale, screen anchor, offsets, dimensions, and fill direction. It can be disabled for an addon-provided replacement.
-- Public API `1.2` supports authoritative mana operations, item and contextual modifier providers, state-change events, tooltip helpers, and a read-only client HUD view.
+- The public API supports authoritative mana operations, item and contextual modifier providers, state-change events, tooltip helpers, and a read-only client HUD/replacement view.
 - Baubles equipment is supported when Baubles or a compatible provider is installed.
 
 ## Configuration
@@ -37,7 +37,9 @@ Current Cleanroom releases may require the temporary MixinBooter version overrid
 
 ## For Addon Developers
 
-The supported Java 8 API is under `com.mahghuuuls.jawms.api`, with read-only client HUD types under `com.mahghuuuls.jawms.api.client`. Only those documented packages are public compatibility surfaces; `com.mahghuuuls.jawms.internal` is internal implementation.
+Use the canonical [Addon Development Guide](docs/ADDON-DEVELOPMENT.md) for the exact published dependency recipe, release/API matrix, server API, modifier units, client snapshot semantics, replacement-HUD lifecycle, and cache-safe rendering obligations.
+
+Published JAWMS `0.1.0` exposes API `1.2`. The current development candidate exposes additive API `1.3`, but it has no published CurseMaven file identity yet. The supported Java 8 package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`; `com.mahghuuuls.jawms.internal` is implementation detail.
 
 ## License
 

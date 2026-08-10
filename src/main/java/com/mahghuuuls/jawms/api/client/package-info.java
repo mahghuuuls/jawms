@@ -1,5 +1,7 @@
 /**
- * Read-only, dedicated-server-safe public values and hooks for client mana
- * presentation. These types expose no Minecraft client objects.
+ * API 1.3 read-only, dedicated-server-safe public values and hooks for client
+ * mana presentation. These types expose no Minecraft client objects. See the
+ * <a href="https://github.com/mahghuuuls/jawms/blob/main/docs/ADDON-DEVELOPMENT.md">canonical addon-development guide</a>
+ * for snapshot semantics and the Chat-phase replacement-HUD contract.
  */
 package com.mahghuuuls.jawms.api.client;

@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Additive public API `1.3` client HUD context with known/unknown Creative state, scaled dimensions, and partial ticks.
+- Connection-local synchronized snapshot revisions with explicit unknown revision semantics and complete immutable value equality.
+- Canonical addon-development guide with the published `0.1.0` dependency recipe, release/API matrix, HUD ownership convention, rendering-state contract, and testing limitations.
+
+### Compatibility
+
+- Retained all documented API `1.2` descriptors and verified an unchanged Java 8 API-`1.2` binary against the API-`1.3` candidate.
+- Direct CurseMaven consumption of API `1.3` remains pending until the candidate receives a real published file identity; no provisional coordinate is claimed.
+
 ## [0.1.0] - 2026-08-07
 
 ### Added
