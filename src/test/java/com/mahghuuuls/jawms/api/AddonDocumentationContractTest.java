@@ -27,8 +27,10 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("zone.rong:mixinbooter:11.11"));
         assertTrue(guide.contains("Published `0.1.0` beta | `8597828` | `1.2`"));
         assertTrue(guide.contains(
-                "Current development candidate | Not published; file identity pending | `1.3`"
+                "Release-ready `0.2.0` beta | Not published; file identity pending | `1.3`"
         ));
+        assertTrue(guide.contains("jawms@[0.1.0,0.3.0)"));
+        assertFalse(guide.contains("jawms@[0.1.0,0.2.0)"));
         assertFalse(guide.contains(
                 "curse.maven:just-another-wizardry-mana-system-1643697:PENDING"
         ));
@@ -49,7 +51,7 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("event.getScaledHeight()"));
         assertTrue(guide.contains("Do not copy the published `0.1.0` dependency"));
         int publishedFlow = guide.indexOf("The following minimal flow compiles");
-        int candidateDelta = guide.indexOf("The unpublished API-`1.3` candidate");
+        int candidateDelta = guide.indexOf("Release-ready JAWMS `0.2.0`");
         assertTrue(publishedFlow >= 0);
         assertTrue(candidateDelta > publishedFlow);
         assertFalse(guide.substring(publishedFlow, candidateDelta).contains("getContext()"));
@@ -87,10 +89,10 @@ class AddonDocumentationContractTest {
         assertTrue(modPage.contains("(" + GUIDE_URL + ")"));
         assertTrue(rootPackage.contains(GUIDE_URL));
         assertTrue(clientPackage.contains(GUIDE_URL));
-        assertTrue(readme.contains("Published JAWMS `0.1.0` exposes API `1.2`"));
-        assertTrue(readme.contains("development candidate exposes additive API `1.3`"));
-        assertTrue(modPage.contains("Published JAWMS `0.1.0` provides API `1.2`"));
-        assertTrue(modPage.contains("development candidate provides additive API `1.3`"));
+        assertTrue(readme.contains("JAWMS `0.2.0` exposes additive API `1.3`"));
+        assertTrue(readme.contains("documented API `1.2` binary surface"));
+        assertTrue(modPage.contains("JAWMS `0.2.0` provides additive API `1.3`"));
+        assertTrue(modPage.contains("documented API `1.2` binary surface"));
     }
 
     private static String read(String relativePath) throws IOException {

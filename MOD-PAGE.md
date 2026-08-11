@@ -1,13 +1,11 @@
-<span style="color:#d6a100">**Beta release:**</span> JAWMS has received extensive automated and in-game testing, but its broad configuration and integration surface still needs wider use across real modpacks. Published `0.1.0` exposes API `1.2`; the additive API `1.3` development candidate has compatibility coverage through separately compiled fixtures, but it has no published file identity and has not yet been exercised by a completed independently developed addon.
+<span style="color:#d6a100">**Beta release:**</span> JAWMS has received extensive automated and in-game testing, but its broad configuration and integration surface still needs wider use across real modpacks. JAWMS `0.2.0` exposes additive API `1.3` and retains the documented API `1.2` binary surface, but API `1.3` has not yet been exercised by a completed independently developed addon.
 
-<span style="color:#e05252">**Temporary Cleanroom note (August 7, 2026):**</span> Cleanroom `0.6.8-alpha` reports its built-in MixinBooter as `11.8`, while JAWMS requires `11.11`. In `config/forge_early.cfg`, use:
+<span style="color:#e05252">**Cleanroom note:**</span> Cleanroom remains a target, but JAWMS `0.2.0` has not been validated there. Installations that report a built-in MixinBooter version below `11.11` require this override in `config/forge_early.cfg`:
 
 ```properties
 B:CUSTOM_BUILT_IN_MOD_VERSION=true
 S:MIXIN_BOOTER_VERSION=11.11
 ```
-
-This temporary override has been tested successfully and should become unnecessary when Cleanroom updates its reported MixinBooter version.
 
 ---
 
@@ -195,11 +193,11 @@ JAWMS includes a Java 8 API for addon mods. Addons can:
 - Observe mana-state changes and provide synchronized tooltip text.
 - Read synchronized client mana state and replace the built-in HUD without depending on internal implementation classes.
 
-Published JAWMS `0.1.0` provides API `1.2`; the current development candidate provides additive API `1.3`, with direct distribution testing pending a real published file identity. The canonical [Addon Development Guide](https://github.com/mahghuuuls/jawms/blob/main/docs/ADDON-DEVELOPMENT.md) contains the exact dependency recipe, release/API matrix, lifecycle rules, and replacement-HUD rendering contract. The supported package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`.
+JAWMS `0.2.0` provides additive API `1.3` while retaining the documented API `1.2` binary surface. Its CurseMaven file identity will be added to the canonical [Addon Development Guide](https://github.com/mahghuuuls/jawms/blob/main/docs/ADDON-DEVELOPMENT.md) after publication; the guide already contains the release/API matrix, lifecycle rules, and replacement-HUD rendering contract. The supported package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`.
 
 ## Requirements
 
-JAWMS targets Minecraft `1.12.2` on Forge and Cleanroom and must be installed on both the client and server for multiplayer. Current Cleanroom releases may require the temporary setup noted at the top of this page.
+JAWMS targets Minecraft `1.12.2` on standard Forge and must be installed on both the client and server for multiplayer. Cleanroom remains a compatibility target, but JAWMS `0.2.0` has not been validated there and may require the setup noted at the top of this page.
 
 Required:
 

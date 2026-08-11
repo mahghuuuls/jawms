@@ -14,7 +14,7 @@ JAWMS mod versions, CurseForge file identities, and API versions are separate id
 | JAWMS distribution | CurseForge file | Public API | Direct dependency status |
 | --- | --- | --- | --- |
 | Published `0.1.0` beta | `8597828` | `1.2` | Verified from a clean ForgeDevEnv consumer |
-| Current development candidate | Not published; file identity pending | `1.3` | Source and compatibility fixtures only; do not invent a CurseMaven coordinate |
+| Release-ready `0.2.0` beta | Not published; file identity pending | `1.3` | Source, old-binary, and launched compatibility fixtures; do not invent a CurseMaven coordinate |
 
 API major `1` follows an additive compatibility policy. A higher minor version retains the documented public descriptors from supported earlier minor versions and does not add required methods to an already-published interface. A breaking change requires another major version or a parallel opt-in contract. A type may be deprecated during major `1`, but deprecation does not authorize its removal from a later `1.x` release.
 
@@ -65,7 +65,7 @@ Declare the same runtime requirements in the addon mod's Forge metadata. The `@M
         modid = "exampleaddon",
         name = "Example JAWMS Addon",
         version = "1.0.0",
-        dependencies = "required-after:jawms@[0.1.0,0.2.0);"
+        dependencies = "required-after:jawms@[0.1.0,0.3.0);"
                 + "required-after:ebwizardry@[4.3.19,4.3.20);"
                 + "required-after:mixinbooter@[11.11,12.0)"
 )
@@ -77,7 +77,7 @@ Also list the three ranges in `mcmod.info` if that file is part of the project:
 
 ```json
 "requiredMods": [
-  "jawms@[0.1.0,0.2.0)",
+  "jawms@[0.1.0,0.3.0)",
   "ebwizardry@[4.3.19,4.3.20)",
   "mixinbooter@[11.11,12.0)"
 ]
@@ -236,7 +236,7 @@ public void renderMana(ManaHudRenderEvent event) {
 }
 ```
 
-The unpublished API-`1.3` candidate adds immutable `ClientHudContext`. After API `1.3` receives a real distribution file and the matrix/metadata recipe is updated, a replacement may add a known-state Creative policy before drawing:
+Release-ready JAWMS `0.2.0` adds immutable `ClientHudContext` in API `1.3`. After the release receives a real distribution file and the matrix/dependency recipe is updated, a replacement may add a known-state Creative policy before drawing:
 
 ```java
 ClientHudContext context = event.getContext();
@@ -247,7 +247,7 @@ if (hideInCreative
 }
 ```
 
-Do not copy the published `0.1.0` dependency or metadata ranges and then use `getContext()`: API `1.2` does not contain that method. Do not invent the future API-`1.3` file ID or minimum mod version; both remain pending publication.
+Do not copy the published `0.1.0` dependency coordinate and then use `getContext()`: API `1.2` does not contain that method. JAWMS `0.2.0` is the minimum mod version for API `1.3`, but its CurseForge file ID remains pending publication and must not be invented.
 
 This is best-effort ownership, not a provider-selection system. An earlier subscriber can cancel first, in which case `receiveCanceled=false` skips this subscriber. If two replacements use the same priority, Forge registration order decides which runs first; JAWMS does not define a stable winner.
 
@@ -281,4 +281,4 @@ Also test:
 - dedicated-server startup with public client API classes present but no client linkage;
 - the exact published dependency coordinate in a clean workspace without resolving JAWMS from `mavenLocal`, a copied JAWMS JAR, or an unpublished file ID.
 
-The current API `1.3` candidate has source, Java 8, descriptor, old-binary, and launched-fixture coverage. It has not yet been consumed by a completed independently developed addon, and direct CurseMaven verification remains pending until an API-`1.3` release receives a real immutable file ID.
+API `1.3` in release-ready JAWMS `0.2.0` has source, Java 8, descriptor, old-binary, and launched-fixture coverage. It has not yet been consumed by a completed independently developed addon, and direct CurseMaven verification remains pending until the release receives a real immutable file ID.

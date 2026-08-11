@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] - 2026-08-11
 
 ### Added
 
@@ -10,8 +10,12 @@
 
 ### Compatibility
 
-- Retained all documented API `1.2` descriptors and verified an unchanged Java 8 API-`1.2` binary against the API-`1.3` candidate.
-- Direct CurseMaven consumption of API `1.3` remains pending until the candidate receives a real published file identity; no provisional coordinate is claimed.
+- Retained all documented API `1.2` descriptors and verified an unchanged Java 8 API-`1.2` binary against API `1.3`.
+- Direct CurseMaven consumption of API `1.3` remains pending until the release receives a real published file identity; no provisional coordinate is claimed.
+
+### Known Limitations
+
+- Cleanroom remains a compatibility target, but JAWMS `0.2.0` has not been validated there.
 
 ## [0.1.0] - 2026-08-07
 
