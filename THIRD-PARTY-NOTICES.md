@@ -37,8 +37,8 @@ copied into this repository:
   targeted at version 4.3.19. Its published source and binary license terms
   remain with its authors.
 - [MixinBooter](https://www.curseforge.com/minecraft/mc-mods/mixin-booter),
-  compiled against version 11.11 and accepted at runtime from 11.11 up to, but
-  excluding, 12.0. MixinBooter is published under LGPL-2.1.
+  compiled against version 11.8 and accepted at runtime from version 11.8 or
+  newer. MixinBooter is published under LGPL-2.1.
 - [Baubles](https://www.curseforge.com/minecraft/mc-mods/baubles), compiled
   against version 1.5.2 as an optional integration.
 

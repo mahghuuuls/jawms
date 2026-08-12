@@ -31,7 +31,7 @@ public final class JustAnotherWizardryManaSystemMod {
 
     public static final String DEPENDENCIES =
             "required-after:ebwizardry@[4.3.19,4.3.20);"
-                    + "required-after:mixinbooter@[11.11,12.0);"
+                    + "required-after:mixinbooter@[11.8,);"
                     + "after:baubles@[1.5.2,)";
 
     public static final Logger LOGGER = LogManager.getLogger(Tags.MOD_NAME);

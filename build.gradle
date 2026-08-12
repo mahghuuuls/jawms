@@ -149,7 +149,7 @@ dependencies {
         annotationProcessor (mixin) {
             transitive = false
         }
-        // MixinBooter 11.11 embeds Mixin 0.8.7; keep the compile-time
+        // MixinBooter 11.8 follows Mixin 0.8.7; keep the compile-time
         // obfuscation processor aligned with the packaged runtime.
         annotationProcessor 'org.spongepowered:mixin:0.8.7:processor'
     }
@@ -666,9 +666,21 @@ tasks.register('verifyApiCompatibilityFixture') {
             }
 
             def metadataText = archive.getInputStream(archive.getEntry('mcmod.info')).getText('UTF-8')
+            def expectedMixinRange = "mixinbooter@[${propertyString('mixin_booter_version')},)"
+            def boundedMixinRange = metadataText =~ /mixinbooter@\[[^,]+,[^)]+\)/
             if (!metadataText.contains('ebwizardry@[4.3.19,4.3.20)')
-                    || !metadataText.contains('mixinbooter@[11.11,12.0)')) {
-                throw new GradleException('Production metadata does not pin the approved dependency ranges.')
+                    || !metadataText.contains(expectedMixinRange)
+                    || metadataText.count('mixinbooter@') != 1
+                    || boundedMixinRange.find()) {
+                throw new GradleException('Production metadata does not contain exactly the approved open MixinBooter range.')
+            }
+
+            def modClassEntry = archive.getEntry(
+                    'com/mahghuuuls/jawms/JustAnotherWizardryManaSystemMod.class'
+            )
+            def modClassText = archive.getInputStream(modClassEntry).getText('ISO-8859-1')
+            if (!modClassText.contains("required-after:${expectedMixinRange};")) {
+                throw new GradleException('Authoritative @Mod metadata does not match the selected MixinBooter build input.')
             }
 
             def nonJava8Entries = archive.entries().findAll { entry ->

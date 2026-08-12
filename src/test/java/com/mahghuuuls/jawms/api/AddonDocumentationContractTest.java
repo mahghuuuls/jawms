@@ -25,6 +25,11 @@ class AddonDocumentationContractTest {
         ));
         assertTrue(guide.contains("curse.maven:electroblobs-wizardry-265642:8320066"));
         assertTrue(guide.contains("zone.rong:mixinbooter:11.11"));
+        assertTrue(guide.contains("Published `0.1.0` Dependency Recipe"));
+        assertTrue(guide.contains("Release-ready `0.2.0` MixinBooter Delta"));
+        assertTrue(guide.contains("zone.rong:mixinbooter:11.8"));
+        assertTrue(guide.contains("required-after:mixinbooter@[11.8,)"));
+        assertTrue(guide.contains("historical `[11.11,12.0)` range"));
         assertTrue(guide.contains("Published `0.1.0` beta | `8597828` | `1.2`"));
         assertTrue(guide.contains(
                 "Release-ready `0.2.0` beta | Not published; file identity pending | `1.3`"

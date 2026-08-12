@@ -85,6 +85,22 @@ Also list the three ranges in `mcmod.info` if that file is part of the project:
 
 Do not rely on CurseMaven transitive metadata to install Wizardry or MixinBooter. They are explicit runtime dependencies of JAWMS on standard Forge and must be present in development and in the installed modpack.
 
+### Release-ready `0.2.0` MixinBooter Delta
+
+The published `0.1.0` recipe above is intentionally historical and must continue to match that immutable JAR. For the release-ready `0.2.0` candidate, use exact MixinBooter `11.8` as the development dependency:
+
+```groovy
+runtimeOnly 'zone.rong:mixinbooter:11.8'
+```
+
+Its `@Mod` and `mcmod.info` requirements are both open-ended from the proven minimum:
+
+```text
+required-after:mixinbooter@[11.8,)
+```
+
+The open range means JAWMS accepts MixinBooter `11.8` or newer; it does not mean every future release has been tested. Exact standalone `11.8` and current `11.13` are the explicit standard-Forge validation lanes for this candidate. Do not copy the historical `[11.11,12.0)` range into `0.2.0` addon metadata.
+
 If addon source directly uses Wizardry types exposed by the server API, such as `Spell` or `Element`, change the Wizardry declaration from `runtimeOnly` to `implementation` while keeping the same deobfuscated coordinate. The replacement-HUD-only example does not directly use those types, so `runtimeOnly` is sufficient there.
 
 For a ForgeDevEnv addon that does not use its own Mixins, make both settings explicit in `gradle.properties`:
