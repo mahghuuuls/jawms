@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0] - 2026-08-12
+
+### Changed
+
+- Added companion-addon links for JAWMS Hud Styles and JAWMS Classic Bar Integration.
+- Updated the addon guide with the published `0.2.0` / API `1.3` CurseMaven file and real-addon adoption.
+
+### Compatibility
+
+- Lowered the MixinBooter requirement to `11.8` and removed its upper bound. Exact standalone `11.8` and `11.13` passed standard-Forge client/server validation; later accepted versions remain untested until separately verified.
+- Cleanroom `0.6.10-alpha` accepted its built-in MixinBooter identity `11.8` and initialized JAWMS without a version override. In-world Cleanroom behavior remains unverified because an unrelated modpack GUI failure blocked world selection.
+
 ## [0.2.0] - 2026-08-11
 
 ### Added
@@ -11,12 +23,7 @@
 ### Compatibility
 
 - Retained all documented API `1.2` descriptors and verified an unchanged Java 8 API-`1.2` binary against API `1.3`.
-- Direct CurseMaven consumption of API `1.3` remains pending until the release receives a real published file identity; no provisional coordinate is claimed.
-- Lowered the MixinBooter requirement to `11.8` and removed its upper bound. Exact standalone `11.8` and `11.13` passed standard-Forge client/server validation; later accepted versions remain untested until separately verified.
-
-### Known Limitations
-
-- JAWMS initialized and reached the main menu in an owner-managed Cleanroom `0.6.10-alpha` modpack using Cleanroom's built-in MixinBooter identity `11.8` without a JAWMS-specific override. An unrelated modpack GUI linkage failure blocked world-entry/cast/HUD validation, so general Cleanroom compatibility is not claimed.
+- Published API `1.3` as CurseForge file `8621418` for direct addon consumption.
 
 ## [0.1.0] - 2026-08-07
 
