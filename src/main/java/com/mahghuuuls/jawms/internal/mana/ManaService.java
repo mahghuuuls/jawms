@@ -4,6 +4,7 @@ import com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod;
 import com.mahghuuuls.jawms.api.IManaService;
 import com.mahghuuuls.jawms.api.ManaCauses;
 import com.mahghuuuls.jawms.api.ManaMutationResult;
+import com.mahghuuuls.jawms.api.ManaMutationFailure;
 import com.mahghuuuls.jawms.api.ManaPublicState;
 import com.mahghuuuls.jawms.api.ManaStateChangeEvent;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
@@ -104,7 +105,7 @@ public final class ManaService implements IManaService {
         requireNonNegative(target);
         return mutate(player, target, requireCause(cause), (state) -> {
             state.setCurrentMana(target);
-            return true;
+            return ManaMutationFailure.NONE;
         });
     }
 
@@ -117,7 +118,7 @@ public final class ManaService implements IManaService {
         requireNonNegative(amount);
         return mutate(player, amount, requireCause(cause), (state) -> {
             state.restore(amount);
-            return true;
+            return ManaMutationFailure.NONE;
         });
     }
 
@@ -128,7 +129,11 @@ public final class ManaService implements IManaService {
             ResourceLocation cause
     ) {
         requireNonNegative(amount);
-        return mutate(player, amount, requireCause(cause), (state) -> state.tryConsume(amount));
+        return mutate(player, amount, requireCause(cause), (state) ->
+                state.tryConsume(amount)
+                        ? ManaMutationFailure.NONE
+                        : ManaMutationFailure.INSUFFICIENT_MANA
+        );
     }
 
     @Override
@@ -140,7 +145,7 @@ public final class ManaService implements IManaService {
         requireNonNegative(maximumAmount);
         return mutate(player, maximumAmount, requireCause(cause), (state) -> {
             state.drainUpTo(maximumAmount);
-            return true;
+            return ManaMutationFailure.NONE;
         });
     }
 
@@ -154,14 +159,14 @@ public final class ManaService implements IManaService {
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
             ManaPublicState oldState = snapshot(state);
-            boolean successful = mutation.apply(state);
+            ManaMutationFailure failure = mutation.apply(state);
             ManaPublicState newState = snapshot(state);
             if (!oldState.equals(newState)) {
                 synchronizeDisplayChange(player, oldState, newState, state);
                 publishTransition(player, oldState, newState, cause, false);
             }
             return new ManaMutationResult(
-                    successful,
+                    failure,
                     requestedAmount,
                     newState.getCurrentMana() - oldState.getCurrentMana(),
                     cause,
@@ -590,6 +595,6 @@ public final class ManaService implements IManaService {
     }
 
     private interface StateMutation {
-        boolean apply(ManaState state);
+        ManaMutationFailure apply(ManaState state);
     }
 }

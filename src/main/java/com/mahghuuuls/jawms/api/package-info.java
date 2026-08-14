@@ -1,5 +1,5 @@
 /**
- * Public, Java 8-compatible JAWMS API, version 1.3.
+ * Public, Java 8-compatible JAWMS API, version 1.4.
  *
  * <p>Addons should depend only on types in this package and its documented
  * {@code client} package. The root API exposes

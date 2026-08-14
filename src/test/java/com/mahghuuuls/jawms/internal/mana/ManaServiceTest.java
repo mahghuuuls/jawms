@@ -1,6 +1,7 @@
 package com.mahghuuuls.jawms.internal.mana;
 
 import com.mahghuuuls.jawms.api.ManaMutationResult;
+import com.mahghuuuls.jawms.api.ManaMutationFailure;
 import com.mahghuuuls.jawms.api.ManaCauses;
 import com.mahghuuuls.jawms.api.ManaPublicState;
 import com.mahghuuuls.jawms.api.ManaStateChangeEvent;
@@ -90,8 +91,13 @@ class ManaServiceTest {
         assertTrue(set.isSuccessful());
         assertEquals(-40, set.getActualDelta());
         assertFalse(failedConsume.isSuccessful());
+        assertEquals(ManaMutationFailure.INSUFFICIENT_MANA, failedConsume.getFailure());
+        assertEquals(30, failedConsume.getRequestedAmount());
         assertEquals(0, failedConsume.getActualDelta());
+        assertEquals(cause, failedConsume.getCause());
+        assertEquals(failedConsume.getOldState(), failedConsume.getNewState());
         assertTrue(exactConsume.isSuccessful());
+        assertEquals(ManaMutationFailure.NONE, exactConsume.getFailure());
         assertEquals(-20, exactConsume.getActualDelta());
         assertEquals(60, restore.getActualAmount());
         assertEquals(60, drain.getActualAmount());
@@ -99,6 +105,22 @@ class ManaServiceTest {
         assertEquals(4, listener.events.size());
         assertEquals(cause, listener.events.get(0).getCause());
         assertEquals(-40, listener.events.get(0).getActualManaDelta());
+    }
+
+    @Test
+    void successfulBoundedNoOpsReportNoFailure() {
+        PlayerFixture fixture = playerFixture();
+        ManaService service = new ManaService();
+        ResourceLocation cause = new ResourceLocation("testaddon", "bounded_noop");
+
+        assertEquals(ManaMutationFailure.NONE,
+                service.setCurrentMana(fixture.player, 60, cause).getFailure());
+        assertEquals(ManaMutationFailure.NONE,
+                service.restoreMana(fixture.player, 5, cause).getFailure());
+        assertEquals(ManaMutationFailure.NONE,
+                service.consumeMana(fixture.player, 0, cause).getFailure());
+        assertEquals(ManaMutationFailure.NONE,
+                service.drainMana(fixture.player, 0, cause).getFailure());
     }
 
     @Test

@@ -3,6 +3,7 @@ package example.jawmsaddon;
 import com.mahghuuuls.jawms.api.IManaService;
 import com.mahghuuuls.jawms.api.ManaApi;
 import com.mahghuuuls.jawms.api.ManaMutationResult;
+import com.mahghuuuls.jawms.api.ManaMutationFailure;
 import com.mahghuuuls.jawms.api.ManaContribution;
 import com.mahghuuuls.jawms.api.ManaPublicState;
 import com.mahghuuuls.jawms.api.ManaStateChangeEvent;
@@ -181,6 +182,10 @@ public final class ApiConsumerFixture {
 
     public static ManaMutationResult consume(EntityPlayer player, int amount) {
         return ManaApi.getManaService().consumeMana(player, amount, CAUSE);
+    }
+
+    public static ManaMutationFailure consumeFailure(EntityPlayer player, int amount) {
+        return consume(player, amount).getFailure();
     }
 
     public static ManaMutationResult drain(EntityPlayer player, int amount) {

@@ -42,11 +42,42 @@ class ManaPublicApiValuesTest {
         );
 
         assertTrue(result.isSuccessful());
+        assertEquals(ManaMutationFailure.NONE, result.getFailure());
         assertEquals(15, result.getActualAmount());
         assertEquals(-15, result.getActualDelta());
         assertEquals(cause, result.getCause());
         assertEquals(oldState, result.getOldState());
         assertEquals(newState, result.getNewState());
+    }
+
+    @Test
+    void mutationResultMapsLegacyFailureAndEnforcesTypedOutcomeInvariant() {
+        ManaPublicState state = state(20, 50, 2.0D, 40L, 0L, true);
+        ResourceLocation cause = new ResourceLocation("addon", "consume");
+
+        ManaMutationResult legacyFailure = new ManaMutationResult(
+                false, 30, 0, cause, state, state
+        );
+
+        assertEquals(ManaMutationFailure.REJECTED, legacyFailure.getFailure());
+        ManaMutationResult explicitSuccess = new ManaMutationResult(
+                ManaMutationFailure.NONE,
+                0,
+                0,
+                cause,
+                state,
+                state
+        );
+        ManaMutationResult explicitFailure = new ManaMutationResult(
+                ManaMutationFailure.INSUFFICIENT_MANA,
+                30,
+                0,
+                cause,
+                state,
+                state
+        );
+        assertTrue(explicitSuccess.isSuccessful());
+        assertFalse(explicitFailure.isSuccessful());
     }
 
     @Test

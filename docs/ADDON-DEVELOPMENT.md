@@ -142,6 +142,10 @@ public void restoreFromPotion(EntityPlayer player) {
 
 Mutation amounts are non-negative whole mana points. `setCurrentMana` clamps to the effective maximum, `restoreMana` restores up to the requested amount, `consumeMana` consumes the exact amount or changes nothing, and `drainMana` drains up to the requested amount. Every mutation needs a namespaced cause, applies to Creative players, synchronizes automatically, and does not start the post-cast regeneration delay.
 
+API `1.4` adds `ManaMutationResult.getFailure()`. `setCurrentMana`, `restoreMana`, and `drainMana` return successful `NONE`, including clamped or bounded no-ops. An affordable `consumeMana`, including consuming zero, also returns successful `NONE`; an exact consume that cannot be paid returns unsuccessful `INSUFFICIENT_MANA` without changing state. The service does not otherwise return `REJECTED`; the retained constructor uses that conservative reason only when an external legacy caller constructs an unsuccessful result.
+
+Invalid amounts or causes, wrong logical side or thread, a missing capability, mutation during provider evaluation, mutation-depth overflow, and setting current mana below an active reservation remain exceptions rather than ordinary failure results.
+
 Subscribe to `ManaStateChangeEvent` on the ordinary Forge event bus to observe committed logical-server changes. It provides immutable old/new state, actual current-mana delta, cause, and the affected server player. The event is not a client notification and is not cancellable.
 
 ### Modifier Providers
