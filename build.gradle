@@ -22,6 +22,8 @@ apply from: 'gradle/scripts/helpers.gradle'
 
 // Early Assertions
 assertProperty 'mod_version'
+assertProperty 'developer_tools_version'
+assertProperty 'developer_tools_jawms_min_version'
 assertProperty 'root_package'
 assertProperty 'mod_id'
 assertProperty 'mod_name'
@@ -163,6 +165,10 @@ dependencies {
 apply from: 'gradle/scripts/dependencies.gradle'
 
 sourceSets {
+    developerTools {
+        java.srcDir 'src/developerTools/java'
+        runtimeClasspath += output + sourceSets.main.runtimeClasspath
+    }
     developmentFixture {
         java.srcDir 'src/developmentFixture/java'
         runtimeClasspath += output + sourceSets.main.runtimeClasspath
@@ -192,6 +198,8 @@ configurations {
     }
     developmentFixtureImplementation.extendsFrom implementation
     developmentFixtureCompileOnly.extendsFrom compileOnly
+    developerToolsImplementation.extendsFrom implementation
+    developerToolsCompileOnly.extendsFrom compileOnly
     apiCompatibilityFixtureImplementation.extendsFrom implementation
     apiCompatibilityFixtureCompileOnly.extendsFrom compileOnly
 }
@@ -205,6 +213,23 @@ dependencies {
             'curse.maven:just-another-wizardry-mana-system-1643697:8632899')
 }
 
+tasks.named(sourceSets.developerTools.compileJavaTaskName, JavaCompile).configure {
+    dependsOn tasks.named(sourceSets.main.classesTaskName)
+    classpath = tasks.named('compileJava', JavaCompile).get().classpath + sourceSets.main.output
+    sourceCompatibility = targetCompatibility = 8
+}
+
+tasks.named(sourceSets.developerTools.processResourcesTaskName, ProcessResources).configure {
+    inputs.property 'tool_version', propertyString('developer_tools_version')
+    inputs.property 'jawms_min_version', propertyString('developer_tools_jawms_min_version')
+    filesMatching('mcmod.info') {
+        expand(
+                'tool_version': propertyString('developer_tools_version'),
+                'jawms_min_version': propertyString('developer_tools_jawms_min_version')
+        )
+    }
+}
+
 tasks.named(sourceSets.developmentFixture.compileJavaTaskName, JavaCompile).configure {
     dependsOn tasks.named(sourceSets.main.classesTaskName)
     classpath = tasks.named('compileJava', JavaCompile).get().classpath + sourceSets.main.output
@@ -212,14 +237,17 @@ tasks.named(sourceSets.developmentFixture.compileJavaTaskName, JavaCompile).conf
 
 tasks.named('compileTestJava', JavaCompile).configure {
     dependsOn sourceSets.developmentFixture.classesTaskName,
-            sourceSets.apiCompatibilityFixture.classesTaskName
+            sourceSets.apiCompatibilityFixture.classesTaskName,
+            sourceSets.developerTools.classesTaskName
     classpath += sourceSets.developmentFixture.output
     classpath += sourceSets.apiCompatibilityFixture.output
+    classpath += sourceSets.developerTools.output
 }
 
 tasks.named('test', Test).configure {
     classpath += sourceSets.developmentFixture.output
     classpath += sourceSets.apiCompatibilityFixture.output
+    classpath += sourceSets.developerTools.output
 }
 
 tasks.named(sourceSets.apiCompatibilityFixture.compileJavaTaskName, JavaCompile).configure {
@@ -311,6 +339,176 @@ def apiCompatibilityFixtureJar = tasks.register('apiCompatibilityFixtureJar', Ja
 // RetroFuturaGradle creates reobf<JarTaskName> tasks on demand. The fixture is
 // an external mod, so it must cross the same MCP-to-SRG boundary as production.
 def reobfApiCompatibilityFixtureJar = tasks.named('reobfApiCompatibilityFixtureJar')
+
+def developerToolsJar = tasks.register('developerToolsJar', Jar) {
+    group = 'build'
+    description = 'Packages the optional JAWMS Developer Tools mod.'
+    dependsOn sourceSets.developerTools.classesTaskName
+    from sourceSets.developerTools.output
+    from(rootProject.file('LICENSE'))
+    from(rootProject.file('THIRD-PARTY-NOTICES.md'))
+    archiveBaseName.set('jawms-devtools')
+    archiveVersion.set(propertyString('developer_tools_version'))
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+
+def reobfDeveloperToolsJar = tasks.named('reobfDeveloperToolsJar')
+
+tasks.register('verifyDeveloperToolsArtifact') {
+    group = 'verification'
+    dependsOn reobfDeveloperToolsJar,
+            reobfApiCompatibilityFixtureJar,
+            reobfApi12BinaryFixtureJar,
+            reobfApi13BinaryFixtureJar,
+            tasks.named('reobfJar')
+    doLast {
+        def forbiddenSources = sourceSets.developerTools.allJava.files.findAll { source ->
+            def text = source.getText('UTF-8')
+            def nonApiJawmsImport = text.readLines().any { line ->
+                def trimmed = line.trim()
+                trimmed.startsWith('import com.mahghuuuls.jawms.')
+                        && !trimmed.startsWith('import com.mahghuuuls.jawms.api.')
+            }
+            nonApiJawmsImport
+                    || text.contains('com.mahghuuuls.jawms.internal.')
+                    || text.contains('com.mahghuuuls.jawms.client.')
+                    || text.contains('com.mahghuuuls.jawms.testfixture.')
+                    || text.contains('example.jawms')
+                    || text.contains('net.minecraft.client.')
+                    || text.contains('electroblob.')
+                    || text.contains('baubles.')
+        }
+        if (!forbiddenSources.empty) {
+            throw new GradleException(
+                    "Developer Tools imports forbidden implementation/client/fixture code: ${forbiddenSources}")
+        }
+
+        def toolJar = reobfDeveloperToolsJar.get().archiveFile.get().asFile
+        def toolArchive = new java.util.zip.ZipFile(toolJar)
+        try {
+            def requiredEntries = [
+                    'mcmod.info', 'LICENSE', 'THIRD-PARTY-NOTICES.md',
+                    'com/mahghuuuls/jawms/devtools/JawmsDeveloperToolsMod.class',
+                    'com/mahghuuuls/jawms/devtools/JawmsDevCommand.class'
+            ]
+            def missingEntries = requiredEntries.findAll { toolArchive.getEntry(it) == null }
+            if (!missingEntries.empty) {
+                throw new GradleException("Developer Tools jar is missing entries: ${missingEntries}")
+            }
+            def forbiddenEntries = toolArchive.entries().findAll { entry ->
+                !entry.directory && (
+                        entry.name.startsWith('com/mahghuuuls/jawms/api/')
+                                || entry.name.startsWith('com/mahghuuuls/jawms/internal/')
+                                || entry.name.startsWith('com/mahghuuuls/jawms/client/')
+                                || entry.name.startsWith('com/mahghuuuls/jawms/testfixture/')
+                                || entry.name.startsWith('example/jawms')
+                                || entry.name.startsWith('agenttesttoolkit/')
+                                || entry.name.startsWith('mixins.'))
+            }*.name
+            if (!forbiddenEntries.empty) {
+                throw new GradleException(
+                        "Developer Tools jar contains forbidden primary/fixture/toolkit content: ${forbiddenEntries}")
+            }
+            def classEntries = toolArchive.entries().findAll {
+                !it.directory && it.name.endsWith('.class')
+            }
+            def invalidBytecode = classEntries.findAll { entry ->
+                byte[] bytes = toolArchive.getInputStream(entry).bytes
+                bytes.length < 8 || (((bytes[6] & 0xff) << 8) | (bytes[7] & 0xff)) != 52
+            }*.name
+            if (!invalidBytecode.empty) {
+                throw new GradleException(
+                        "Developer Tools jar is not Java 8 bytecode: ${invalidBytecode}")
+            }
+            def combinedBytecode = classEntries.collect { entry ->
+                new String(toolArchive.getInputStream(entry).bytes, 'ISO-8859-1')
+            }.join('\n')
+            def forbiddenReferences = [
+                    'com/mahghuuuls/jawms/internal/',
+                    'com/mahghuuuls/jawms/client/',
+                    'com/mahghuuuls/jawms/testfixture/',
+                    'example/jawmsaddon/',
+                    'net/minecraft/client/',
+                    'electroblob/',
+                    'baubles/',
+                    'agenttesttoolkit/'
+            ].findAll { combinedBytecode.contains(it) }
+            if (!forbiddenReferences.empty) {
+                throw new GradleException(
+                        "Developer Tools bytecode contains forbidden references: ${forbiddenReferences}")
+            }
+            def leakedDevelopmentNames = [
+                    'getCommandSenderAsPlayer', 'sendMessage', 'getUsage'
+            ].findAll { combinedBytecode.contains(it) }
+            def missingRuntimeNames = [
+                    'func_71521_c', 'func_145747_a', 'func_71518_a'
+            ].findAll { !combinedBytecode.contains(it) }
+            if (!leakedDevelopmentNames.empty || !missingRuntimeNames.empty) {
+                throw new GradleException(
+                        "Developer Tools was not fully reobfuscated; leaked=${leakedDevelopmentNames}, missing=${missingRuntimeNames}")
+            }
+            def metadata = toolArchive.getInputStream(toolArchive.getEntry('mcmod.info'))
+                    .getText('UTF-8')
+            def expectedToolVersion = propertyString('developer_tools_version')
+            def expectedPrimaryVersion = propertyString('mod_version')
+            def expectedJawmsMinimum = propertyString('developer_tools_jawms_min_version')
+            if (expectedToolVersion != expectedPrimaryVersion
+                    || expectedJawmsMinimum != expectedPrimaryVersion) {
+                throw new GradleException(
+                        'Developer Tools version and minimum JAWMS version must match the primary candidate.')
+            }
+            def expectedJawmsRange = "jawms@[${expectedJawmsMinimum},)"
+            if (!metadata.contains('"modid": "jawms_devtools"')
+                    || !metadata.contains('"version": "' + expectedToolVersion + '"')
+                    || !metadata.contains(expectedJawmsRange)
+                    || !combinedBytecode.contains(expectedToolVersion)
+                    || !combinedBytecode.contains("required-after:${expectedJawmsRange}")) {
+                throw new GradleException(
+                        'Developer Tools metadata and @Mod constants do not match the selected tool/JAWMS versions.')
+            }
+        } finally {
+            toolArchive.close()
+        }
+
+        def productionJar = tasks.named('reobfJar').get().archiveFile.get().asFile
+        def leakedToolContent = zipTree(productionJar).matching {
+            include 'com/mahghuuuls/jawms/devtools/**'
+            include '**/jawms_devtools/**'
+        }.files
+        if (!leakedToolContent.empty) {
+            throw new GradleException(
+                    "Developer Tools content leaked into the primary jar: ${leakedToolContent}")
+        }
+        def productionArchive = new java.util.zip.ZipFile(productionJar)
+        try {
+            def productionMetadata = productionArchive
+                    .getInputStream(productionArchive.getEntry('mcmod.info'))
+                    .getText('UTF-8')
+            if (productionMetadata.contains('jawms_devtools')) {
+                throw new GradleException(
+                        'Primary JAWMS metadata contains a Developer Tools dependency.')
+            }
+        } finally {
+            productionArchive.close()
+        }
+
+        def fixtureJars = [
+                reobfApiCompatibilityFixtureJar.get().archiveFile.get().asFile,
+                reobfApi12BinaryFixtureJar.get().archiveFile.get().asFile,
+                reobfApi13BinaryFixtureJar.get().archiveFile.get().asFile
+        ]
+        def fixtureToolLeaks = fixtureJars.findAll { fixtureJar ->
+            !zipTree(fixtureJar).matching {
+                include 'com/mahghuuuls/jawms/devtools/**'
+            }.files.empty
+        }
+        if (!fixtureToolLeaks.empty) {
+            throw new GradleException(
+                    "Developer Tools content leaked into compatibility fixtures: ${fixtureToolLeaks}")
+        }
+    }
+}
 
 tasks.register('verifyApiCompatibilityFixture') {
     group = 'verification'
@@ -892,8 +1090,12 @@ tasks.register('verifyApiCompatibilityFixture') {
 }
 
 tasks.named('check').configure {
-    dependsOn tasks.named('verifyApiCompatibilityFixture')
+    dependsOn tasks.named('verifyApiCompatibilityFixture'),
+            tasks.named('verifyDeveloperToolsArtifact')
 }
+
+def includeDeveloperToolsInRuns = providers.gradleProperty('jawmsIncludeDeveloperTools')
+        .getOrElse('false').toBoolean()
 
 ['runClient', 'runServer'].each { runTaskName ->
     tasks.named(runTaskName).configure {
@@ -901,11 +1103,17 @@ tasks.named('check').configure {
                 sourceSets.apiCompatibilityFixture.classesTaskName,
                 reobfApi12BinaryFixtureJar,
                 reobfApi13BinaryFixtureJar
+        if (includeDeveloperToolsInRuns) {
+            dependsOn sourceSets.developerTools.classesTaskName
+        }
         doFirst {
             classpath += sourceSets.developmentFixture.output
             classpath += sourceSets.apiCompatibilityFixture.output
             classpath += files(reobfApi12BinaryFixtureJar.get().archiveFile.get().asFile)
             classpath += files(reobfApi13BinaryFixtureJar.get().archiveFile.get().asFile)
+            if (includeDeveloperToolsInRuns) {
+                classpath += sourceSets.developerTools.output
+            }
         }
     }
 }

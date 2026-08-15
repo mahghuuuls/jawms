@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0] - Unreleased
+
+### Added
+
+- Additive public API `1.4` typed mana-mutation outcomes, immutable provider descriptors, immediate and deferred modifier-cache refresh operations, and accepted mana-profile explanations.
+- Separate optional JAWMS Developer Tools artifact with permission-level-4 public-API inspection and mutation commands for controlled addon-development environments.
+- Canonical command reference covering primary, optional Developer Tools, contributor-fixture, and compatibility-fixture commands.
+
+### Compatibility
+
+- Retained all documented API `1.2` and API `1.3` descriptors and added frozen old-binary compatibility checks for both generations.
+- Kept published JAWMS `0.3.0` / API `1.3` as the current remote addon dependency recipe until `0.4.0` receives a real published file identity.
+
 ## [0.3.0] - 2026-08-12
 
 ### Changed

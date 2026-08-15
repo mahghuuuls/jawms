@@ -62,7 +62,8 @@ public final class ClientReplacementHudFixture extends CommandBase {
     public String getUsage(ICommandSender sender) {
         return "/jawms-api-hud probe <on|off> | mode "
                 + "<off|visible|hide-full|hide-creative|exception> | "
-                + "earlier <on|off> | parent <on|off> | equal <off|ab|ba> | status";
+                + "earlier <on|off> | parent <on|off> | equal <off|ab|ba> | "
+                + "replacement <on|off> | status";
     }
 
     @Override

@@ -15,13 +15,14 @@ JAWMS mod versions, CurseForge file identities, and API versions are separate id
 | --- | --- | --- | --- |
 | Published `0.1.0` beta | `8597828` | `1.2` | Verified from a clean ForgeDevEnv consumer |
 | Published `0.2.0` beta | `8621418` | `1.3` | Resolved through standard CurseMaven and consumed by completed companion addons |
-| Release-ready `0.3.0` beta | Not published; file identity pending | `1.3` | Same public API; updated MixinBooter dependency metadata only |
+| Published `0.3.0` beta | `8632899` | `1.3` | Current immutable dependency recipe; MixinBooter `11.8` or newer |
+| Candidate `0.4.0` beta | Not published; file identity pending | `1.4` | Source, compatibility-fixture, and build evidence only until publication |
 
 API major `1` follows an additive compatibility policy. A higher minor version retains the documented public descriptors from supported earlier minor versions and does not add required methods to an already-published interface. A breaking change requires another major version or a parallel opt-in contract. A type may be deprecated during major `1`, but deprecation does not authorize its removal from a later `1.x` release.
 
 The current API version is available as `ManaApi.API_VERSION` and `ManaApiVersion.CURRENT`. Use the matrix above to choose a real distribution file; do not infer a CurseForge file ID from those constants.
 
-## Published `0.1.0` Dependency Recipe
+## Published `0.3.0` Dependency Recipe
 
 The supported compilation input is the full JAWMS mod. There is no separately published `jawms-api` artifact. In a current [CleanroomMC ForgeDevEnv](https://github.com/CleanroomMC/ForgeDevEnv) project, add the following repository blocks:
 
@@ -50,12 +51,12 @@ Then add these exact dependencies:
 ```groovy
 dependencies {
     implementation rfg.deobf(
-            'curse.maven:just-another-wizardry-mana-system-1643697:8597828'
+            'curse.maven:just-another-wizardry-mana-system-1643697:8632899'
     )
     runtimeOnly rfg.deobf(
             'curse.maven:electroblobs-wizardry-265642:8320066'
     )
-    runtimeOnly 'zone.rong:mixinbooter:11.11'
+    runtimeOnly 'zone.rong:mixinbooter:11.8'
 }
 ```
 
@@ -66,9 +67,9 @@ Declare the same runtime requirements in the addon mod's Forge metadata. The `@M
         modid = "exampleaddon",
         name = "Example JAWMS Addon",
         version = "1.0.0",
-        dependencies = "required-after:jawms@[0.1.0,0.3.0);"
+        dependencies = "required-after:jawms@[0.3.0,0.4.0);"
                 + "required-after:ebwizardry@[4.3.19,4.3.20);"
-                + "required-after:mixinbooter@[11.11,12.0)"
+                + "required-after:mixinbooter@[11.8,)"
 )
 public final class ExampleAddon {
 }
@@ -78,29 +79,28 @@ Also list the three ranges in `mcmod.info` if that file is part of the project:
 
 ```json
 "requiredMods": [
-  "jawms@[0.1.0,0.3.0)",
+  "jawms@[0.3.0,0.4.0)",
   "ebwizardry@[4.3.19,4.3.20)",
-  "mixinbooter@[11.11,12.0)"
+  "mixinbooter@[11.8,)"
 ]
 ```
 
 Do not rely on CurseMaven transitive metadata to install Wizardry or MixinBooter. They are explicit runtime dependencies of JAWMS on standard Forge and must be present in development and in the installed modpack.
 
-### Published `0.2.0` API `1.3` Dependency
+### Historical `0.1.0` And `0.2.0` Dependencies
 
-For API `1.3`, replace the JAWMS dependency in the historical recipe with the published `0.2.0` file:
+Published `0.1.0` file `8597828` provides API `1.2`. Published `0.2.0` file `8621418` provides API `1.3`:
 
 ```groovy
-implementation rfg.deobf(
-        'curse.maven:just-another-wizardry-mana-system-1643697:8621418'
-)
+implementation rfg.deobf('curse.maven:just-another-wizardry-mana-system-1643697:8597828')
+implementation rfg.deobf('curse.maven:just-another-wizardry-mana-system-1643697:8621418')
 ```
 
-Published `0.2.0` still requires MixinBooter `11.11` through versions below `12.0`. Addons that require API `1.3` and specifically target that immutable release should declare `jawms@[0.2.0,0.3.0)` and retain the historical MixinBooter dependency shown above.
+Use only the one JAWMS dependency matching the release you target. Published `0.1.0` and `0.2.0` require MixinBooter `11.11` through versions below `12.0`. Addons targeting those immutable releases should declare `jawms@[0.1.0,0.3.0)` or the narrower `jawms@[0.2.0,0.3.0)` as appropriate and retain the historical `[11.11,12.0)` MixinBooter range.
 
-### Release-ready `0.3.0` MixinBooter Delta
+### Published `0.3.0` MixinBooter Boundary
 
-The published `0.1.0` and `0.2.0` recipes above are intentionally historical and must continue to match those immutable JARs. For the release-ready `0.3.0` candidate, use exact MixinBooter `11.8` as the development dependency:
+Published `0.3.0` uses exact MixinBooter `11.8` as the development dependency:
 
 ```groovy
 runtimeOnly 'zone.rong:mixinbooter:11.8'
@@ -112,7 +112,11 @@ Its `@Mod` and `mcmod.info` requirements are both open-ended from the proven min
 required-after:mixinbooter@[11.8,)
 ```
 
-The open range means JAWMS accepts MixinBooter `11.8` or newer; it does not mean every future release has been tested. Exact standalone `11.8` and current `11.13` are the explicit standard-Forge validation lanes for this candidate. Addons requiring JAWMS `0.3.0` should declare `jawms@[0.3.0,0.4.0)` and must not copy the historical `[11.11,12.0)` MixinBooter range into their current metadata.
+The open range means JAWMS accepts MixinBooter `11.8` or newer; it does not mean every future release has been tested. Exact standalone `11.8` and `11.13` are the explicit standard-Forge validation lanes retained for that release. Addons requiring JAWMS `0.3.0` should declare `jawms@[0.3.0,0.4.0)` and must not copy the historical `[11.11,12.0)` MixinBooter range into current metadata.
+
+### Candidate API `1.4` Source Boundary
+
+JAWMS `0.4.0` advances the public API to `1.4`, but it has no CurseForge file identity until publication. Do not invent a CurseMaven coordinate for it. The API-`1.4` examples below describe the candidate source and are compiled by JAWMS's maintained compatibility fixture. Continue using published `0.3.0` file `8632899` for an independently resolvable dependency until a real `0.4.0` file exists.
 
 If addon source directly uses Wizardry types exposed by the server API, such as `Spell` or `Element`, change the Wizardry declaration from `runtimeOnly` to `implementation` while keeping the same deobfuscated coordinate. The replacement-HUD-only example does not directly use those types, so `runtimeOnly` is sufficient there.
 
@@ -129,6 +133,8 @@ Leaving the template's example `mixin_configs` name non-empty can put a nonexist
 
 All `IManaService` methods require a logical-server player and the Minecraft server thread. Current mana is server-authoritative; client values are display-only.
 
+The basic service and provider operations below exist in published API `1.3`. Sections that explicitly identify an API-`1.4` addition require the local `0.4.0` candidate until that version receives a real published file identity.
+
 ```java
 private static final ResourceLocation POTION_RESTORE =
         new ResourceLocation("exampleaddon", "potion_restore");
@@ -144,6 +150,13 @@ Mutation amounts are non-negative whole mana points. `setCurrentMana` clamps to 
 
 API `1.4` adds `ManaMutationResult.getFailure()`. `setCurrentMana`, `restoreMana`, and `drainMana` return successful `NONE`, including clamped or bounded no-ops. An affordable `consumeMana`, including consuming zero, also returns successful `NONE`; an exact consume that cannot be paid returns unsuccessful `INSUFFICIENT_MANA` without changing state. The service does not otherwise return `REJECTED`; the retained constructor uses that conservative reason only when an external legacy caller constructs an unsuccessful result.
 
+| Operation | Ordinary result |
+| --- | --- |
+| `setCurrentMana` | Successful `NONE`; the requested value is bounded to the effective maximum. |
+| `restoreMana` | Successful `NONE`; the actual increase can be zero at full mana or smaller than requested near full mana. |
+| `consumeMana` | Successful `NONE` for an affordable exact amount, including zero; otherwise unsuccessful `INSUFFICIENT_MANA` with no state change. |
+| `drainMana` | Successful `NONE`; drains up to the request and can report a smaller or zero actual amount. |
+
 Invalid amounts or causes, wrong logical side or thread, a missing capability, mutation during provider evaluation, mutation-depth overflow, and setting current mana below an active reservation remain exceptions rather than ordinary failure results.
 
 Subscribe to `ManaStateChangeEvent` on the ordinary Forge event bus to observe committed logical-server changes. It provides immutable old/new state, actual current-mana delta, cause, and the affected server player. The event is not a client notification and is not cancellable.
@@ -151,6 +164,8 @@ Subscribe to `ManaStateChangeEvent` on the ordinary Forge event bus to observe c
 ### Modifier Providers
 
 Register providers during Forge pre-initialization or initialization. Provider IDs are globally unique, evaluation order is provider-ID order, duplicate IDs fail, and registration closes at load-complete.
+
+Implementing `IItemManaModifierProvider` or `IContextualManaModifierProvider` does not register anything by itself. Every provider must be passed explicitly to the matching `ManaApi.register...Provider` method during the open registration window.
 
 ```java
 @Mod.EventHandler
@@ -179,16 +194,18 @@ ManaApi.registerContextualProvider(
 
 Provider callbacks run on the logical server and must be deterministic, side-effect-free, and reasonably cheap. They may query JAWMS, but must not mutate mana or call `invalidateModifierCache` from inside evaluation. Return one complete immutable contribution. Returning `null` or throwing a runtime exception invalidates only that provider result and caches the failure for the rest of the evaluation tick.
 
-`ManaApi.getRegisteredProviders()` returns an immutable, provider-ID-sorted snapshot of the registrations accepted so far. Each `ManaProviderDescriptor` exposes the provider ID and whether it is an item or contextual provider. Item descriptors expose a target item registry ID when one is known; call `hasKnownTargetItemId()` before `getTargetItemId()`. The target can be explicitly unknown before the item receives a registry name, and contextual providers never have a target item. A snapshot never exposes provider callbacks, `Item` objects, or mutable registry state. `ManaApi.isProviderRegistrationFrozen()` reports whether load-complete has closed registration; an earlier snapshot remains unchanged when later legal registrations are accepted.
+API `1.4` adds provider-registry observation. `ManaApi.getRegisteredProviders()` returns an immutable, provider-ID-sorted snapshot of the registrations accepted so far. Each `ManaProviderDescriptor` exposes the provider ID and whether it is an item or contextual provider. Item descriptors expose a target item registry ID when one is known; call `hasKnownTargetItemId()` before `getTargetItemId()`. The target can be explicitly unknown before the item receives a registry name, and contextual providers never have a target item. A snapshot never exposes provider callbacks, `Item` objects, or mutable registry state. `ManaApi.isProviderRegistrationFrozen()` reports whether load-complete has closed registration; an earlier snapshot remains unchanged when later legal registrations are accepted.
 
-JAWMS provides two explicit refresh operations for addon state that it cannot otherwise observe:
+API `1.4` provides two explicit refresh operations for addon state that JAWMS cannot otherwise observe:
 
 - Call `ManaApi.invalidateModifierCache(player)` **after** the authoritative addon state has changed. This invalidates immediately in the current server tick and clears any older deferred request for that player.
 - Call `ManaApi.markModifierCacheDirty(player)` from a callback that runs **before** the authoritative addon state changes. Duplicate requests coalesce by player UUID, do not evaluate providers synchronously, and are consumed before that player's next server END-tick profile evaluation. A dirty request made after an immediate invalidation still schedules one later refresh.
 
 Both operations require a logical-server player on the Minecraft server thread and reject calls during provider evaluation. Logout, clone/respawn, dimension change, and server shutdown discard pending refresh state. Ordinary equipment changes and normal next-tick evaluation already refresh profiles, so do not request an extra refresh for them.
 
-### Accepted Profile Explanation
+Potion transitions need special timing in Forge 1.12.2. `PotionAddedEvent` is posted before a new effect is inserted or an existing amplifier/duration is combined. Uncancelled `PotionRemoveEvent` and `PotionExpiryEvent` are also posted before removal. For a logical-server `EntityPlayerMP`, call `markModifierCacheDirty` from those pre-transition callbacks so the coalesced server END-tick refresh observes the new effect, amplifier replacement, removal, or expiry. Filter out client-side entities. If addon code owns a different callback that runs only after its authoritative state has changed, call `invalidateModifierCache` instead. Provider callbacks themselves remain pure and must never request either refresh.
+
+### API `1.4` Accepted Profile Explanation
 
 `ManaApi.explainManaProfile(player)` returns the immutable server-only explanation retained from the latest profile evaluation accepted by gameplay. It does not scan equipment, invoke a provider, post an event, mutate mana, or send a packet. If the player has not accepted an evaluation yet, it throws `IllegalStateException` instead of performing a speculative calculation.
 
@@ -221,8 +238,8 @@ For maximum mana, regeneration, and delay, resolution is:
 
 ```text
 max(0, configured base + sum(flat))
-    × (1 + sum(percentage increases) / 100)
-    × product(1 - each percentage reduction / 100)
+    * (1 + sum(percentage increases) / 100)
+    * product(1 - each percentage reduction / 100)
 ```
 
 After those factors, maximum mana is floored and bounded to `1..2147483647`. Regeneration is non-negative and measured in mana per second; fractional regeneration accumulates internally while current mana remains whole. Delay is non-negative seconds and is rounded upward only when converted to ticks.
@@ -265,7 +282,7 @@ JAWMS publishes `ManaHudRenderEvent` on the Forge event bus. This table is part 
 
 Use `LOWEST` priority and `receiveCanceled=false`. If the replacement is disabled, return without touching the event. Once enabled, cancel before applying the replacement's own visibility policy. This prevents JAWMS's built-in bar from appearing when the replacement intentionally hides at full mana, in Creative, or for another addon-specific reason.
 
-The following minimal flow compiles against the published `0.1.0` / API-`1.2` dependency recipe above. API `1.2` does not expose Creative state, so this version implements only an enabled switch and full-mana policy:
+The following minimal flow compiles against the published `0.3.0` / API-`1.3` dependency recipe above. It deliberately uses only the retained API-`1.2` subset, so it also illustrates the older compatibility boundary and implements only an enabled switch and full-mana policy:
 
 ```java
 @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = false)
@@ -291,7 +308,7 @@ public void renderMana(ManaHudRenderEvent event) {
 }
 ```
 
-Published JAWMS `0.2.0` adds immutable `ClientHudContext` in API `1.3`. A replacement compiled against file `8621418` may add a known-state Creative policy before drawing:
+API `1.3` adds immutable `ClientHudContext`. A replacement compiled against published `0.3.0` file `8632899` may add a known-state Creative policy before drawing:
 
 ```java
 ClientHudContext context = event.getContext();
@@ -302,7 +319,7 @@ if (hideInCreative
 }
 ```
 
-Do not copy the published `0.1.0` dependency coordinate and then use `getContext()`: API `1.2` does not contain that method. JAWMS `0.2.0` is the minimum mod version for API `1.3`; use its published CurseForge file `8621418`.
+Do not copy the published `0.1.0` dependency coordinate and then use `getContext()`: API `1.2` does not contain that method. JAWMS `0.2.0` was the first API-`1.3` release, while published `0.3.0` file `8632899` is the current dependency recipe.
 
 This is best-effort ownership, not a provider-selection system. An earlier subscriber can cancel first, in which case `receiveCanceled=false` skips this subscriber. If two replacements use the same priority, Forge registration order decides which runs first; JAWMS does not define a stable winner.
 
@@ -322,6 +339,12 @@ Do not use raw `glPushAttrib/glPopAttrib` as the only restoration mechanism: it 
 
 The maintained, executable Java 8 reference is [`CacheSafeReplacementHud`](../src/apiCompatibilityFixture/java/example/jawmsaddon/CacheSafeReplacementHud.java). It is fixture source rather than public API: copy or adapt its pattern; never depend on the fixture class or package. Its `try/finally` guard demonstrates a partially transparent texture, default-texture-unit handling, matrix balance, and cache-consistent restoration.
 
+## Optional Developer Tools
+
+JAWMS `0.4.0` builds a separate `jawms-devtools-0.4.0.jar` for addon-development environments. Install it beside the matching JAWMS version when you need permission-level-4 state, mutation, provider, accepted-explanation, or cache-refresh diagnostics. It uses only the documented public API and is not required by the primary JAWMS mod. Removing the tool JAR removes `/jawms-dev` without disabling JAWMS.
+
+The canonical [`docs/COMMANDS.md`](COMMANDS.md) reference distinguishes primary operator commands, optional Developer Tools, contributor-only development fixtures, and API compatibility fixtures. Do not distribute contributor or compatibility fixtures as addon-development tools.
+
 ## Testing A HUD Addon
 
 Compile public code for Java 8 and test it in a real Forge 1.12.2 client. A plain JVM test can validate immutable values and listener logic, but it cannot prove that Forge transformed `ManaHudRenderEvent` with its injected cancelable-event behavior. At least one launched Forge test must observe the real callback, call `setCanceled(true)`, and confirm that the built-in JAWMS draw is suppressed while the replacement and adjacent HUD/chat rendering remain correct.
@@ -336,4 +359,4 @@ Also test:
 - dedicated-server startup with public client API classes present but no client linkage;
 - the exact published dependency coordinate in a clean workspace without resolving JAWMS from `mavenLocal`, a copied JAWMS JAR, or an unpublished file ID.
 
-API `1.3` in published JAWMS `0.2.0` has source, Java 8, descriptor, old-binary, launched-fixture, direct CurseMaven, and completed-addon coverage. [JAWMS Hud Styles](https://www.curseforge.com/minecraft/mc-mods/jawms-hud-styles) and [JAWMS Classic Bar Integration](https://www.curseforge.com/minecraft/mc-mods/jawms-classic-bar) both consume the public HUD API. Release-ready JAWMS `0.3.0` retains the same API `1.3` surface; its own CurseForge file identity remains pending publication.
+API `1.3` in published JAWMS `0.3.0` has source, Java 8, descriptor, old-binary, launched-fixture, direct CurseMaven, and completed-addon coverage. [JAWMS Hud Styles](https://www.curseforge.com/minecraft/mc-mods/jawms-hud-styles) and [JAWMS Classic Bar Integration](https://www.curseforge.com/minecraft/mc-mods/jawms-classic-bar) both consume the public HUD API. Candidate API `1.4` has source/build and compatibility-fixture coverage only until `0.4.0` is independently published and exercised by a real addon.
