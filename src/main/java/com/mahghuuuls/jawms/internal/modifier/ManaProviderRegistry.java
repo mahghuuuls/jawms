@@ -5,6 +5,8 @@ import com.mahghuuuls.jawms.api.IContextualManaModifierProvider;
 import com.mahghuuuls.jawms.api.IItemManaModifierProvider;
 import com.mahghuuuls.jawms.api.ManaContribution;
 import com.mahghuuuls.jawms.api.ManaItemContext;
+import com.mahghuuuls.jawms.api.ManaProviderDescriptor;
+import com.mahghuuuls.jawms.api.ManaProviderKind;
 import com.mahghuuuls.jawms.internal.mana.ManaEvaluationGuard;
 import com.mahghuuuls.jawms.internal.mana.ManaService;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
@@ -15,9 +17,12 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.nbt.NBTTagCompound;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 
@@ -29,6 +34,7 @@ public final class ManaProviderRegistry {
 
     private final TreeMap<ResourceLocation, Registration> registrations = new TreeMap<>();
     private final Map<UUID, PlayerCache> playerCaches = new HashMap<>();
+    private final Set<UUID> pendingRefreshes = new HashSet<>();
     private final Map<String, Long> lastDiagnostics = new HashMap<>();
     private long diagnosticEmissions;
     private boolean frozen;
@@ -62,6 +68,31 @@ public final class ManaProviderRegistry {
 
     public synchronized void freeze() {
         frozen = true;
+    }
+
+    public synchronized boolean isFrozen() {
+        return frozen;
+    }
+
+    public synchronized List<ManaProviderDescriptor> descriptors() {
+        List<ManaProviderDescriptor> result = new ArrayList<>(registrations.size());
+        for (Registration registration : registrations.values()) {
+            if (registration instanceof ItemRegistration) {
+                ItemRegistration item = (ItemRegistration) registration;
+                result.add(new ManaProviderDescriptor(
+                        registration.id,
+                        ManaProviderKind.ITEM,
+                        item.item.getRegistryName()
+                ));
+            } else {
+                result.add(new ManaProviderDescriptor(
+                        registration.id,
+                        ManaProviderKind.CONTEXTUAL,
+                        null
+                ));
+            }
+        }
+        return Collections.unmodifiableList(result);
     }
 
     public synchronized List<ManaContribution> evaluateItem(
@@ -125,25 +156,56 @@ public final class ManaProviderRegistry {
     }
 
     public synchronized void invalidate(EntityPlayer player) {
-        ManaService.requireState(player);
-        UUID playerId = player.getUniqueID();
-        if (ManaEvaluationGuard.isEvaluating(playerId)) {
-            throw new IllegalStateException(
-                    "JAWMS modifier cache cannot be invalidated during provider evaluation."
-            );
+        UUID playerId = requireRefreshContext(player);
+        pendingRefreshes.remove(playerId);
+        advanceGeneration(player, playerId);
+    }
+
+    public synchronized void markDirty(EntityPlayer player) {
+        pendingRefreshes.add(requireRefreshContext(player));
+    }
+
+    /** Consumes one coalesced request immediately before END-tick evaluation. */
+    public synchronized boolean consumeDeferredRefresh(EntityPlayer player) {
+        UUID playerId = requireRefreshContext(player);
+        if (!pendingRefreshes.remove(playerId)) {
+            return false;
         }
-        PlayerCache old = playerCaches.get(playerId);
-        long generation = old == null ? 1L : old.generation + 1L;
-        playerCaches.put(playerId, new PlayerCache(currentTick(player), -1L, generation));
+        advanceGeneration(player, playerId);
+        return true;
     }
 
     public synchronized void remove(EntityPlayer player) {
         if (player != null) {
             UUID playerId = player.getUniqueID();
             playerCaches.remove(playerId);
+            pendingRefreshes.remove(playerId);
             String prefix = playerId + "|";
             lastDiagnostics.keySet().removeIf(key -> key.startsWith(prefix));
         }
+    }
+
+    public synchronized void clearRuntimeState() {
+        playerCaches.clear();
+        pendingRefreshes.clear();
+        lastDiagnostics.clear();
+    }
+
+    private UUID requireRefreshContext(EntityPlayer player) {
+        ManaService.requireModifierRefreshContext(player);
+        UUID playerId = player.getUniqueID();
+        if (ManaEvaluationGuard.isEvaluating(playerId)) {
+            throw new IllegalStateException(
+                    "JAWMS modifier cache cannot be refreshed during provider evaluation."
+            );
+        }
+        return playerId;
+    }
+
+    private void advanceGeneration(EntityPlayer player, UUID playerId) {
+        PlayerCache old = playerCaches.get(playerId);
+        long generation = old == null ? 1L : old.generation + 1L;
+        playerCaches.put(playerId, new PlayerCache(currentTick(player), -1L, generation));
     }
 
     private void requireRegistration(ResourceLocation id, Object provider) {

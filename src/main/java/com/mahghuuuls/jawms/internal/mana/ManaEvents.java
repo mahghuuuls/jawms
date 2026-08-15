@@ -39,6 +39,8 @@ public final class ManaEvents {
         if (event.getEntityPlayer().world.isRemote) {
             return;
         }
+        ManaProviderRegistry.instance().remove(event.getOriginal());
+        ManaProviderRegistry.instance().remove(event.getEntityPlayer());
         ManaState original = event.getOriginal().getCapability(ManaCapability.INSTANCE, null);
         ManaState replacement = event.getEntityPlayer().getCapability(ManaCapability.INSTANCE, null);
         if (original != null && replacement != null) {
@@ -54,6 +56,7 @@ public final class ManaEvents {
         ManaState state = event.player.getCapability(ManaCapability.INSTANCE, null);
         GameplayRules rules = GameplayRulesManager.current();
         if (state != null) {
+            ManaProviderRegistry.instance().consumeDeferredRefresh(event.player);
             WizardryWandBridge.reconcileContinuousCast(event.player);
             ManaService.tickPlayer(event.player, rules);
         }
@@ -67,6 +70,7 @@ public final class ManaEvents {
 
     @SubscribeEvent
     public void playerRespawned(PlayerEvent.PlayerRespawnEvent event) {
+        ManaProviderRegistry.instance().remove(event.player);
         CastCostContextManager.clearAll(event.player);
         CastPaymentContextManager.clearAll(event.player);
         CastPaymentService.clear(event.player);
@@ -76,6 +80,7 @@ public final class ManaEvents {
 
     @SubscribeEvent
     public void playerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        ManaProviderRegistry.instance().remove(event.player);
         ManaService.clearTransientLifecycleState(event.player);
         ManaNetwork.synchronizeRules(event.player, GameplayRulesManager.current());
         ManaNetwork.synchronizeLifecycle(event.player, "dimension change");

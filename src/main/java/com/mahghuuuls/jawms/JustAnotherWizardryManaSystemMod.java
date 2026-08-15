@@ -12,6 +12,7 @@ import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLLoadCompleteEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
+import net.minecraftforge.fml.common.event.FMLServerStoppedEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -99,6 +100,11 @@ public final class JustAnotherWizardryManaSystemMod {
         } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
             throw new IllegalStateException("Could not register the JAWMS development test fixture.", exception);
         }
+    }
+
+    @Mod.EventHandler
+    public void serverStopped(FMLServerStoppedEvent event) {
+        ManaProviderRegistry.instance().clearRuntimeState();
     }
 
     private static void initializeDevelopmentFixture() {

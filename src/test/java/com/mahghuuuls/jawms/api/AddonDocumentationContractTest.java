@@ -76,6 +76,13 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("max(0, configured base + sum(flat))"));
         assertTrue(guide.contains("After those factors, maximum mana is floored"));
         assertFalse(guide.contains("max(allowed minimum, configured base + sum(flat))"));
+        assertTrue(guide.contains("ManaApi.getRegisteredProviders()"));
+        assertTrue(guide.contains("ManaApi.isProviderRegistrationFrozen()"));
+        assertTrue(guide.contains("ManaApi.invalidateModifierCache(player)"));
+        assertTrue(guide.contains("ManaApi.markModifierCacheDirty(player)"));
+        assertTrue(guide.contains("runs **before** the authoritative addon state changes"));
+        assertTrue(guide.contains("do not evaluate providers synchronously"));
+        assertTrue(guide.contains("next server END-tick profile evaluation"));
         assertTrue(guide.contains("Compare known revisions only within the current connection"));
         assertTrue(guide.contains("glPushAttrib/glPopAttrib"));
         assertTrue(guide.contains(

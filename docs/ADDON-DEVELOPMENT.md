@@ -179,7 +179,14 @@ ManaApi.registerContextualProvider(
 
 Provider callbacks run on the logical server and must be deterministic, side-effect-free, and reasonably cheap. They may query JAWMS, but must not mutate mana or call `invalidateModifierCache` from inside evaluation. Return one complete immutable contribution. Returning `null` or throwing a runtime exception invalidates only that provider result and caches the failure for the rest of the evaluation tick.
 
-Call `ManaApi.invalidateModifierCache(player)` only from the logical server thread after addon state changes in a way that JAWMS cannot otherwise observe. Ordinary equipment changes and the next server tick already refresh profiles.
+`ManaApi.getRegisteredProviders()` returns an immutable, provider-ID-sorted snapshot of the registrations accepted so far. Each `ManaProviderDescriptor` exposes the provider ID and whether it is an item or contextual provider. Item descriptors expose a target item registry ID when one is known; call `hasKnownTargetItemId()` before `getTargetItemId()`. The target can be explicitly unknown before the item receives a registry name, and contextual providers never have a target item. A snapshot never exposes provider callbacks, `Item` objects, or mutable registry state. `ManaApi.isProviderRegistrationFrozen()` reports whether load-complete has closed registration; an earlier snapshot remains unchanged when later legal registrations are accepted.
+
+JAWMS provides two explicit refresh operations for addon state that it cannot otherwise observe:
+
+- Call `ManaApi.invalidateModifierCache(player)` **after** the authoritative addon state has changed. This invalidates immediately in the current server tick and clears any older deferred request for that player.
+- Call `ManaApi.markModifierCacheDirty(player)` from a callback that runs **before** the authoritative addon state changes. Duplicate requests coalesce by player UUID, do not evaluate providers synchronously, and are consumed before that player's next server END-tick profile evaluation. A dirty request made after an immediate invalidation still schedules one later refresh.
+
+Both operations require a logical-server player on the Minecraft server thread and reject calls during provider evaluation. Logout, clone/respawn, dimension change, and server shutdown discard pending refresh state. Ordinary equipment changes and normal next-tick evaluation already refresh profiles, so do not request an extra refresh for them.
 
 ### Contribution Units And Arithmetic
 

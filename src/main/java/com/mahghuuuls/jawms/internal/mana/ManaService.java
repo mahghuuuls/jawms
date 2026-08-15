@@ -177,6 +177,20 @@ public final class ManaService implements IManaService {
     }
 
     public static ManaState requireState(EntityPlayer player) {
+        ManaState state = requireServerState(player);
+        if (state.hasPendingLoadedMana()
+                && !ManaEvaluationGuard.isEvaluating(player.getUniqueID())) {
+            state.applyResolvedProfile(resolveProfile(player, GameplayRulesManager.current()));
+        }
+        return state;
+    }
+
+    /** Validates refresh authority without applying pending profile state. */
+    public static void requireModifierRefreshContext(EntityPlayer player) {
+        requireServerState(player);
+    }
+
+    private static ManaState requireServerState(EntityPlayer player) {
         if (player == null) {
             throw new NullPointerException("Player must not be null.");
         }
@@ -193,10 +207,6 @@ public final class ManaService implements IManaService {
         ManaState state = player.getCapability(ManaCapability.INSTANCE, null);
         if (state == null) {
             throw new IllegalStateException("The player does not have the JAWMS mana capability.");
-        }
-        if (state.hasPendingLoadedMana()
-                && !ManaEvaluationGuard.isEvaluating(player.getUniqueID())) {
-            state.applyResolvedProfile(resolveProfile(player, GameplayRulesManager.current()));
         }
         return state;
     }

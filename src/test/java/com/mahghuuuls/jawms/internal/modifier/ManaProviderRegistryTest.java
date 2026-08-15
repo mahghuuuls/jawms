@@ -2,6 +2,8 @@ package com.mahghuuuls.jawms.internal.modifier;
 
 import com.mahghuuuls.jawms.api.ManaContribution;
 import com.mahghuuuls.jawms.api.ManaItemContext;
+import com.mahghuuuls.jawms.api.ManaProviderDescriptor;
+import com.mahghuuuls.jawms.api.ManaProviderKind;
 import com.mahghuuuls.jawms.api.ManaSlotCategory;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorProfile;
@@ -27,7 +29,9 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -51,6 +55,43 @@ class ManaProviderRegistryTest {
         assertThrows(IllegalStateException.class, () -> registry.registerContextual(
                 id("late"), player -> ManaContribution.EMPTY
         ));
+    }
+
+    @Test
+    void descriptorSnapshotsAreSortedImmutableAndTruthfulAcrossFreeze() {
+        ManaProviderRegistry registry = new ManaProviderRegistry();
+        Item unknownItem = new Item();
+        registry.registerContextual(id("z_context"), player -> ManaContribution.EMPTY);
+        registry.registerItem(id("a_known"), Items.STICK,
+                (player, context) -> ManaContribution.EMPTY);
+
+        List<ManaProviderDescriptor> beforeFreeze = registry.descriptors();
+        assertFalse(registry.isFrozen());
+        assertEquals(Arrays.asList(id("a_known"), id("z_context")), Arrays.asList(
+                beforeFreeze.get(0).getProviderId(), beforeFreeze.get(1).getProviderId()
+        ));
+        assertEquals(ManaProviderKind.ITEM, beforeFreeze.get(0).getKind());
+        assertTrue(beforeFreeze.get(0).hasKnownTargetItemId());
+        assertEquals(Items.STICK.getRegistryName(), beforeFreeze.get(0).getTargetItemId());
+        assertEquals(ManaProviderKind.CONTEXTUAL, beforeFreeze.get(1).getKind());
+        assertFalse(beforeFreeze.get(1).hasKnownTargetItemId());
+        assertThrows(IllegalStateException.class, beforeFreeze.get(1)::getTargetItemId);
+        assertThrows(UnsupportedOperationException.class,
+                () -> beforeFreeze.add(beforeFreeze.get(0)));
+
+        registry.registerItem(id("m_unknown"), unknownItem,
+                (player, context) -> ManaContribution.EMPTY);
+        List<ManaProviderDescriptor> afterRegistration = registry.descriptors();
+        assertEquals(2, beforeFreeze.size());
+        assertEquals(3, afterRegistration.size());
+        ManaProviderDescriptor unknown = afterRegistration.get(1);
+        assertEquals(id("m_unknown"), unknown.getProviderId());
+        assertFalse(unknown.hasKnownTargetItemId());
+        assertThrows(IllegalStateException.class, unknown::getTargetItemId);
+
+        registry.freeze();
+        assertTrue(registry.isFrozen());
+        assertEquals(afterRegistration, registry.descriptors());
     }
 
     @Test
@@ -186,10 +227,76 @@ class ManaProviderRegistryTest {
     }
 
     @Test
+    void duplicateDeferredRefreshesCoalesceWithoutSynchronousEvaluation() {
+        ManaProviderRegistry registry = new ManaProviderRegistry();
+        AtomicInteger calls = new AtomicInteger();
+        registry.registerContextual(id("deferred"), player -> {
+            calls.incrementAndGet();
+            return ManaContribution.EMPTY;
+        });
+        PlayerFixture fixture = player(31L);
+        GameplayRules rules = GameplayRules.initialDefaults();
+        registry.evaluateContextual(fixture.player, rules);
+
+        for (int index = 0; index < 10; index++) {
+            registry.markDirty(fixture.player);
+        }
+
+        assertEquals(1, calls.get());
+        assertTrue(registry.consumeDeferredRefresh(fixture.player));
+        assertFalse(registry.consumeDeferredRefresh(fixture.player));
+        registry.evaluateContextual(fixture.player, rules);
+        registry.evaluateContextual(fixture.player, rules);
+        assertEquals(2, calls.get());
+    }
+
+    @Test
+    void immediateAndDeferredRefreshOrderingIsExplicit() {
+        ManaProviderRegistry registry = new ManaProviderRegistry();
+        AtomicInteger calls = new AtomicInteger();
+        registry.registerContextual(id("ordering"), player -> {
+            calls.incrementAndGet();
+            return ManaContribution.EMPTY;
+        });
+        PlayerFixture fixture = player(32L);
+        GameplayRules rules = GameplayRules.initialDefaults();
+        registry.evaluateContextual(fixture.player, rules);
+
+        registry.markDirty(fixture.player);
+        registry.invalidate(fixture.player);
+        assertFalse(registry.consumeDeferredRefresh(fixture.player));
+        registry.evaluateContextual(fixture.player, rules);
+        assertEquals(2, calls.get());
+
+        registry.markDirty(fixture.player);
+        assertTrue(registry.consumeDeferredRefresh(fixture.player));
+        registry.evaluateContextual(fixture.player, rules);
+        assertEquals(3, calls.get());
+    }
+
+    @Test
+    void invalidRefreshContextsDoNotCorruptAnotherPendingRequest() {
+        ManaProviderRegistry registry = new ManaProviderRegistry();
+        PlayerFixture valid = player(33L);
+        registry.markDirty(valid.player);
+
+        EntityPlayer clientPlayer = mock(EntityPlayer.class);
+        EntityPlayerMP offThreadPlayer = mock(EntityPlayerMP.class);
+        WorldServer offThreadWorld = mock(WorldServer.class);
+        offThreadPlayer.world = offThreadWorld;
+        when(offThreadWorld.isCallingFromMinecraftThread()).thenReturn(false);
+
+        assertThrows(IllegalStateException.class, () -> registry.invalidate(clientPlayer));
+        assertThrows(IllegalStateException.class, () -> registry.markDirty(offThreadPlayer));
+        assertTrue(registry.consumeDeferredRefresh(valid.player));
+    }
+
+    @Test
     void mutationAndInvalidationAreRejectedInsideProviderWithoutChangingMana() {
         ManaProviderRegistry registry = new ManaProviderRegistry();
         AtomicInteger mutationRejections = new AtomicInteger();
         AtomicInteger invalidationRejections = new AtomicInteger();
+        AtomicInteger dirtyRejections = new AtomicInteger();
         AtomicInteger priorMaximum = new AtomicInteger();
         registry.registerContextual(id("guard"), player -> {
             priorMaximum.set(new ManaService().getMaximumMana(player));
@@ -203,6 +310,11 @@ class ManaProviderRegistryTest {
             } catch (IllegalStateException expected) {
                 invalidationRejections.incrementAndGet();
             }
+            try {
+                registry.markDirty(player);
+            } catch (IllegalStateException expected) {
+                dirtyRejections.incrementAndGet();
+            }
             return ManaContribution.EMPTY;
         });
         PlayerFixture fixture = player(40L);
@@ -212,6 +324,7 @@ class ManaProviderRegistryTest {
 
         assertEquals(1, mutationRejections.get());
         assertEquals(1, invalidationRejections.get());
+        assertEquals(1, dirtyRejections.get());
         assertEquals(60, priorMaximum.get());
         assertEquals(before, fixture.state.getCurrentMana());
     }
@@ -249,12 +362,36 @@ class ManaProviderRegistryTest {
         assertEquals(0, registry.diagnosticEntryCount());
     }
 
+    @Test
+    void playerAndServerCleanupRemoveDeferredRuntimeState() {
+        ManaProviderRegistry registry = new ManaProviderRegistry();
+        UUID playerId = UUID.randomUUID();
+        PlayerFixture first = player(60L, playerId);
+        PlayerFixture replacement = player(60L, playerId);
+        registry.markDirty(first.player);
+
+        registry.remove(first.player);
+        assertFalse(registry.consumeDeferredRefresh(replacement.player));
+        registry.markDirty(replacement.player);
+        assertTrue(registry.consumeDeferredRefresh(replacement.player));
+
+        registry.markDirty(first.player);
+        registry.markDirty(replacement.player);
+        registry.clearRuntimeState();
+        assertFalse(registry.consumeDeferredRefresh(first.player));
+        assertFalse(registry.consumeDeferredRefresh(replacement.player));
+    }
+
     private static PlayerFixture player(long tick) {
+        return player(tick, UUID.randomUUID());
+    }
+
+    private static PlayerFixture player(long tick, UUID playerId) {
         EntityPlayer player = mock(EntityPlayerMP.class);
         WorldServer world = mock(WorldServer.class);
         ManaState state = new ManaState();
         player.world = world;
-        when(player.getUniqueID()).thenReturn(UUID.randomUUID());
+        when(player.getUniqueID()).thenReturn(playerId);
         when(world.getTotalWorldTime()).thenReturn(tick);
         when(world.isCallingFromMinecraftThread()).thenReturn(true);
         when(player.getCapability(ManaCapability.INSTANCE, null)).thenReturn(state);

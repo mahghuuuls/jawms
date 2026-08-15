@@ -6,6 +6,7 @@ import com.mahghuuuls.jawms.api.ManaMutationResult;
 import com.mahghuuuls.jawms.api.ManaMutationFailure;
 import com.mahghuuuls.jawms.api.ManaContribution;
 import com.mahghuuuls.jawms.api.ManaPublicState;
+import com.mahghuuuls.jawms.api.ManaProviderDescriptor;
 import com.mahghuuuls.jawms.api.ManaStateChangeEvent;
 import com.mahghuuuls.jawms.api.IItemManaModifierProvider;
 import com.mahghuuuls.jawms.api.IContextualManaModifierProvider;
@@ -30,7 +31,9 @@ import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** A separately compiled Java 8 example addon that uses only JAWMS public API types. */
@@ -60,6 +63,9 @@ public final class ApiConsumerFixture {
     private static final AtomicInteger MUTATION_REJECTIONS = new AtomicInteger();
     private static final AtomicReference<String> LAST_ITEM_CONTEXT =
             new AtomicReference<>("none");
+    private static final AtomicReference<String> LAST_CONTEXT_PLAYER =
+            new AtomicReference<>("none");
+    private static final AtomicLong LAST_CONTEXT_TICK = new AtomicLong(-1L);
     private static volatile boolean contextualEnabled;
     private static volatile boolean nullEnabled;
     private static volatile boolean throwingEnabled;
@@ -108,6 +114,8 @@ public final class ApiConsumerFixture {
                     @Override
                     public ManaContribution getContribution(EntityPlayer player) {
                         CONTEXT_CALLS.incrementAndGet();
+                        LAST_CONTEXT_PLAYER.set(player.getUniqueID().toString());
+                        LAST_CONTEXT_TICK.set(player.world.getTotalWorldTime());
                         return contextualEnabled
                                 ? ManaContribution.builder().flatRegeneration(1.0D).build()
                                 : ManaContribution.EMPTY;
@@ -258,7 +266,7 @@ public final class ApiConsumerFixture {
 
         @Override
         public String getUsage(ICommandSender sender) {
-            return "/jawms-api-fixture inspect | cycle | providers <status|contextual|null|throwing|mutation|bauble|invalidate> [true|false]";
+            return "/jawms-api-fixture inspect | cycle | providers <status|registrations|invalidate|dirty|contextual|contextual-deferred|null|throwing|mutation|bauble> [true|false]";
         }
 
         @Override
@@ -298,11 +306,29 @@ public final class ApiConsumerFixture {
                     sender.sendMessage(new TextComponentString("JAWMS provider cache invalidated."));
                     return;
                 }
+                if ("dirty".equals(operation) && arguments.length == 2) {
+                    ManaApi.markModifierCacheDirty(player);
+                    sender.sendMessage(new TextComponentString(
+                            "JAWMS provider cache marked dirty for the next END tick."
+                    ));
+                    return;
+                }
+                if ("registrations".equals(operation) && arguments.length == 2) {
+                    List<ManaProviderDescriptor> providers = ManaApi.getRegisteredProviders();
+                    sender.sendMessage(new TextComponentString(
+                            "providers frozen=" + ManaApi.isProviderRegistrationFrozen()
+                                    + ", count=" + providers.size()
+                                    + ", registrations=" + providers + "."
+                    ));
+                    return;
+                }
                 if ("status".equals(operation) && arguments.length == 2) {
                     sender.sendMessage(new TextComponentString(
                             "providers itemCalls=" + ITEM_CALLS.get()
                                     + ", lastItemContext=" + LAST_ITEM_CONTEXT.get()
                                     + ", contextCalls=" + CONTEXT_CALLS.get()
+                                    + ", lastContextPlayer=" + LAST_CONTEXT_PLAYER.get()
+                                    + ", lastContextTick=" + LAST_CONTEXT_TICK.get()
                                     + ", failureCalls=" + FAILURE_CALLS.get()
                                     + ", mutationRejections=" + MUTATION_REJECTIONS.get()
                                     + ", contextual=" + contextualEnabled
@@ -315,7 +341,11 @@ public final class ApiConsumerFixture {
                 }
                 if (arguments.length == 3) {
                     boolean enabled = parseFlag(arguments[2]);
-                    if ("contextual".equals(operation)) {
+                    boolean deferred = "contextual-deferred".equals(operation);
+                    if (deferred) {
+                        ManaApi.markModifierCacheDirty(player);
+                        contextualEnabled = enabled;
+                    } else if ("contextual".equals(operation)) {
                         contextualEnabled = enabled;
                     } else if ("null".equals(operation)) {
                         nullEnabled = enabled;
@@ -328,7 +358,9 @@ public final class ApiConsumerFixture {
                     } else {
                         throw new CommandException(getUsage(sender));
                     }
-                    ManaApi.invalidateModifierCache(player);
+                    if (!deferred) {
+                        ManaApi.invalidateModifierCache(player);
+                    }
                     sender.sendMessage(new TextComponentString(operation + "=" + enabled + "."));
                     return;
                 }
