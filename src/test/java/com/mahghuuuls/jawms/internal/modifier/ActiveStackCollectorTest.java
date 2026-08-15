@@ -1,6 +1,8 @@
 package com.mahghuuuls.jawms.internal.modifier;
 
 import com.mahghuuuls.jawms.api.ManaContribution;
+import com.mahghuuuls.jawms.api.ManaContributionDisposition;
+import com.mahghuuuls.jawms.api.ManaContributionSourceKind;
 import com.mahghuuuls.jawms.api.ManaItemContext;
 import com.mahghuuuls.jawms.api.ManaSlotCategory;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorProfile;
@@ -124,6 +126,135 @@ class ActiveStackCollectorTest {
                 contributions.get(0).getFlatMaximumMana(),
                 contributions.get(1).getFlatMaximumMana()
         ));
+    }
+
+    @Test
+    void configuredLayerAndOverriddenProviderShareOneSourceAwareDecision() {
+        ManaProviderRegistry registry = new ManaProviderRegistry();
+        AtomicInteger calls = new AtomicInteger();
+        registry.registerItem(new net.minecraft.util.ResourceLocation("test", "provider"),
+                Items.STICK, (player, context) -> {
+                    calls.incrementAndGet();
+                    return ManaContribution.builder().flatMaximumMana(99).build();
+                });
+        EntityPlayer player = mock(EntityPlayerMP.class);
+        WorldServer world = mock(WorldServer.class);
+        player.world = world;
+        when(player.getUniqueID()).thenReturn(UUID.randomUUID());
+        when(world.getTotalWorldTime()).thenReturn(1L);
+        ConfiguredItemRule explicit = new ConfiguredItemRule(
+                Items.STICK.getRegistryName(), ConfiguredItemRule.WILDCARD_METADATA,
+                ManaContribution.builder().flatMaximumMana(4).build()
+        );
+        List<ContributionEvaluationRecord> records = new ArrayList<>();
+
+        ActiveStackCollector.collectResolvedStackRecords(
+                player,
+                new ManaItemContext(
+                        new ItemStack(Items.STICK), ManaSlotCategory.MAIN_HAND, 0
+                ),
+                explicit,
+                null,
+                GameplayRules.initialDefaults(),
+                records,
+                registry
+        );
+
+        assertEquals(2, records.size());
+        assertEquals(ManaContributionSourceKind.CONFIGURED_ITEM,
+                records.get(0).toPublicExplanation().getSourceKind());
+        assertEquals(ManaContributionDisposition.APPLIED,
+                records.get(0).getDisposition());
+        assertEquals(4, records.get(0).getContribution().getFlatMaximumMana());
+        assertEquals(ManaContributionSourceKind.ITEM_PROVIDER,
+                records.get(1).toPublicExplanation().getSourceKind());
+        assertEquals(ManaContributionDisposition.OVERRIDDEN,
+                records.get(1).getDisposition());
+        assertEquals(0, calls.get());
+    }
+
+    @Test
+    void generatedLayerAlsoRecordsMatchingProviderAsOverridden() {
+        ManaProviderRegistry registry = new ManaProviderRegistry();
+        AtomicInteger calls = new AtomicInteger();
+        registry.registerItem(new net.minecraft.util.ResourceLocation("test", "provider"),
+                Items.STICK, (player, context) -> {
+                    calls.incrementAndGet();
+                    return ManaContribution.EMPTY;
+                });
+        EntityPlayer player = mock(EntityPlayerMP.class);
+        WorldServer world = mock(WorldServer.class);
+        player.world = world;
+        when(player.getUniqueID()).thenReturn(UUID.randomUUID());
+        when(world.getTotalWorldTime()).thenReturn(1L);
+        List<ContributionEvaluationRecord> records = new ArrayList<>();
+
+        ActiveStackCollector.collectResolvedStackRecords(
+                player,
+                new ManaItemContext(
+                        new ItemStack(Items.STICK), ManaSlotCategory.ARMOR, 0
+                ),
+                null,
+                ManaContribution.builder().flatMaximumMana(5).build(),
+                GameplayRules.initialDefaults(),
+                records,
+                registry
+        );
+
+        assertEquals(2, records.size());
+        assertEquals(ManaContributionSourceKind.GENERATED_WIZARDRY_ARMOR,
+                records.get(0).toPublicExplanation().getSourceKind());
+        assertEquals(ManaContributionDisposition.APPLIED,
+                records.get(0).getDisposition());
+        assertEquals(ManaContributionDisposition.OVERRIDDEN,
+                records.get(1).getDisposition());
+        assertEquals(0, calls.get());
+    }
+
+    @Test
+    void neutralConfiguredAndGeneratedLayersAreEmptyAndStillOverrideProviders() {
+        ManaProviderRegistry registry = new ManaProviderRegistry();
+        AtomicInteger calls = new AtomicInteger();
+        registry.registerItem(new net.minecraft.util.ResourceLocation("test", "provider"),
+                Items.STICK, (player, context) -> {
+                    calls.incrementAndGet();
+                    return ManaContribution.builder().flatMaximumMana(99).build();
+                });
+        EntityPlayer player = mock(EntityPlayerMP.class);
+        WorldServer world = mock(WorldServer.class);
+        player.world = world;
+        when(player.getUniqueID()).thenReturn(UUID.randomUUID());
+        when(world.getTotalWorldTime()).thenReturn(1L);
+        ManaItemContext context = new ManaItemContext(
+                new ItemStack(Items.STICK), ManaSlotCategory.ARMOR, 0
+        );
+        ConfiguredItemRule configured = new ConfiguredItemRule(
+                Items.STICK.getRegistryName(), ConfiguredItemRule.WILDCARD_METADATA,
+                ManaContribution.EMPTY
+        );
+
+        List<ContributionEvaluationRecord> configuredRecords = new ArrayList<>();
+        ActiveStackCollector.collectResolvedStackRecords(
+                player, context, configured, null, GameplayRules.initialDefaults(),
+                configuredRecords, registry
+        );
+        List<ContributionEvaluationRecord> generatedRecords = new ArrayList<>();
+        ActiveStackCollector.collectResolvedStackRecords(
+                player, context, null, ManaContribution.EMPTY,
+                GameplayRules.initialDefaults(), generatedRecords, registry
+        );
+
+        assertEquals(ManaContributionDisposition.EMPTY,
+                configuredRecords.get(0).getDisposition());
+        assertNull(configuredRecords.get(0).getContribution());
+        assertEquals(ManaContributionDisposition.OVERRIDDEN,
+                configuredRecords.get(1).getDisposition());
+        assertEquals(ManaContributionDisposition.EMPTY,
+                generatedRecords.get(0).getDisposition());
+        assertNull(generatedRecords.get(0).getContribution());
+        assertEquals(ManaContributionDisposition.OVERRIDDEN,
+                generatedRecords.get(1).getDisposition());
+        assertEquals(0, calls.get());
     }
 
     @Test

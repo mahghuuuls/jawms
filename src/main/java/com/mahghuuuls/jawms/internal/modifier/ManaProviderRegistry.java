@@ -4,6 +4,9 @@ import com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod;
 import com.mahghuuuls.jawms.api.IContextualManaModifierProvider;
 import com.mahghuuuls.jawms.api.IItemManaModifierProvider;
 import com.mahghuuuls.jawms.api.ManaContribution;
+import com.mahghuuuls.jawms.api.ManaContributionDisposition;
+import com.mahghuuuls.jawms.api.ManaContributionFailure;
+import com.mahghuuuls.jawms.api.ManaContributionSourceKind;
 import com.mahghuuuls.jawms.api.ManaItemContext;
 import com.mahghuuuls.jawms.api.ManaProviderDescriptor;
 import com.mahghuuuls.jawms.api.ManaProviderKind;
@@ -100,32 +103,72 @@ public final class ManaProviderRegistry {
             ManaItemContext context,
             GameplayRules rules
     ) {
+        return acceptedContributions(evaluateItemRecords(player, context, rules, false));
+    }
+
+    public synchronized List<ContributionEvaluationRecord> evaluateItemRecords(
+            EntityPlayer player,
+            ManaItemContext context,
+            GameplayRules rules,
+            boolean overridden
+    ) {
         requireEvaluationArguments(player, rules);
         if (context == null) {
             throw new NullPointerException("context");
         }
         PlayerCache cache = cache(player, rules);
-        List<ManaContribution> result = new ArrayList<>();
+        List<ContributionEvaluationRecord> result = new ArrayList<>();
         ItemStack stack = context.getStack();
+        ResourceLocation itemId = stack.getItem().getRegistryName();
         StackFingerprint fingerprint = StackFingerprint.of(stack);
         for (Registration registration : registrations.values()) {
             if (!(registration instanceof ItemRegistration)
-                    || rules.isProviderDisabled(registration.id)) {
+                    ) {
                 continue;
             }
             ItemRegistration itemRegistration = (ItemRegistration) registration;
             if (itemRegistration.item != stack.getItem()) {
                 continue;
             }
+            if (overridden) {
+                result.add(ContributionEvaluationRecord.item(
+                        registration.id,
+                        ManaContributionSourceKind.ITEM_PROVIDER,
+                        ManaContributionDisposition.OVERRIDDEN,
+                        ManaContributionFailure.NONE,
+                        itemId,
+                        context,
+                        null
+                ));
+                continue;
+            }
+            if (rules.isProviderDisabled(registration.id)) {
+                result.add(ContributionEvaluationRecord.item(
+                        registration.id,
+                        ManaContributionSourceKind.ITEM_PROVIDER,
+                        ManaContributionDisposition.DISABLED,
+                        ManaContributionFailure.NONE,
+                        itemId,
+                        context,
+                        null
+                ));
+                continue;
+            }
             CacheKey key = CacheKey.item(registration.id, context, fingerprint);
-            CachedContribution cached = cache.values.get(key);
+            CachedEvaluation cached = cache.values.get(key);
             if (cached == null) {
                 cached = evaluateItemProvider(player, context, itemRegistration);
                 cache.values.put(key, cached);
             }
-            if (cached.contribution != null) {
-                result.add(cached.contribution);
-            }
+            result.add(ContributionEvaluationRecord.item(
+                    registration.id,
+                    ManaContributionSourceKind.ITEM_PROVIDER,
+                    cached.disposition,
+                    cached.failure,
+                    itemId,
+                    context,
+                    cached.contribution
+            ));
         }
         return result;
     }
@@ -134,23 +177,43 @@ public final class ManaProviderRegistry {
             EntityPlayer player,
             GameplayRules rules
     ) {
+        return acceptedContributions(evaluateContextualRecords(player, rules));
+    }
+
+    public synchronized List<ContributionEvaluationRecord> evaluateContextualRecords(
+            EntityPlayer player,
+            GameplayRules rules
+    ) {
         requireEvaluationArguments(player, rules);
         PlayerCache cache = cache(player, rules);
-        List<ManaContribution> result = new ArrayList<>();
+        List<ContributionEvaluationRecord> result = new ArrayList<>();
         for (Registration registration : registrations.values()) {
-            if (!(registration instanceof ContextualRegistration)
-                    || rules.isProviderDisabled(registration.id)) {
+            if (!(registration instanceof ContextualRegistration)) {
+                continue;
+            }
+            if (rules.isProviderDisabled(registration.id)) {
+                result.add(ContributionEvaluationRecord.playerWide(
+                        registration.id,
+                        ManaContributionSourceKind.CONTEXTUAL_PROVIDER,
+                        ManaContributionDisposition.DISABLED,
+                        ManaContributionFailure.NONE,
+                        null
+                ));
                 continue;
             }
             CacheKey key = CacheKey.contextual(registration.id);
-            CachedContribution cached = cache.values.get(key);
+            CachedEvaluation cached = cache.values.get(key);
             if (cached == null) {
                 cached = evaluateContextualProvider(player, (ContextualRegistration) registration);
                 cache.values.put(key, cached);
             }
-            if (cached.contribution != null) {
-                result.add(cached.contribution);
-            }
+            result.add(ContributionEvaluationRecord.playerWide(
+                    registration.id,
+                    ManaContributionSourceKind.CONTEXTUAL_PROVIDER,
+                    cached.disposition,
+                    cached.failure,
+                    cached.contribution
+            ));
         }
         return result;
     }
@@ -239,7 +302,7 @@ public final class ManaProviderRegistry {
         return cache;
     }
 
-    private CachedContribution evaluateItemProvider(
+    private CachedEvaluation evaluateItemProvider(
             EntityPlayer player,
             ManaItemContext context,
             ItemRegistration registration
@@ -248,17 +311,22 @@ public final class ManaProviderRegistry {
             ManaContribution contribution = registration.provider.getContribution(player, context);
             if (contribution == null) {
                 diagnostic(player, registration.id, "item", context.toString(), null);
-            } else {
-                ManaProfileResolver.validateContribution(contribution);
+                return CachedEvaluation.invalid(ManaContributionFailure.NULL_RESULT);
             }
-            return new CachedContribution(contribution);
+            try {
+                ManaProfileResolver.validateContribution(contribution);
+            } catch (RuntimeException exception) {
+                diagnostic(player, registration.id, "item", context.toString(), exception);
+                return CachedEvaluation.invalid(ManaContributionFailure.INVALID_RESULT);
+            }
+            return CachedEvaluation.accepted(contribution);
         } catch (RuntimeException exception) {
             diagnostic(player, registration.id, "item", context.toString(), exception);
-            return CachedContribution.FAILED;
+            return CachedEvaluation.failed();
         }
     }
 
-    private CachedContribution evaluateContextualProvider(
+    private CachedEvaluation evaluateContextualProvider(
             EntityPlayer player,
             ContextualRegistration registration
     ) {
@@ -266,14 +334,31 @@ public final class ManaProviderRegistry {
             ManaContribution contribution = registration.provider.getContribution(player);
             if (contribution == null) {
                 diagnostic(player, registration.id, "contextual", "player", null);
-            } else {
-                ManaProfileResolver.validateContribution(contribution);
+                return CachedEvaluation.invalid(ManaContributionFailure.NULL_RESULT);
             }
-            return new CachedContribution(contribution);
+            try {
+                ManaProfileResolver.validateContribution(contribution);
+            } catch (RuntimeException exception) {
+                diagnostic(player, registration.id, "contextual", "player", exception);
+                return CachedEvaluation.invalid(ManaContributionFailure.INVALID_RESULT);
+            }
+            return CachedEvaluation.accepted(contribution);
         } catch (RuntimeException exception) {
             diagnostic(player, registration.id, "contextual", "player", exception);
-            return CachedContribution.FAILED;
+            return CachedEvaluation.failed();
         }
+    }
+
+    private static List<ManaContribution> acceptedContributions(
+            List<ContributionEvaluationRecord> records
+    ) {
+        List<ManaContribution> result = new ArrayList<>();
+        for (ContributionEvaluationRecord record : records) {
+            if (record.getDisposition() == ManaContributionDisposition.APPLIED) {
+                result.add(record.getContribution());
+            }
+        }
+        return result;
     }
 
     private void diagnostic(
@@ -353,7 +438,7 @@ public final class ManaProviderRegistry {
         private final long tick;
         private final long rulesRevision;
         private final long generation;
-        private final Map<CacheKey, CachedContribution> values = new HashMap<>();
+        private final Map<CacheKey, CachedEvaluation> values = new HashMap<>();
 
         private PlayerCache(long tick, long rulesRevision, long generation) {
             this.tick = tick;
@@ -362,12 +447,41 @@ public final class ManaProviderRegistry {
         }
     }
 
-    private static final class CachedContribution {
-        private static final CachedContribution FAILED = new CachedContribution(null);
+    private static final class CachedEvaluation {
+        private final ManaContributionDisposition disposition;
+        private final ManaContributionFailure failure;
         private final ManaContribution contribution;
 
-        private CachedContribution(ManaContribution contribution) {
+        private CachedEvaluation(
+                ManaContributionDisposition disposition,
+                ManaContributionFailure failure,
+                ManaContribution contribution
+        ) {
+            this.disposition = disposition;
+            this.failure = failure;
             this.contribution = contribution;
+        }
+
+        private static CachedEvaluation accepted(ManaContribution contribution) {
+            return contribution.isEmpty()
+                    ? new CachedEvaluation(
+                    ManaContributionDisposition.EMPTY, ManaContributionFailure.NONE, null
+            )
+                    : new CachedEvaluation(
+                    ManaContributionDisposition.APPLIED, ManaContributionFailure.NONE, contribution
+            );
+        }
+
+        private static CachedEvaluation invalid(ManaContributionFailure failure) {
+            return new CachedEvaluation(ManaContributionDisposition.INVALID, failure, null);
+        }
+
+        private static CachedEvaluation failed() {
+            return new CachedEvaluation(
+                    ManaContributionDisposition.FAILED,
+                    ManaContributionFailure.PROVIDER_EXCEPTION,
+                    null
+            );
         }
     }
 

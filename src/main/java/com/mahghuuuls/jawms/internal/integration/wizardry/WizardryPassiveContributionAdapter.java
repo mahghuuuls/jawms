@@ -1,6 +1,11 @@
 package com.mahghuuuls.jawms.internal.integration.wizardry;
 
+import com.mahghuuuls.jawms.Tags;
 import com.mahghuuuls.jawms.api.ManaContribution;
+import com.mahghuuuls.jawms.api.ManaContributionDisposition;
+import com.mahghuuuls.jawms.api.ManaContributionFailure;
+import com.mahghuuuls.jawms.api.ManaContributionSourceKind;
+import com.mahghuuuls.jawms.internal.modifier.ContributionEvaluationRecord;
 import com.mahghuuuls.jawms.internal.rules.WizardryIntegrationRules;
 import electroblob.wizardry.event.ArtefactCheckEvent;
 import electroblob.wizardry.item.ItemArtefact;
@@ -12,6 +17,7 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.potion.PotionEffect;
+import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.Event;
 
@@ -21,33 +27,68 @@ import java.util.List;
 /** Converts approved live Wizardry state into ordinary internal resolver contributions. */
 public final class WizardryPassiveContributionAdapter {
 
+    private static final ResourceLocation HELD_UPGRADES =
+            new ResourceLocation(Tags.MOD_ID, "wizardry_held_upgrades");
+    private static final ResourceLocation CONDENSING =
+            new ResourceLocation(Tags.MOD_ID, "wizardry_condensing");
+    private static final ResourceLocation FONT =
+            new ResourceLocation(Tags.MOD_ID, "wizardry_font_of_mana");
+
     private WizardryPassiveContributionAdapter() {
     }
 
     public static List<ManaContribution> collect(
             EntityPlayer player, WizardryIntegrationRules rules
     ) {
+        List<ManaContribution> result = new ArrayList<>();
+        for (ContributionEvaluationRecord record : collectRecords(player, rules)) {
+            if (record.getDisposition() == ManaContributionDisposition.APPLIED) {
+                result.add(record.getContribution());
+            }
+        }
+        return result;
+    }
+
+    public static List<ContributionEvaluationRecord> collectRecords(
+            EntityPlayer player, WizardryIntegrationRules rules
+    ) {
         if (player == null || rules == null) {
             throw new NullPointerException("player and rules must not be null");
         }
-        List<ManaContribution> result = new ArrayList<>(3);
+        List<ContributionEvaluationRecord> result = new ArrayList<>(3);
         ManaContribution held = heldWandContribution(player, rules);
         if (held != null) {
-            result.add(held);
+            result.add(passive(HELD_UPGRADES, held));
         }
         int condensingCount = rules.isCondensingEnabled()
                 ? activeCondensingRingCount(player)
                 : 0;
         if (condensingCount > 0) {
-            result.add(condensingContribution(condensingCount, rules));
+            result.add(passive(
+                    CONDENSING, condensingContribution(condensingCount, rules)
+            ));
         }
         if (rules.isFontEnabled() && WizardryPotions.font_of_mana != null) {
             PotionEffect effect = player.getActivePotionEffect(WizardryPotions.font_of_mana);
             if (effect != null) {
-                result.add(fontContribution(effect.getAmplifier(), rules));
+                result.add(passive(FONT, fontContribution(effect.getAmplifier(), rules)));
             }
         }
         return result;
+    }
+
+    private static ContributionEvaluationRecord passive(
+            ResourceLocation sourceId, ManaContribution contribution
+    ) {
+        boolean empty = contribution.isEmpty();
+        return ContributionEvaluationRecord.playerWide(
+                sourceId,
+                ManaContributionSourceKind.WIZARDRY_PASSIVE,
+                empty ? ManaContributionDisposition.EMPTY
+                        : ManaContributionDisposition.APPLIED,
+                ManaContributionFailure.NONE,
+                empty ? null : contribution
+        );
     }
 
     public static int aggregateHeldUpgrade(

@@ -7,6 +7,7 @@ import com.mahghuuuls.jawms.api.ManaMutationFailure;
 import com.mahghuuuls.jawms.api.ManaContribution;
 import com.mahghuuuls.jawms.api.ManaPublicState;
 import com.mahghuuuls.jawms.api.ManaProviderDescriptor;
+import com.mahghuuuls.jawms.api.ManaProfileExplanation;
 import com.mahghuuuls.jawms.api.ManaStateChangeEvent;
 import com.mahghuuuls.jawms.api.IItemManaModifierProvider;
 import com.mahghuuuls.jawms.api.IContextualManaModifierProvider;
@@ -266,7 +267,7 @@ public final class ApiConsumerFixture {
 
         @Override
         public String getUsage(ICommandSender sender) {
-            return "/jawms-api-fixture inspect | cycle | providers <status|registrations|invalidate|dirty|contextual|contextual-deferred|null|throwing|mutation|bauble> [true|false]";
+            return "/jawms-api-fixture inspect | explain | cycle | providers <status|registrations|invalidate|dirty|contextual|contextual-deferred|null|throwing|mutation|bauble> [true|false]";
         }
 
         @Override
@@ -282,6 +283,28 @@ public final class ApiConsumerFixture {
                 ManaPublicState state = inspect(player);
                 sender.sendMessage(new TextComponentString(
                         "JAWMS API fixture state=" + state + ", api=" + ManaApi.API_VERSION + "."
+                ));
+                return;
+            }
+            if (arguments.length == 1 && "explain".equalsIgnoreCase(arguments[0])) {
+                int callsBefore = ITEM_CALLS.get() + CONTEXT_CALLS.get()
+                        + FAILURE_CALLS.get();
+                ManaProfileExplanation explanation = ManaApi.explainManaProfile(player);
+                int callsAfter = ITEM_CALLS.get() + CONTEXT_CALLS.get()
+                        + FAILURE_CALLS.get();
+                sender.sendMessage(new TextComponentString(
+                        "JAWMS explanation tick=" + explanation.getEvaluatedWorldTick()
+                                + ", rulesRevision=" + explanation.getGameplayRulesRevision()
+                                + ", maximum=" + explanation.getFinalMaximumMana()
+                                + ", regeneration=" + explanation.getFinalRegeneration()
+                                + ", lockoutTicks=" + explanation.getFinalLockoutTicks()
+                                + ", postCast="
+                                + explanation.canRegenerateDuringPostCastLockout()
+                                + ", continuous="
+                                + explanation.canRegenerateDuringContinuousCasting()
+                                + ", sources=" + explanation.getContributions().size()
+                                + ", providerCallsBefore=" + callsBefore
+                                + ", providerCallsAfter=" + callsAfter + "."
                 ));
                 return;
             }

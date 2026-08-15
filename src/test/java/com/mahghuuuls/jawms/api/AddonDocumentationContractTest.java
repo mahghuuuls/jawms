@@ -83,6 +83,14 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("runs **before** the authoritative addon state changes"));
         assertTrue(guide.contains("do not evaluate providers synchronously"));
         assertTrue(guide.contains("next server END-tick profile evaluation"));
+        assertTrue(guide.contains("ManaApi.explainManaProfile(player)"));
+        assertTrue(guide.contains("does not scan equipment, invoke a provider"));
+        assertTrue(guide.contains("`OVERRIDDEN`"));
+        assertTrue(guide.contains("`INVALID`"));
+        assertTrue(guide.contains("`FAILED`"));
+        assertTrue(guide.contains("Only `APPLIED` records expose"));
+        assertTrue(guide.contains("Unmatched item providers"));
+        assertTrue(guide.contains("never expose exception text"));
         assertTrue(guide.contains("Compare known revisions only within the current connection"));
         assertTrue(guide.contains("glPushAttrib/glPopAttrib"));
         assertTrue(guide.contains(

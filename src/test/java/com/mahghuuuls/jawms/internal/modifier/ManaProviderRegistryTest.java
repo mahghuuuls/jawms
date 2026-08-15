@@ -1,6 +1,9 @@
 package com.mahghuuuls.jawms.internal.modifier;
 
 import com.mahghuuuls.jawms.api.ManaContribution;
+import com.mahghuuuls.jawms.api.ManaContributionDisposition;
+import com.mahghuuuls.jawms.api.ManaContributionFailure;
+import com.mahghuuuls.jawms.api.ManaContributionExplanation;
 import com.mahghuuuls.jawms.api.ManaItemContext;
 import com.mahghuuuls.jawms.api.ManaProviderDescriptor;
 import com.mahghuuuls.jawms.api.ManaProviderKind;
@@ -207,6 +210,83 @@ class ManaProviderRegistryTest {
     }
 
     @Test
+    void contextualRecordsRetainEveryBoundedDispositionWithoutCrossFailure() throws Exception {
+        ManaContribution corrupted = ManaContribution.builder().build();
+        Field multiplier = ManaContribution.class.getDeclaredField(
+                "globalSpellCostMultiplier"
+        );
+        multiplier.setAccessible(true);
+        multiplier.setDouble(corrupted, Double.NaN);
+        ManaProviderRegistry registry = new ManaProviderRegistry();
+        AtomicInteger disabledCalls = new AtomicInteger();
+        ResourceLocation disabled = id("c_disabled");
+        registry.registerContextual(id("a_applied"), player ->
+                ManaContribution.builder().flatMaximumMana(3).build());
+        registry.registerContextual(id("b_empty"), player -> ManaContribution.EMPTY);
+        registry.registerContextual(disabled, player -> {
+            disabledCalls.incrementAndGet();
+            return ManaContribution.EMPTY;
+        });
+        registry.registerContextual(id("d_null"), player -> null);
+        registry.registerContextual(id("e_invalid"), player -> corrupted);
+        registry.registerContextual(id("f_failed"), player -> {
+            throw new IllegalStateException("fixture failure");
+        });
+        GameplayRules rules = new GameplayRules(
+                4L, 50, 2.0D, 2.0D, GameplayRules.DEFAULT_COST_FORMULA,
+                20, 50, 100, Collections.emptyMap(), Collections.emptyList(),
+                WizardryArmorProfile.DEFAULT, Collections.singleton(disabled)
+        );
+
+        List<ContributionEvaluationRecord> records = registry.evaluateContextualRecords(
+                player(2L).player, rules
+        );
+
+        assertEquals(6, records.size());
+        assertRecord(records.get(0), ManaContributionDisposition.APPLIED,
+                ManaContributionFailure.NONE);
+        assertRecord(records.get(1), ManaContributionDisposition.EMPTY,
+                ManaContributionFailure.NONE);
+        assertRecord(records.get(2), ManaContributionDisposition.DISABLED,
+                ManaContributionFailure.NONE);
+        assertRecord(records.get(3), ManaContributionDisposition.INVALID,
+                ManaContributionFailure.NULL_RESULT);
+        assertRecord(records.get(4), ManaContributionDisposition.INVALID,
+                ManaContributionFailure.INVALID_RESULT);
+        assertRecord(records.get(5), ManaContributionDisposition.FAILED,
+                ManaContributionFailure.PROVIDER_EXCEPTION);
+        assertEquals(0, disabledCalls.get());
+        assertEquals(3, records.get(0).getContribution().getFlatMaximumMana());
+    }
+
+    @Test
+    void overriddenMatchingItemProviderIsRecordedWithoutInvocationAndUnmatchedIsAbsent() {
+        ManaProviderRegistry registry = new ManaProviderRegistry();
+        AtomicInteger calls = new AtomicInteger();
+        registry.registerItem(id("a_matching"), Items.STICK, (player, context) -> {
+            calls.incrementAndGet();
+            return ManaContribution.builder().flatMaximumMana(99).build();
+        });
+        registry.registerItem(id("b_unmatched"), Items.APPLE, (player, context) -> {
+            calls.incrementAndGet();
+            return ManaContribution.EMPTY;
+        });
+        ManaItemContext context = new ManaItemContext(
+                new ItemStack(Items.STICK), ManaSlotCategory.MAIN_HAND, 0
+        );
+
+        List<ContributionEvaluationRecord> records = registry.evaluateItemRecords(
+                player(3L).player, context, GameplayRules.initialDefaults(), true
+        );
+
+        assertEquals(1, records.size());
+        assertRecord(records.get(0), ManaContributionDisposition.OVERRIDDEN,
+                ManaContributionFailure.NONE);
+        assertEquals(id("a_matching"), records.get(0).toPublicExplanation().getSourceId());
+        assertEquals(0, calls.get());
+    }
+
+    @Test
     void explicitInvalidationPermitsOneFreshEvaluationInSameTick() {
         ManaProviderRegistry registry = new ManaProviderRegistry();
         AtomicInteger calls = new AtomicInteger();
@@ -400,6 +480,18 @@ class ManaProviderRegistryTest {
 
     private static ResourceLocation id(String path) {
         return new ResourceLocation("test", path);
+    }
+
+    private static void assertRecord(
+            ContributionEvaluationRecord record,
+            ManaContributionDisposition disposition,
+            ManaContributionFailure failure
+    ) {
+        ManaContributionExplanation explanation = record.toPublicExplanation();
+        assertEquals(disposition, explanation.getDisposition());
+        assertEquals(failure, explanation.getFailure());
+        assertEquals(disposition == ManaContributionDisposition.APPLIED,
+                explanation.hasAcceptedContribution());
     }
 
     private static Item item(String path) {

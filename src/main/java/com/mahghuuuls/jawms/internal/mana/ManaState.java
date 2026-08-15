@@ -3,6 +3,8 @@ package com.mahghuuuls.jawms.internal.mana;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import com.mahghuuuls.jawms.internal.modifier.ResolvedManaProfile;
+import com.mahghuuuls.jawms.internal.modifier.ManaProfileEvaluation;
+import com.mahghuuuls.jawms.api.ManaProfileExplanation;
 import electroblob.wizardry.constants.Element;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumHand;
@@ -39,6 +41,7 @@ public final class ManaState {
     private int lastInsufficientRequired = -1;
     private int lastInsufficientAvailable = -1;
     private long revision;
+    private ManaProfileEvaluation acceptedProfileEvaluation;
 
     public ManaState() {
         GameplayRules rules = GameplayRulesManager.current();
@@ -370,6 +373,7 @@ public final class ManaState {
         regenerationRemainder = 0.0D;
         remainingLockoutTicks = 0L;
         resetTransientCastingState();
+        acceptedProfileEvaluation = null;
     }
 
     public boolean applyEffectiveStats(int maximumMana, double regenerationPerSecond) {
@@ -399,6 +403,7 @@ public final class ManaState {
         if (!Double.isFinite(regenerationPerSecond) || regenerationPerSecond < 0.0D) {
             throw new IllegalArgumentException("Effective regeneration must be finite and non-negative.");
         }
+        acceptedProfileEvaluation = null;
         boolean changed = pendingLoadedMana != null
                 || maximumMana != effectiveMaximum
                 || Double.compare(regenerationPerSecond, effectiveRegeneration) != 0
@@ -439,6 +444,24 @@ public final class ManaState {
         return true;
     }
 
+    public boolean applyProfileEvaluation(ManaProfileEvaluation evaluation) {
+        if (evaluation == null) {
+            throw new NullPointerException("evaluation");
+        }
+        boolean changed = applyResolvedProfile(evaluation.getProfile());
+        acceptedProfileEvaluation = evaluation;
+        return changed;
+    }
+
+    public ManaProfileExplanation explainAcceptedProfile() {
+        if (acceptedProfileEvaluation == null) {
+            throw new IllegalStateException(
+                    "No authoritative JAWMS mana-profile evaluation has been accepted yet."
+            );
+        }
+        return acceptedProfileEvaluation.toPublicExplanation();
+    }
+
     public void advanceRevision() {
         revision++;
     }
@@ -461,6 +484,7 @@ public final class ManaState {
         remainingLockoutTicks = 0L;
         resetTransientCastingState();
         revision = original.revision + 1L;
+        acceptedProfileEvaluation = null;
     }
 
     public NBTTagCompound serializeIntrinsicState() {
@@ -470,6 +494,7 @@ public final class ManaState {
     }
 
     public void deserializeIntrinsicState(NBTTagCompound tag) {
+        acceptedProfileEvaluation = null;
         if (tag.hasKey("currentMana", 3)) {
             pendingLoadedMana = Math.max(0, tag.getInteger("currentMana"));
             currentMana = clamp(pendingLoadedMana);

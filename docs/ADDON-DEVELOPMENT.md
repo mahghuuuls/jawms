@@ -188,6 +188,21 @@ JAWMS provides two explicit refresh operations for addon state that it cannot ot
 
 Both operations require a logical-server player on the Minecraft server thread and reject calls during provider evaluation. Logout, clone/respawn, dimension change, and server shutdown discard pending refresh state. Ordinary equipment changes and normal next-tick evaluation already refresh profiles, so do not request an extra refresh for them.
 
+### Accepted Profile Explanation
+
+`ManaApi.explainManaProfile(player)` returns the immutable server-only explanation retained from the latest profile evaluation accepted by gameplay. It does not scan equipment, invoke a provider, post an event, mutate mana, or send a packet. If the player has not accepted an evaluation yet, it throws `IllegalStateException` instead of performing a speculative calculation.
+
+The explanation includes the evaluated world tick, gameplay-rules revision, configured bases, numeric aggregation stages, every final profile value, and deterministic source records. Each `ManaContributionExplanation` identifies its stable source ID and kind, optional item and slot identity, one disposition, and a bounded failure category. Only `APPLIED` records expose an accepted `ManaContribution`:
+
+- `APPLIED`: the immutable contribution participated in the accepted arithmetic;
+- `EMPTY`: the source was evaluated successfully but contributed nothing;
+- `DISABLED`: server rules disabled the relevant provider before invocation;
+- `OVERRIDDEN`: a configured or generated item layer won precedence, so the matching item provider was not invoked;
+- `INVALID`: the provider returned `null` or an invalid contribution;
+- `FAILED`: the provider callback threw an exception.
+
+All contextual providers are represented, including empty and disabled providers. Item providers appear only when their target item occupies an active armor, hand, or available Baubles slot. Unmatched item providers remain visible through `ManaApi.getRegisteredProviders()` but are absent from a player's explanation. Failure records expose only `ManaContributionFailure`; they never expose exception text, stack traces, callbacks, players, items, configuration objects, or other mutable runtime state.
+
 ### Contribution Units And Arithmetic
 
 | Contribution | Unit and meaning |

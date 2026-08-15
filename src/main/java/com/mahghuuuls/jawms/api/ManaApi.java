@@ -79,4 +79,14 @@ public final class ManaApi {
     public static void markModifierCacheDirty(EntityPlayer player) {
         ManaProviderRegistry.instance().markDirty(player);
     }
+
+    /**
+     * Returns the last profile evaluation accepted for this logical-server
+     * player. The query uses retained provenance and never invokes providers.
+     *
+     * @throws IllegalStateException when no evaluation has been accepted yet
+     */
+    public static ManaProfileExplanation explainManaProfile(EntityPlayer player) {
+        return ManaService.explainAcceptedProfile(player);
+    }
 }

@@ -6,15 +6,14 @@ import com.mahghuuuls.jawms.api.ManaCauses;
 import com.mahghuuuls.jawms.api.ManaMutationResult;
 import com.mahghuuuls.jawms.api.ManaMutationFailure;
 import com.mahghuuuls.jawms.api.ManaPublicState;
+import com.mahghuuuls.jawms.api.ManaProfileExplanation;
 import com.mahghuuuls.jawms.api.ManaStateChangeEvent;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
-import com.mahghuuuls.jawms.internal.integration.wizardry.WizardryPassiveContributionAdapter;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentContextManager;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentService;
-import com.mahghuuuls.jawms.internal.modifier.ActiveStackCollector;
-import com.mahghuuuls.jawms.internal.modifier.ManaProfileResolver;
-import com.mahghuuuls.jawms.internal.modifier.ManaProviderRegistry;
+import com.mahghuuuls.jawms.internal.modifier.ManaProfileEvaluation;
+import com.mahghuuuls.jawms.internal.modifier.ManaProfileEvaluator;
 import com.mahghuuuls.jawms.internal.modifier.ResolvedManaProfile;
 import electroblob.wizardry.spell.Spell;
 import com.mahghuuuls.jawms.internal.casting.CastCostContextManager;
@@ -180,7 +179,9 @@ public final class ManaService implements IManaService {
         ManaState state = requireServerState(player);
         if (state.hasPendingLoadedMana()
                 && !ManaEvaluationGuard.isEvaluating(player.getUniqueID())) {
-            state.applyResolvedProfile(resolveProfile(player, GameplayRulesManager.current()));
+            state.applyProfileEvaluation(evaluateProfile(
+                    player, GameplayRulesManager.current()
+            ));
         }
         return state;
     }
@@ -188,6 +189,11 @@ public final class ManaService implements IManaService {
     /** Validates refresh authority without applying pending profile state. */
     public static void requireModifierRefreshContext(EntityPlayer player) {
         requireServerState(player);
+    }
+
+    /** Returns the retained accepted explanation without evaluating providers. */
+    public static ManaProfileExplanation explainAcceptedProfile(EntityPlayer player) {
+        return requireServerState(player).explainAcceptedProfile();
     }
 
     private static ManaState requireServerState(EntityPlayer player) {
@@ -407,7 +413,9 @@ public final class ManaService implements IManaService {
         ManaPublicState oldState = snapshot(state);
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
-            boolean profileChanged = state.applyResolvedProfile(resolveProfile(player, rules));
+            boolean profileChanged = state.applyProfileEvaluation(
+                    evaluateProfile(player, rules)
+            );
             boolean lockoutEnded = state.getRemainingLockoutTicks() > 0L;
             boolean gateOpen = state.advanceRegenerationGate();
             lockoutEnded = lockoutEnded && state.getRemainingLockoutTicks() == 0L;
@@ -437,9 +445,12 @@ public final class ManaService implements IManaService {
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
             ManaPublicState oldState = snapshot(state);
             boolean hadLockout = state.getRemainingLockoutTicks() > 0L;
-            ResolvedManaProfile replacementProfile = resolveProfile(player, replacement);
+            ManaProfileEvaluation replacementEvaluation = evaluateProfile(
+                    player, replacement
+            );
+            ResolvedManaProfile replacementProfile = replacementEvaluation.getProfile();
             state.clampLockoutAfterReload(replacementProfile.getLockoutTicks());
-            boolean profileChanged = state.applyResolvedProfile(replacementProfile);
+            boolean profileChanged = state.applyProfileEvaluation(replacementEvaluation);
             ManaPublicState newState = snapshot(state);
             boolean lockoutEnded = hadLockout && newState.getRemainingLockoutTicks() == 0L;
             if (!oldState.equals(newState)) {
@@ -589,19 +600,10 @@ public final class ManaService implements IManaService {
         }
     }
 
-    private static ResolvedManaProfile resolveProfile(EntityPlayer player, GameplayRules rules) {
-        java.util.List<com.mahghuuuls.jawms.api.ManaContribution> contributions =
-                ActiveStackCollector.collect(player, rules);
-        contributions.addAll(ManaProviderRegistry.instance().evaluateContextual(player, rules));
-        contributions.addAll(WizardryPassiveContributionAdapter.collect(
-                player, rules.getWizardryIntegrationRules()
-        ));
-        return ManaProfileResolver.resolve(
-                rules.getBaseMaximum(),
-                rules.getBaseRegeneration(),
-                rules.getRegenerationLockoutSeconds(),
-                contributions
-        );
+    private static ManaProfileEvaluation evaluateProfile(
+            EntityPlayer player, GameplayRules rules
+    ) {
+        return ManaProfileEvaluator.evaluate(player, rules);
     }
 
     private interface StateMutation {

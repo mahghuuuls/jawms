@@ -20,6 +20,17 @@ public final class ManaProfileResolver {
             double baseLockoutSeconds,
             List<ManaContribution> contributions
     ) {
+        return calculate(
+                baseMaximum, baseRegeneration, baseLockoutSeconds, contributions
+        ).getProfile();
+    }
+
+    static ManaProfileCalculation calculate(
+            int baseMaximum,
+            double baseRegeneration,
+            double baseLockoutSeconds,
+            List<ManaContribution> contributions
+    ) {
         if (baseMaximum < 1) {
             throw new IllegalArgumentException("Base maximum must be positive.");
         }
@@ -29,13 +40,16 @@ public final class ManaProfileResolver {
             throw new NullPointerException("contributions");
         }
 
-        double maximumFlat = baseMaximum;
+        double maximumFlat = 0.0D;
+        double maximumRunning = baseMaximum;
         double maximumIncrease = 0.0D;
         double maximumReductionFactor = 1.0D;
-        double regenerationFlat = baseRegeneration;
+        double regenerationFlat = 0.0D;
+        double regenerationRunning = baseRegeneration;
         double regenerationIncrease = 0.0D;
         double regenerationReductionFactor = 1.0D;
-        double lockoutFlat = baseLockoutSeconds;
+        double lockoutFlat = 0.0D;
+        double lockoutRunning = baseLockoutSeconds;
         double lockoutIncrease = 0.0D;
         double lockoutReductionFactor = 1.0D;
         double globalEfficiency = 0.0D;
@@ -51,6 +65,9 @@ public final class ManaProfileResolver {
             }
             validateContribution(contribution);
             maximumFlat = saturatedAdd(maximumFlat, contribution.getFlatMaximumMana());
+            maximumRunning = saturatedAdd(
+                    maximumRunning, contribution.getFlatMaximumMana()
+            );
             maximumIncrease = saturatedAdd(
                     maximumIncrease,
                     contribution.getMaximumManaIncrease()
@@ -62,6 +79,10 @@ public final class ManaProfileResolver {
                     regenerationFlat,
                     contribution.getFlatRegeneration()
             );
+            regenerationRunning = saturatedAdd(
+                    regenerationRunning,
+                    contribution.getFlatRegeneration()
+            );
             regenerationIncrease = saturatedAdd(
                     regenerationIncrease,
                     contribution.getRegenerationIncrease()
@@ -71,6 +92,10 @@ public final class ManaProfileResolver {
             );
             lockoutFlat = saturatedAdd(
                     lockoutFlat,
+                    contribution.getFlatLockoutSeconds()
+            );
+            lockoutRunning = saturatedAdd(
+                    lockoutRunning,
                     contribution.getFlatLockoutSeconds()
             );
             lockoutIncrease = saturatedAdd(
@@ -112,8 +137,11 @@ public final class ManaProfileResolver {
             continuousPermission |= contribution.canRegenerateDuringContinuousCasting();
         }
 
+        double maximumSubtotal = Math.max(0.0D, maximumRunning);
+        double regenerationSubtotal = Math.max(0.0D, regenerationRunning);
+        double lockoutSubtotal = Math.max(0.0D, lockoutRunning);
         double resolvedMaximum = resolveNumeric(
-                Math.max(0.0D, maximumFlat),
+                maximumSubtotal,
                 maximumIncrease,
                 maximumReductionFactor
         );
@@ -121,17 +149,17 @@ public final class ManaProfileResolver {
                 ? Integer.MAX_VALUE
                 : Math.max(1, (int) Math.floor(resolvedMaximum));
         double regeneration = resolveNumeric(
-                Math.max(0.0D, regenerationFlat),
+                regenerationSubtotal,
                 regenerationIncrease,
                 regenerationReductionFactor
         );
         double lockoutSeconds = resolveNumeric(
-                Math.max(0.0D, lockoutFlat),
+                lockoutSubtotal,
                 lockoutIncrease,
                 lockoutReductionFactor
         );
 
-        return new ResolvedManaProfile(
+        ResolvedManaProfile profile = new ResolvedManaProfile(
                 maximum,
                 regeneration,
                 lockoutSeconds,
@@ -145,6 +173,21 @@ public final class ManaProfileResolver {
                 ),
                 postCastPermission,
                 continuousPermission
+        );
+        return new ManaProfileCalculation(
+                profile,
+                new NumericAggregation(
+                        baseMaximum, maximumFlat, maximumSubtotal,
+                        maximumIncrease, maximumReductionFactor, resolvedMaximum
+                ),
+                new NumericAggregation(
+                        baseRegeneration, regenerationFlat, regenerationSubtotal,
+                        regenerationIncrease, regenerationReductionFactor, regeneration
+                ),
+                new NumericAggregation(
+                        baseLockoutSeconds, lockoutFlat, lockoutSubtotal,
+                        lockoutIncrease, lockoutReductionFactor, lockoutSeconds
+                )
         );
     }
 

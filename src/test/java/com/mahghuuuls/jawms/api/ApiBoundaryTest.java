@@ -8,6 +8,9 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,6 +28,12 @@ class ApiBoundaryTest {
         assertPublicSignaturesDoNotExposeImplementation(ManaPublicState.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaMutationResult.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaMutationFailure.class);
+        assertPublicSignaturesDoNotExposeImplementation(ManaContributionDisposition.class);
+        assertPublicSignaturesDoNotExposeImplementation(ManaContributionExplanation.class);
+        assertPublicSignaturesDoNotExposeImplementation(ManaContributionFailure.class);
+        assertPublicSignaturesDoNotExposeImplementation(ManaContributionSourceKind.class);
+        assertPublicSignaturesDoNotExposeImplementation(ManaProfileAggregation.class);
+        assertPublicSignaturesDoNotExposeImplementation(ManaProfileExplanation.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaProviderDescriptor.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaProviderKind.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaStateChangeEvent.class);
@@ -57,6 +66,23 @@ class ApiBoundaryTest {
         ManaHudRenderEvent.class.getMethod("getPartialTicks");
         ManaHudRenderEvent.class.getMethod("getScaledWidth");
         ManaHudRenderEvent.class.getMethod("getScaledHeight");
+    }
+
+    @Test
+    void serverOnlyExplanationDoesNotEnterExistingPacketSchemas() throws Exception {
+        for (String path : new String[]{
+                "src/main/java/com/mahghuuuls/jawms/internal/mana/ManaStateMessage.java",
+                "src/main/java/com/mahghuuuls/jawms/internal/rules/GameplayRulesMessage.java",
+                "src/main/java/com/mahghuuuls/jawms/internal/casting/ContinuousCastReleaseMessage.java",
+                "src/main/java/com/mahghuuuls/jawms/internal/casting/ContinuousCastStopMessage.java"
+        }) {
+            String source = new String(
+                    Files.readAllBytes(Paths.get(System.getProperty("user.dir")).resolve(path)),
+                    StandardCharsets.UTF_8
+            );
+            assertFalse(source.contains("ManaProfileExplanation"), path);
+            assertFalse(source.contains("ManaContributionExplanation"), path);
+        }
     }
 
     private static void assertPublicSignaturesDoNotExposeImplementation(Class<?> apiType) {
