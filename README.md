@@ -2,7 +2,7 @@
 
 Just Another Wizardry Mana System (JAWMS) replaces Electroblob's Wizardry wand mana with a persistent, server-authoritative player mana pool. It adds configurable regeneration and spell costs, reworks Wizardry's mana-related equipment around the new resource, and provides a simple configurable HUD.
 
-The current published `0.3.0` release is a public beta; the local `0.4.0` candidate advances its addon API and adds separately packaged Developer Tools. See the [detailed mod page](MOD-PAGE.md) for beta status, configuration examples, stat explanations, Wizardry integration behavior, companion addons, and the public API overview. Player-visible release changes are recorded in the [changelog](CHANGELOG.md).
+The current published `0.4.0` release is a public beta. It advances the addon API to `1.4` and adds separately packaged optional Developer Tools. See the [detailed mod page](MOD-PAGE.md) for beta status, configuration examples, stat explanations, Wizardry integration behavior, companion addons, and the public API overview. Player-visible release changes are recorded in the [changelog](CHANGELOG.md).
 
 ## Features
 
@@ -44,7 +44,7 @@ Exact standalone MixinBooter `11.8` and `11.13` passed standard-Forge client/ser
 
 Use the canonical [Addon Development Guide](docs/ADDON-DEVELOPMENT.md) for the exact published dependency recipe, release/API matrix, server API, modifier units, client snapshot semantics, replacement-HUD lifecycle, and cache-safe rendering obligations. The separate [Command Reference](docs/COMMANDS.md) documents primary commands, optional Developer Tools, and contributor/API fixtures under their truthful availability tiers.
 
-JAWMS `0.4.0` advances the additive API to `1.4` while retaining the documented API `1.2` binary surface and API `1.3` additions. Published JAWMS `0.3.0` file `8632899` remains the real direct CurseMaven dependency until `0.4.0` receives its own file identity. The supported Java 8 package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`; `com.mahghuuuls.jawms.internal` is implementation detail.
+Published JAWMS `0.4.0` file `8651841` provides additive API `1.4` while retaining the documented API `1.2` binary surface and API `1.3` additions. The supported Java 8 package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`; `com.mahghuuuls.jawms.internal` is implementation detail.
 
 ## License
 

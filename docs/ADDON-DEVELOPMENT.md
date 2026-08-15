@@ -15,14 +15,14 @@ JAWMS mod versions, CurseForge file identities, and API versions are separate id
 | --- | --- | --- | --- |
 | Published `0.1.0` beta | `8597828` | `1.2` | Verified from a clean ForgeDevEnv consumer |
 | Published `0.2.0` beta | `8621418` | `1.3` | Resolved through standard CurseMaven and consumed by completed companion addons |
-| Published `0.3.0` beta | `8632899` | `1.3` | Current immutable dependency recipe; MixinBooter `11.8` or newer |
-| Candidate `0.4.0` beta | Not published; file identity pending | `1.4` | Source, compatibility-fixture, and build evidence only until publication |
+| Published `0.3.0` beta | `8632899` | `1.3` | Historical API-`1.3` dependency; MixinBooter `11.8` or newer |
+| Published `0.4.0` beta | `8651841` | `1.4` | Current immutable dependency recipe; MixinBooter `11.8` or newer |
 
 API major `1` follows an additive compatibility policy. A higher minor version retains the documented public descriptors from supported earlier minor versions and does not add required methods to an already-published interface. A breaking change requires another major version or a parallel opt-in contract. A type may be deprecated during major `1`, but deprecation does not authorize its removal from a later `1.x` release.
 
 The current API version is available as `ManaApi.API_VERSION` and `ManaApiVersion.CURRENT`. Use the matrix above to choose a real distribution file; do not infer a CurseForge file ID from those constants.
 
-## Published `0.3.0` Dependency Recipe
+## Published `0.4.0` Dependency Recipe
 
 The supported compilation input is the full JAWMS mod. There is no separately published `jawms-api` artifact. In a current [CleanroomMC ForgeDevEnv](https://github.com/CleanroomMC/ForgeDevEnv) project, add the following repository blocks:
 
@@ -51,7 +51,7 @@ Then add these exact dependencies:
 ```groovy
 dependencies {
     implementation rfg.deobf(
-            'curse.maven:just-another-wizardry-mana-system-1643697:8632899'
+            'curse.maven:just-another-wizardry-mana-system-1643697:8651841'
     )
     runtimeOnly rfg.deobf(
             'curse.maven:electroblobs-wizardry-265642:8320066'
@@ -67,7 +67,7 @@ Declare the same runtime requirements in the addon mod's Forge metadata. The `@M
         modid = "exampleaddon",
         name = "Example JAWMS Addon",
         version = "1.0.0",
-        dependencies = "required-after:jawms@[0.3.0,0.4.0);"
+        dependencies = "required-after:jawms@[0.4.0,0.5.0);"
                 + "required-after:ebwizardry@[4.3.19,4.3.20);"
                 + "required-after:mixinbooter@[11.8,)"
 )
@@ -79,7 +79,7 @@ Also list the three ranges in `mcmod.info` if that file is part of the project:
 
 ```json
 "requiredMods": [
-  "jawms@[0.3.0,0.4.0)",
+  "jawms@[0.4.0,0.5.0)",
   "ebwizardry@[4.3.19,4.3.20)",
   "mixinbooter@[11.8,)"
 ]
@@ -87,20 +87,21 @@ Also list the three ranges in `mcmod.info` if that file is part of the project:
 
 Do not rely on CurseMaven transitive metadata to install Wizardry or MixinBooter. They are explicit runtime dependencies of JAWMS on standard Forge and must be present in development and in the installed modpack.
 
-### Historical `0.1.0` And `0.2.0` Dependencies
+### Historical `0.1.0`, `0.2.0`, And `0.3.0` Dependencies
 
-Published `0.1.0` file `8597828` provides API `1.2`. Published `0.2.0` file `8621418` provides API `1.3`:
+Published `0.1.0` file `8597828` provides API `1.2`. Published `0.2.0` file `8621418` and `0.3.0` file `8632899` provide API `1.3`:
 
 ```groovy
 implementation rfg.deobf('curse.maven:just-another-wizardry-mana-system-1643697:8597828')
 implementation rfg.deobf('curse.maven:just-another-wizardry-mana-system-1643697:8621418')
+implementation rfg.deobf('curse.maven:just-another-wizardry-mana-system-1643697:8632899')
 ```
 
-Use only the one JAWMS dependency matching the release you target. Published `0.1.0` and `0.2.0` require MixinBooter `11.11` through versions below `12.0`. Addons targeting those immutable releases should declare `jawms@[0.1.0,0.3.0)` or the narrower `jawms@[0.2.0,0.3.0)` as appropriate and retain the historical `[11.11,12.0)` MixinBooter range.
+Use only the one JAWMS dependency matching the release you target. Published `0.1.0` and `0.2.0` require MixinBooter `11.11` through versions below `12.0`. Addons targeting those immutable releases should declare `jawms@[0.1.0,0.3.0)` or the narrower `jawms@[0.2.0,0.3.0)` as appropriate and retain the historical `[11.11,12.0)` MixinBooter range. An addon intentionally remaining on published `0.3.0` may declare `jawms@[0.3.0,0.4.0)`.
 
-### Published `0.3.0` MixinBooter Boundary
+### Published `0.3.0` And `0.4.0` MixinBooter Boundary
 
-Published `0.3.0` uses exact MixinBooter `11.8` as the development dependency:
+Published `0.3.0` and `0.4.0` use exact MixinBooter `11.8` as the development dependency:
 
 ```groovy
 runtimeOnly 'zone.rong:mixinbooter:11.8'
@@ -112,11 +113,11 @@ Its `@Mod` and `mcmod.info` requirements are both open-ended from the proven min
 required-after:mixinbooter@[11.8,)
 ```
 
-The open range means JAWMS accepts MixinBooter `11.8` or newer; it does not mean every future release has been tested. Exact standalone `11.8` and `11.13` are the explicit standard-Forge validation lanes retained for that release. Addons requiring JAWMS `0.3.0` should declare `jawms@[0.3.0,0.4.0)` and must not copy the historical `[11.11,12.0)` MixinBooter range into current metadata.
+The open range means JAWMS accepts MixinBooter `11.8` or newer; it does not mean every future release has been tested. Exact standalone `11.8` and `11.13` are the explicit standard-Forge validation lanes retained for these releases. Addons targeting current JAWMS `0.4.0` should declare `jawms@[0.4.0,0.5.0)` and must not copy the historical `[11.11,12.0)` MixinBooter range into current metadata.
 
-### Candidate API `1.4` Source Boundary
+### Published API `1.4` Distribution Boundary
 
-JAWMS `0.4.0` advances the public API to `1.4`, but it has no CurseForge file identity until publication. Do not invent a CurseMaven coordinate for it. The API-`1.4` examples below describe the candidate source and are compiled by JAWMS's maintained compatibility fixture. Continue using published `0.3.0` file `8632899` for an independently resolvable dependency until a real `0.4.0` file exists.
+Published JAWMS `0.4.0` file `8651841` advances the public API to `1.4` and is the current independently resolvable compilation input. The API-`1.4` examples below are also compiled by JAWMS's maintained compatibility fixture. There is no separately published `jawms-api` artifact; depend on the full deobfuscated JAWMS file shown above.
 
 If addon source directly uses Wizardry types exposed by the server API, such as `Spell` or `Element`, change the Wizardry declaration from `runtimeOnly` to `implementation` while keeping the same deobfuscated coordinate. The replacement-HUD-only example does not directly use those types, so `runtimeOnly` is sufficient there.
 
@@ -133,7 +134,7 @@ Leaving the template's example `mixin_configs` name non-empty can put a nonexist
 
 All `IManaService` methods require a logical-server player and the Minecraft server thread. Current mana is server-authoritative; client values are display-only.
 
-The basic service and provider operations below exist in published API `1.3`. Sections that explicitly identify an API-`1.4` addition require the local `0.4.0` candidate until that version receives a real published file identity.
+The basic service and provider operations below also exist in published API `1.3`. Sections that identify an API-`1.4` addition require published JAWMS `0.4.0` file `8651841` or a later compatible release.
 
 ```java
 private static final ResourceLocation POTION_RESTORE =
@@ -282,7 +283,7 @@ JAWMS publishes `ManaHudRenderEvent` on the Forge event bus. This table is part 
 
 Use `LOWEST` priority and `receiveCanceled=false`. If the replacement is disabled, return without touching the event. Once enabled, cancel before applying the replacement's own visibility policy. This prevents JAWMS's built-in bar from appearing when the replacement intentionally hides at full mana, in Creative, or for another addon-specific reason.
 
-The following minimal flow compiles against the published `0.3.0` / API-`1.3` dependency recipe above. It deliberately uses only the retained API-`1.2` subset, so it also illustrates the older compatibility boundary and implements only an enabled switch and full-mana policy:
+The following minimal flow compiles against the published `0.4.0` / API-`1.4` dependency recipe above. It deliberately uses only the retained API-`1.2` subset, so it also illustrates the older compatibility boundary and implements only an enabled switch and full-mana policy:
 
 ```java
 @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = false)
@@ -308,7 +309,7 @@ public void renderMana(ManaHudRenderEvent event) {
 }
 ```
 
-API `1.3` adds immutable `ClientHudContext`. A replacement compiled against published `0.3.0` file `8632899` may add a known-state Creative policy before drawing:
+API `1.3` added immutable `ClientHudContext`, which remains available in published `0.4.0` file `8651841`. A replacement may add a known-state Creative policy before drawing:
 
 ```java
 ClientHudContext context = event.getContext();
@@ -319,7 +320,7 @@ if (hideInCreative
 }
 ```
 
-Do not copy the published `0.1.0` dependency coordinate and then use `getContext()`: API `1.2` does not contain that method. JAWMS `0.2.0` was the first API-`1.3` release, while published `0.3.0` file `8632899` is the current dependency recipe.
+Do not copy the published `0.1.0` dependency coordinate and then use `getContext()`: API `1.2` does not contain that method. JAWMS `0.2.0` was the first API-`1.3` release, while published `0.4.0` file `8651841` is the current dependency recipe and includes that retained method.
 
 This is best-effort ownership, not a provider-selection system. An earlier subscriber can cancel first, in which case `receiveCanceled=false` skips this subscriber. If two replacements use the same priority, Forge registration order decides which runs first; JAWMS does not define a stable winner.
 
@@ -359,4 +360,4 @@ Also test:
 - dedicated-server startup with public client API classes present but no client linkage;
 - the exact published dependency coordinate in a clean workspace without resolving JAWMS from `mavenLocal`, a copied JAWMS JAR, or an unpublished file ID.
 
-API `1.3` in published JAWMS `0.3.0` has source, Java 8, descriptor, old-binary, launched-fixture, direct CurseMaven, and completed-addon coverage. [JAWMS Hud Styles](https://www.curseforge.com/minecraft/mc-mods/jawms-hud-styles) and [JAWMS Classic Bar Integration](https://www.curseforge.com/minecraft/mc-mods/jawms-classic-bar) both consume the public HUD API. Candidate API `1.4` has source/build and compatibility-fixture coverage only until `0.4.0` is independently published and exercised by a real addon.
+API `1.3` in published JAWMS `0.3.0` has source, Java 8, descriptor, old-binary, launched-fixture, direct CurseMaven, and completed-addon coverage. [JAWMS Hud Styles](https://www.curseforge.com/minecraft/mc-mods/jawms-hud-styles) and [JAWMS Classic Bar Integration](https://www.curseforge.com/minecraft/mc-mods/jawms-classic-bar) both consume the public HUD API. API `1.4` is published in JAWMS `0.4.0` file `8651841` and has source, build, old-binary, compatibility-fixture, and JAWMS Developer Tools runtime coverage; migration of the owner-owned JAWMS Additions project remains separate follow-up work.

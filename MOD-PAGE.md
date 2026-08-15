@@ -76,7 +76,7 @@ JAWMS includes a documented Java 8 API. Addons can:
 - Observe mana-state transitions and provide synchronized tooltip text.
 - Read synchronized client mana state and replace the built-in HUD without depending on internal implementation classes.
 
-JAWMS `0.4.0` advances the additive API to `1.4` while retaining the documented API `1.2` binary surface and API `1.3` additions. Until `0.4.0` is published with a real file identity, published JAWMS `0.3.0` file `8632899` remains the direct CurseMaven dependency for API `1.3`. JAWMS Hud Styles and JAWMS Classic Bar Integration both use the public HUD API.
+Published JAWMS `0.4.0` file `8651841` provides additive API `1.4` while retaining the documented API `1.2` binary surface and API `1.3` additions. JAWMS Hud Styles and JAWMS Classic Bar Integration both use the public HUD API.
 
 The canonical [Addon Development Guide](https://github.com/mahghuuuls/jawms/blob/main/docs/ADDON-DEVELOPMENT.md) contains the dependency recipe, release and API matrix, server-side operations, modifier arithmetic, synchronization rules, HUD lifecycle, and rendering-state responsibilities. The [Command Reference](https://github.com/mahghuuuls/jawms/blob/main/docs/COMMANDS.md) documents the separately installed Developer Tools and keeps contributor fixtures distinct from shipped commands. The supported package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`.
 

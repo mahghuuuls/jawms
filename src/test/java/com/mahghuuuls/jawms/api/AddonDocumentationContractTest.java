@@ -24,10 +24,15 @@ class AddonDocumentationContractTest {
                 "curse.maven:just-another-wizardry-mana-system-1643697:8597828"
         ));
         assertTrue(guide.contains("curse.maven:electroblobs-wizardry-265642:8320066"));
-        assertTrue(guide.contains("Published `0.3.0` Dependency Recipe"));
-        assertTrue(guide.contains("Historical `0.1.0` And `0.2.0` Dependencies"));
+        assertTrue(guide.contains("Published `0.4.0` Dependency Recipe"));
+        assertTrue(guide.contains(
+                "Historical `0.1.0`, `0.2.0`, And `0.3.0` Dependencies"
+        ));
         assertTrue(guide.contains(
                 "curse.maven:just-another-wizardry-mana-system-1643697:8632899"
+        ));
+        assertTrue(guide.contains(
+                "curse.maven:just-another-wizardry-mana-system-1643697:8651841"
         ));
         assertTrue(guide.contains("zone.rong:mixinbooter:11.8"));
         assertTrue(guide.contains("required-after:mixinbooter@[11.8,)"));
@@ -40,16 +45,19 @@ class AddonDocumentationContractTest {
                 "Published `0.3.0` beta | `8632899` | `1.3`"
         ));
         assertTrue(guide.contains(
-                "Candidate `0.4.0` beta | Not published; file identity pending | `1.4`"
+                "Published `0.4.0` beta | `8651841` | `1.4`"
         ));
-        assertTrue(guide.contains("Candidate API `1.4` Source Boundary"));
+        assertTrue(guide.contains("Published API `1.4` Distribution Boundary"));
         assertTrue(guide.contains("jawms@[0.1.0,0.3.0)"));
         assertTrue(guide.contains("jawms@[0.3.0,0.4.0)"));
+        assertTrue(guide.contains("jawms@[0.4.0,0.5.0)"));
         assertFalse(guide.contains("jawms@[0.1.0,0.2.0)"));
         assertFalse(guide.contains(
                 "curse.maven:just-another-wizardry-mana-system-1643697:PENDING"
         ));
         assertFalse(guide.contains("curse.maven:just-another-wizardry-mana-system-1643697:0.4.0"));
+        assertFalse(guide.contains("file identity pending"));
+        assertFalse(guide.contains("Candidate `0.4.0`"));
         assertFalse(guide.contains("Ã"));
     }
 
@@ -61,18 +69,18 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("priority = EventPriority.LOWEST"));
         assertTrue(guide.contains("receiveCanceled = false"));
         assertTrue(guide.contains(
-                "minimal flow compiles against the published `0.3.0` / API-`1.3`"
+                "minimal flow compiles against the published `0.4.0` / API-`1.4`"
         ));
         assertTrue(guide.contains("event.getPartialTicks()"));
         assertTrue(guide.contains("event.getScaledWidth()"));
         assertTrue(guide.contains("event.getScaledHeight()"));
         assertTrue(guide.contains("Do not copy the published `0.1.0` dependency"));
         int publishedFlow = guide.indexOf("The following minimal flow compiles");
-        int candidateDelta = guide.indexOf("API `1.3` adds immutable `ClientHudContext`");
+        int contextDelta = guide.indexOf("API `1.3` added immutable `ClientHudContext`");
         assertTrue(publishedFlow >= 0);
-        assertTrue(candidateDelta > publishedFlow);
-        assertFalse(guide.substring(publishedFlow, candidateDelta).contains("getContext()"));
-        assertTrue(guide.substring(candidateDelta).contains("getContext()"));
+        assertTrue(contextDelta > publishedFlow);
+        assertFalse(guide.substring(publishedFlow, contextDelta).contains("getContext()"));
+        assertTrue(guide.substring(contextDelta).contains("getContext()"));
         assertTrue(guide.contains("event.setCanceled(true)"));
         assertTrue(guide.contains("if (hideWhenFull"));
         assertTrue(guide.indexOf("event.setCanceled(true)")
@@ -149,10 +157,11 @@ class AddonDocumentationContractTest {
         assertTrue(modPage.contains("(" + GUIDE_URL + ")"));
         assertTrue(rootPackage.contains(GUIDE_URL));
         assertTrue(clientPackage.contains(GUIDE_URL));
-        assertTrue(readme.contains("JAWMS `0.4.0` advances the additive API to `1.4`"));
+        assertTrue(readme.contains("current published `0.4.0` release"));
+        assertTrue(readme.contains("Published JAWMS `0.4.0` file `8651841`"));
         assertTrue(readme.contains("documented API `1.2` binary surface"));
         assertTrue(readme.contains("docs/COMMANDS.md"));
-        assertTrue(modPage.contains("JAWMS `0.4.0` advances the additive API to `1.4`"));
+        assertTrue(modPage.contains("Published JAWMS `0.4.0` file `8651841`"));
         assertTrue(modPage.contains("documented API `1.2` binary surface"));
         assertTrue(modPage.contains(
                 "https://www.curseforge.com/minecraft/mc-mods/jawms-hud-styles"

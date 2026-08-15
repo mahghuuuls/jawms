@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.4.0] - Unreleased
+## [0.4.0] - 2026-08-15
 
 ### Added
 
@@ -11,7 +11,7 @@
 ### Compatibility
 
 - Retained all documented API `1.2` and API `1.3` descriptors and added frozen old-binary compatibility checks for both generations.
-- Kept published JAWMS `0.3.0` / API `1.3` as the current remote addon dependency recipe until `0.4.0` receives a real published file identity.
+- Published additive API `1.4` as CurseForge file `8651841` for direct addon consumption.
 
 ## [0.3.0] - 2026-08-12
 
