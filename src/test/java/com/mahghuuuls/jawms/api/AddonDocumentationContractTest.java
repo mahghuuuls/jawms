@@ -172,7 +172,7 @@ class AddonDocumentationContractTest {
                 .trim();
         assertEquals(
                 "## For Mod Developers\n\n"
-                        + "JAWMS includes a documented Java 8 API for addons. "
+                        + "JAWMS includes a documented API for addons. "
                         + "Developers can find setup instructions and the full technical "
                         + "reference in the [Addon Development Guide](" + GUIDE_URL + ").",
                 developerSection

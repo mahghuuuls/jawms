@@ -68,7 +68,7 @@ Valid server-side changes can be applied with `/jawms reload`. If an integration
 
 ## For Mod Developers
 
-JAWMS includes a documented Java 8 API for addons. Developers can find setup instructions and the full technical reference in the [Addon Development Guide](https://github.com/mahghuuuls/jawms/blob/main/docs/ADDON-DEVELOPMENT.md).
+JAWMS includes a documented API for addons. Developers can find setup instructions and the full technical reference in the [Addon Development Guide](https://github.com/mahghuuuls/jawms/blob/main/docs/ADDON-DEVELOPMENT.md).
 
 ## Detailed System Reference
 
