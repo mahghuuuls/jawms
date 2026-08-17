@@ -1,5 +1,6 @@
 package com.mahghuuuls.jawms.api;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -143,7 +144,7 @@ class AddonDocumentationContractTest {
     }
 
     @Test
-    void publicEntryPointsLinkSameGuideAndVersionBoundary() throws IOException {
+    void publicEntryPointsLinkGuideAndKeepModPageDeveloperCopyConcise() throws IOException {
         String readme = read("README.md");
         String modPage = read("MOD-PAGE.md");
         String rootPackage = read(
@@ -161,13 +162,44 @@ class AddonDocumentationContractTest {
         assertTrue(readme.contains("Published JAWMS `0.4.0` file `8651841`"));
         assertTrue(readme.contains("documented API `1.2` binary surface"));
         assertTrue(readme.contains("docs/COMMANDS.md"));
-        assertTrue(modPage.contains("Published JAWMS `0.4.0` file `8651841`"));
-        assertTrue(modPage.contains("documented API `1.2` binary surface"));
+        String normalizedModPage = modPage.replace("\r\n", "\n");
+        int developerStart = normalizedModPage.indexOf("## For Mod Developers");
+        int developerEnd = normalizedModPage.indexOf("## Detailed System Reference");
+        assertTrue(developerStart >= 0);
+        assertTrue(developerEnd > developerStart);
+        String developerSection = normalizedModPage
+                .substring(developerStart, developerEnd)
+                .trim();
+        assertEquals(
+                "## For Mod Developers\n\n"
+                        + "JAWMS includes a documented Java 8 API for addons. "
+                        + "Developers can find setup instructions and the full technical "
+                        + "reference in the [Addon Development Guide](" + GUIDE_URL + ").",
+                developerSection
+        );
+        int companionsStart = normalizedModPage.indexOf(
+                "### Mana Bar and Companion Addons"
+        );
+        int companionsEnd = normalizedModPage.indexOf("### Requirements");
+        assertTrue(companionsStart >= 0);
+        assertTrue(companionsEnd > companionsStart);
+        String companionSection = normalizedModPage.substring(
+                companionsStart,
+                companionsEnd
+        );
+        assertTrue(companionSection.contains(
+                "Players can customize or extend JAWMS with companion addons:"
+        ));
         assertTrue(modPage.contains(
                 "https://www.curseforge.com/minecraft/mc-mods/jawms-hud-styles"
         ));
         assertTrue(modPage.contains(
                 "https://www.curseforge.com/minecraft/mc-mods/jawms-classic-bar"
+        ));
+        assertTrue(companionSection.contains(
+                "- [JAWMS Additions]"
+                        + "(https://www.curseforge.com/minecraft/mc-mods/jawms-additions) "
+                        + "expands the mana system with new potions, enchantments, and Baubles."
         ));
     }
 

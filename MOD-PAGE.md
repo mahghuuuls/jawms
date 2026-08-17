@@ -24,10 +24,11 @@ Wizardry's spell selection, tiers, cooldowns, progression, charge-up behavior, a
 
 The built-in display is a simple blue mana bar. It can hide while full, show different numeric values, use different anchors and offsets, change size, and fill in any of four directions. It can also be disabled completely.
 
-Players who prefer a different presentation can use a companion addon:
+Players can customize or extend JAWMS with companion addons:
 
 - [JAWMS Hud Styles](https://www.curseforge.com/minecraft/mc-mods/jawms-hud-styles) replaces the basic bar with compact configurable HUD styles beside the hotbar.
 - [JAWMS Classic Bar Integration](https://www.curseforge.com/minecraft/mc-mods/jawms-classic-bar) displays JAWMS mana as part of Classic Bar Legacy's HUD stack.
+- [JAWMS Additions](https://www.curseforge.com/minecraft/mc-mods/jawms-additions) expands the mana system with new potions, enchantments, and Baubles.
 
 ### Requirements
 
@@ -67,18 +68,7 @@ Valid server-side changes can be applied with `/jawms reload`. If an integration
 
 ## For Mod Developers
 
-JAWMS includes a documented Java 8 API. Addons can:
-
-- Read, add, consume, or set authoritative player mana through supported operations.
-- Provide equipped-item modifiers for armor, Baubles slots, and either hand.
-- Provide player-wide modifiers for enchantments, potion effects, temporary states, and other mechanics.
-- Modify maximum mana, mana regeneration, regeneration delay, Spell Efficiency, spell-cost multipliers, and regeneration permissions.
-- Observe mana-state transitions and provide synchronized tooltip text.
-- Read synchronized client mana state and replace the built-in HUD without depending on internal implementation classes.
-
-Published JAWMS `0.4.0` file `8651841` provides additive API `1.4` while retaining the documented API `1.2` binary surface and API `1.3` additions. JAWMS Hud Styles and JAWMS Classic Bar Integration both use the public HUD API.
-
-The canonical [Addon Development Guide](https://github.com/mahghuuuls/jawms/blob/main/docs/ADDON-DEVELOPMENT.md) contains the dependency recipe, release and API matrix, server-side operations, modifier arithmetic, synchronization rules, HUD lifecycle, and rendering-state responsibilities. The [Command Reference](https://github.com/mahghuuuls/jawms/blob/main/docs/COMMANDS.md) documents the separately installed Developer Tools and keeps contributor fixtures distinct from shipped commands. The supported package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`.
+JAWMS includes a documented Java 8 API for addons. Developers can find setup instructions and the full technical reference in the [Addon Development Guide](https://github.com/mahghuuuls/jawms/blob/main/docs/ADDON-DEVELOPMENT.md).
 
 ## Detailed System Reference
 
