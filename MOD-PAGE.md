@@ -27,6 +27,7 @@ Players can customize or extend JAWMS with companion addons:
 - [JAWMS Hud Styles](https://www.curseforge.com/minecraft/mc-mods/jawms-hud-styles) replaces the basic bar with compact configurable HUD styles beside the hotbar.
 - [JAWMS Classic Bar Integration](https://www.curseforge.com/minecraft/mc-mods/jawms-classic-bar) displays JAWMS mana as part of Classic Bar Legacy's HUD stack.
 - [JAWMS Additions](https://www.curseforge.com/minecraft/mc-mods/jawms-additions) expands the mana system with new potions, enchantments, and Baubles.
+- [JAWMS Integrations](https://www.curseforge.com/minecraft/mc-mods/jawms-integrations) adds optional compatibility between JAWMS and other mods.
 
 ### Requirements
 

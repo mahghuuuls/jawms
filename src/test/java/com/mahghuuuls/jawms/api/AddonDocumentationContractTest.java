@@ -18,57 +18,39 @@ class AddonDocumentationContractTest {
             "https://github.com/mahghuuuls/jawms/blob/main/" + GUIDE_PATH;
 
     @Test
-    void canonicalGuidePinsPublishedRecipeAndTruthfulApiMatrix() throws IOException {
+    void currentGuideStaysCurrentAndHistoryOwnsOlderVersions() throws IOException {
         String guide = read(GUIDE_PATH);
+        String history = read("docs/API-HISTORY.md");
 
         assertTrue(guide.contains(
-                "curse.maven:just-another-wizardry-mana-system-1643697:8597828"
+                "JAWMS `1.0.0` provides API `1.5`"
+        ));
+        assertTrue(guide.contains("[API History](API-HISTORY.md)"));
+        assertTrue(guide.contains("jawms_curseforge_file=REPLACE_WITH_NUMERIC_FILE_ID"));
+        assertTrue(guide.contains(
+                "curse.maven:just-another-wizardry-mana-system-1643697:${jawms_curseforge_file}"
         ));
         assertTrue(guide.contains("curse.maven:electroblobs-wizardry-265642:8320066"));
-        assertTrue(guide.contains("Published `0.4.0` Dependency Recipe"));
-        assertTrue(guide.contains(
-                "Historical `0.1.0`, `0.2.0`, And `0.3.0` Dependencies"
-        ));
-        assertTrue(guide.contains(
-                "curse.maven:just-another-wizardry-mana-system-1643697:8632899"
-        ));
-        assertTrue(guide.contains(
-                "curse.maven:just-another-wizardry-mana-system-1643697:8651841"
-        ));
         assertTrue(guide.contains("zone.rong:mixinbooter:11.8"));
         assertTrue(guide.contains("required-after:mixinbooter@[11.8,)"));
-        assertTrue(guide.contains("historical `[11.11,12.0)` MixinBooter range"));
-        assertTrue(guide.contains("Published `0.1.0` | `8597828` | `1.2`"));
-        assertTrue(guide.contains(
-                "Published `0.2.0` | `8621418` | `1.3`"
-        ));
-        assertTrue(guide.contains(
-                "Published `0.3.0` | `8632899` | `1.3`"
-        ));
-        assertTrue(guide.contains(
-                "Published `0.4.0` | `8651841` | `1.4`"
-        ));
-        assertTrue(guide.contains(
-                "Stable `1.0.0` candidate | Not published | `1.5`"
-        ));
-        assertTrue(guide.contains(
-                "`0.4.0` remains the canonical remote dependency recipe"
-        ));
-        assertTrue(guide.contains("Published API `1.4` Distribution Boundary"));
-        assertTrue(guide.contains("jawms@[0.1.0,0.3.0)"));
-        assertTrue(guide.contains("jawms@[0.3.0,0.4.0)"));
-        assertTrue(guide.contains("jawms@[0.4.0,0.5.0)"));
-        assertFalse(guide.contains("jawms@[0.1.0,0.2.0)"));
-        assertFalse(guide.contains(
-                "curse.maven:just-another-wizardry-mana-system-1643697:PENDING"
-        ));
-        assertFalse(guide.contains("curse.maven:just-another-wizardry-mana-system-1643697:0.4.0"));
-        assertFalse(guide.contains("file identity pending"));
-        assertFalse(guide.contains("Candidate `0.4.0`"));
-        assertFalse(guide.contains(
-                "curse.maven:just-another-wizardry-mana-system-1643697:1.0.0"
-        ));
+        assertTrue(guide.contains("jawms@[1.0.0,1.1.0)"));
+        assertFalse(guide.contains("0.1.0"));
+        assertFalse(guide.contains("0.2.0"));
+        assertFalse(guide.contains("0.3.0"));
+        assertFalse(guide.contains("0.4.0"));
+        assertFalse(guide.contains("API `1.2`"));
+        assertFalse(guide.contains("API `1.3`"));
+        assertFalse(guide.contains("API `1.4`"));
+
+        assertTrue(history.contains("`0.1.0` | `8597828` | `1.2`"));
+        assertTrue(history.contains("`0.2.0` | `8621418` | `1.3`"));
+        assertTrue(history.contains("`0.3.0` | `8632899` | `1.3`"));
+        assertTrue(history.contains("`0.4.0` | `8651841` | `1.4`"));
+        assertTrue(history.contains("`1.0.0` | See the CurseForge Files page | `1.5`"));
+        assertTrue(history.contains("jawms@[0.4.0,0.5.0)"));
+        assertTrue(history.contains("MixinBooter `[11.11,12.0)`"));
         assertFalse(guide.contains("Ã"));
+        assertFalse(history.contains("Ã"));
     }
 
     @Test
@@ -78,19 +60,12 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("RenderGameOverlayEvent.Chat"));
         assertTrue(guide.contains("priority = EventPriority.LOWEST"));
         assertTrue(guide.contains("receiveCanceled = false"));
-        assertTrue(guide.contains(
-                "minimal flow compiles against the published `0.4.0` / API-`1.4`"
-        ));
+        assertTrue(guide.contains("This current API example"));
         assertTrue(guide.contains("event.getPartialTicks()"));
         assertTrue(guide.contains("event.getScaledWidth()"));
         assertTrue(guide.contains("event.getScaledHeight()"));
-        assertTrue(guide.contains("Do not copy the published `0.1.0` dependency"));
-        int publishedFlow = guide.indexOf("The following minimal flow compiles");
-        int contextDelta = guide.indexOf("API `1.3` added immutable `ClientHudContext`");
-        assertTrue(publishedFlow >= 0);
-        assertTrue(contextDelta > publishedFlow);
-        assertFalse(guide.substring(publishedFlow, contextDelta).contains("getContext()"));
-        assertTrue(guide.substring(contextDelta).contains("getContext()"));
+        assertTrue(guide.contains("ClientHudContext context = event.getContext()"));
+        assertTrue(guide.contains("context.isCreativeModeKnown()"));
         assertTrue(guide.contains("event.setCanceled(true)"));
         assertTrue(guide.contains("if (hideWhenFull"));
         assertTrue(guide.indexOf("event.setCanceled(true)")
@@ -153,6 +128,7 @@ class AddonDocumentationContractTest {
             throws IOException {
         String[] paths = {
                 GUIDE_PATH,
+                "docs/API-HISTORY.md",
                 "docs/COMMANDS.md",
                 "README.md",
                 "MOD-PAGE.md",
@@ -184,8 +160,9 @@ class AddonDocumentationContractTest {
         assertTrue(modPage.contains("(" + GUIDE_URL + ")"));
         assertTrue(rootPackage.contains(GUIDE_URL));
         assertTrue(clientPackage.contains(GUIDE_URL));
-        assertTrue(readme.contains("stable local `1.0.0` candidate"));
-        assertTrue(readme.contains("published JAWMS `0.4.0` file `8651841`"));
+        assertTrue(readme.contains("JAWMS `1.0.0` uses additive addon API `1.5`"));
+        assertTrue(readme.contains("Use the guide for current dependency setup and API usage"));
+        assertTrue(readme.contains("[API History](docs/API-HISTORY.md)"));
         assertTrue(readme.contains("published API `1.2`, `1.3`, and `1.4` binary surfaces"));
         assertFalse(readme.contains("public beta"));
         assertFalse(modPage.contains("Beta release:"));
@@ -228,6 +205,11 @@ class AddonDocumentationContractTest {
                 "- [JAWMS Additions]"
                         + "(https://www.curseforge.com/minecraft/mc-mods/jawms-additions) "
                         + "expands the mana system with new potions, enchantments, and Baubles."
+        ));
+        assertTrue(companionSection.contains(
+                "- [JAWMS Integrations]"
+                        + "(https://www.curseforge.com/minecraft/mc-mods/jawms-integrations) "
+                        + "adds optional compatibility between JAWMS and other mods."
         ));
     }
 

@@ -2,7 +2,7 @@
 
 Just Another Wizardry Mana System (JAWMS) replaces Electroblob's Wizardry wand mana with a persistent, server-authoritative player mana pool. It adds configurable regeneration and spell costs, reworks Wizardry's mana-related equipment around the new resource, and provides a simple configurable HUD.
 
-The stable local `1.0.0` candidate uses additive addon API `1.5` and builds separately packaged optional Developer Tools. It has no published CurseMaven coordinate until the release is uploaded. See the [detailed mod page](MOD-PAGE.md) for configuration examples, stat explanations, Wizardry integration behavior, companion addons, and the public API overview. Player-visible release changes are recorded in the [changelog](CHANGELOG.md).
+JAWMS `1.0.0` uses additive addon API `1.5` and builds separately packaged optional Developer Tools. See the [detailed mod page](MOD-PAGE.md) for configuration examples, stat explanations, Wizardry integration behavior, companion addons, and the public API overview. Player-visible release changes are recorded in the [changelog](CHANGELOG.md).
 
 ## Features
 
@@ -26,7 +26,7 @@ Server operators can apply valid gameplay and integration changes with `/jawms r
 
 ## Requirements
 
-JAWMS targets Minecraft 1.12.2 on standard Forge. Its open MixinBooter range also allows Cleanroom `0.6.10-alpha` to satisfy the dependency with its built-in `11.8` identity, without a JAWMS-specific version override. JAWMS requires:
+JAWMS targets Minecraft 1.12.2 on standard Forge. Its open MixinBooter range also allows Cleanroom `0.6.11-alpha` to satisfy the dependency with its built-in compatible identity, without a JAWMS-specific version override. JAWMS requires:
 
 - Electroblob's Wizardry `4.3.19`
 - MixinBooter `11.8` or newer
@@ -39,12 +39,14 @@ Exact standalone MixinBooter `11.8` and `11.13` passed standard-Forge client/ser
 
 - [JAWMS Hud Styles](https://www.curseforge.com/minecraft/mc-mods/jawms-hud-styles) replaces the basic mana bar with compact configurable HUD styles.
 - [JAWMS Classic Bar Integration](https://www.curseforge.com/minecraft/mc-mods/jawms-classic-bar) displays JAWMS mana through Classic Bar Legacy.
+- [JAWMS Additions](https://www.curseforge.com/minecraft/mc-mods/jawms-additions) expands the mana system with new potions, enchantments, and Baubles.
+- [JAWMS Integrations](https://www.curseforge.com/minecraft/mc-mods/jawms-integrations) adds optional compatibility between JAWMS and other mods.
 
 ## For Addon Developers
 
 Use the canonical [Addon Development Guide](docs/ADDON-DEVELOPMENT.md) for the exact published dependency recipe, release/API matrix, server API, modifier units, client snapshot semantics, replacement-HUD lifecycle, and cache-safe rendering obligations. The separate [Command Reference](docs/COMMANDS.md) documents primary commands, optional Developer Tools, and contributor/API fixtures under their truthful availability tiers.
 
-The stable local `1.0.0` candidate advances the compatible implementation to API `1.5` while retaining the published API `1.2`, `1.3`, and `1.4` binary surfaces. Use published JAWMS `0.4.0` file `8651841` as the remote dependency until a real `1.0.0` file exists. The supported Java 8 package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`; other JAWMS packages are implementation details.
+JAWMS `1.0.0` provides API `1.5` while retaining the published API `1.2`, `1.3`, and `1.4` binary surfaces. The supported package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`; other JAWMS packages are implementation details. Use the guide for current dependency setup and API usage; older releases are documented separately in [API History](docs/API-HISTORY.md).
 
 ## License
 
