@@ -1,7 +1,9 @@
 package com.mahghuuuls.jawms.client;
 
+import com.mahghuuuls.jawms.api.ConfiguredFlaskSnapshot;
 import com.mahghuuuls.jawms.internal.rules.ConfiguredItemRule;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesMessage;
+import com.mahghuuuls.jawms.internal.rules.ProviderPreviewEntry;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorProfile;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorEfficiencyProfile;
 import com.mahghuuuls.jawms.internal.rules.WizardryIntegrationRules;
@@ -34,6 +36,7 @@ public final class ClientGameplayRules {
     private static double efficiencyScale;
     private static WizardryArmorEfficiencyProfile armorEfficiencyProfile = WizardryArmorEfficiencyProfile.DEFAULT;
     private static WizardryIntegrationRules integrationRules = WizardryIntegrationRules.defaults(0L);
+    private static volatile PresentationState presentation = PresentationState.unavailable();
 
     public ClientGameplayRules() {
     }
@@ -58,6 +61,12 @@ public final class ClientGameplayRules {
         efficiencyScale = message.getEfficiencyScale();
         armorEfficiencyProfile = message.getArmorEfficiencyProfile();
         integrationRules = message.getIntegrationRules();
+        presentation = PresentationState.available(
+                ConfiguredFlaskSnapshot.available(
+                        smallFlask, mediumFlask, largeFlask, revision
+                ),
+                message.getProviderPreviews()
+        );
         WizardryFlaskBridge.refreshCapacities(smallFlask, mediumFlask, largeFlask);
     }
 
@@ -87,6 +96,47 @@ public final class ClientGameplayRules {
 
     public static int getLargeFlask() {
         return largeFlask;
+    }
+
+    public static ConfiguredFlaskSnapshot getConfiguredFlaskSnapshot() {
+        return presentation.configuredFlasks;
+    }
+
+    public static List<ProviderPreviewEntry> getProviderPreviews(ItemStack stack) {
+        if (stack == null || stack.isEmpty() || stack.getItem().getRegistryName() == null) {
+            return Collections.emptyList();
+        }
+        return getProviderPreviews(
+                stack.getItem().getRegistryName(), stack.getMetadata()
+        );
+    }
+
+    static List<ProviderPreviewEntry> getProviderPreviews(
+            ResourceLocation itemId,
+            int metadata
+    ) {
+        List<ProviderPreviewEntry> itemPreviews = getProviderPreviews(itemId);
+        java.util.ArrayList<ProviderPreviewEntry> applicable = null;
+        for (int index = 0; index < itemPreviews.size(); index++) {
+            ProviderPreviewEntry preview = itemPreviews.get(index);
+            if (!preview.appliesToMetadata(metadata)) {
+                if (applicable == null) {
+                    applicable = new java.util.ArrayList<>(itemPreviews.subList(0, index));
+                }
+            } else if (applicable != null) {
+                applicable.add(preview);
+            }
+        }
+        return applicable == null
+                ? itemPreviews : Collections.unmodifiableList(applicable);
+    }
+
+    static List<ProviderPreviewEntry> getProviderPreviews(ResourceLocation itemId) {
+        if (itemId == null) {
+            return Collections.emptyList();
+        }
+        List<ProviderPreviewEntry> previews = presentation.previewsByItem.get(itemId);
+        return previews == null ? Collections.emptyList() : previews;
     }
 
     public static Map<ResourceLocation, Double> getSpellCosts() {
@@ -147,5 +197,52 @@ public final class ClientGameplayRules {
         efficiencyScale = 0.0D;
         armorEfficiencyProfile = WizardryArmorEfficiencyProfile.DEFAULT;
         integrationRules = WizardryIntegrationRules.defaults(0L);
+        presentation = PresentationState.unavailable();
+    }
+
+    private static final class PresentationState {
+
+        private final ConfiguredFlaskSnapshot configuredFlasks;
+        private final Map<ResourceLocation, List<ProviderPreviewEntry>> previewsByItem;
+
+        private PresentationState(
+                ConfiguredFlaskSnapshot configuredFlasks,
+                Map<ResourceLocation, List<ProviderPreviewEntry>> previewsByItem
+        ) {
+            this.configuredFlasks = configuredFlasks;
+            this.previewsByItem = previewsByItem;
+        }
+
+        private static PresentationState unavailable() {
+            return new PresentationState(
+                    ConfiguredFlaskSnapshot.unavailable(), Collections.emptyMap()
+            );
+        }
+
+        private static PresentationState available(
+                ConfiguredFlaskSnapshot configuredFlasks,
+                List<ProviderPreviewEntry> previews
+        ) {
+            Map<ResourceLocation, List<ProviderPreviewEntry>> mutable = new LinkedHashMap<>();
+            for (ProviderPreviewEntry preview : previews) {
+                List<ProviderPreviewEntry> itemPreviews = mutable.get(
+                        preview.getTargetItemId()
+                );
+                if (itemPreviews == null) {
+                    itemPreviews = new java.util.ArrayList<>();
+                    mutable.put(preview.getTargetItemId(), itemPreviews);
+                }
+                itemPreviews.add(preview);
+            }
+            Map<ResourceLocation, List<ProviderPreviewEntry>> immutable =
+                    new LinkedHashMap<>();
+            for (Map.Entry<ResourceLocation, List<ProviderPreviewEntry>> entry
+                    : mutable.entrySet()) {
+                immutable.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
+            }
+            return new PresentationState(
+                    configuredFlasks, Collections.unmodifiableMap(immutable)
+            );
+        }
     }
 }

@@ -80,11 +80,13 @@ public final class JustAnotherWizardryManaSystemMod {
 
     @Mod.EventHandler
     public void loadComplete(FMLLoadCompleteEvent event) {
+        GameplayRulesManager.completeProviderRegistration();
         ManaProviderRegistry.instance().freeze();
     }
 
     @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
+        GameplayRulesManager.serverStarted(event.getServer());
         event.registerServerCommand(new JawmsCommand());
         if (!Boolean.getBoolean("jawms.enableTestCommands")) {
             return;
@@ -104,6 +106,7 @@ public final class JustAnotherWizardryManaSystemMod {
 
     @Mod.EventHandler
     public void serverStopped(FMLServerStoppedEvent event) {
+        GameplayRulesManager.serverStopped();
         ManaProviderRegistry.instance().clearRuntimeState();
     }
 

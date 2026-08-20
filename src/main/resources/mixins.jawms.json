@@ -18,6 +18,7 @@
 	"server": [],
 	"client": [
 		"GuiSpellInfoMixin",
+		"ItemStackTooltipClientMixin",
 		"ItemWandClientMixin",
 		"ItemManaFlaskClientMixin"
 	],

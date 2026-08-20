@@ -75,6 +75,7 @@ public final class ManaContribution {
         return new Builder();
     }
 
+    /** Returns the signed whole-mana maximum contribution. */
     public int getFlatMaximumMana() {
         return flatMaximumMana;
     }
@@ -220,6 +221,7 @@ public final class ManaContribution {
         private Builder() {
         }
 
+        /** Sets a signed whole-mana maximum contribution. */
         public Builder flatMaximumMana(int value) {
             flatMaximumMana = value;
             return this;
@@ -250,8 +252,32 @@ public final class ManaContribution {
             return this;
         }
 
+        /**
+         * Sets signed seconds added before percentage lockout modifiers.
+         * Positive values increase the delay and negative values reduce it.
+         */
         public Builder flatLockoutSeconds(double value) {
             flatLockoutSeconds = value;
+            return this;
+        }
+
+        /**
+         * Sets a non-negative flat increase to post-cast regeneration lockout.
+         * This writes the same signed value as {@link #flatLockoutSeconds(double)};
+         * whichever flat-lockout setter is called last wins.
+         */
+        public Builder flatLockoutIncreaseSeconds(double value) {
+            flatLockoutSeconds = nonNegative(value, "flatLockoutIncreaseSeconds");
+            return this;
+        }
+
+        /**
+         * Sets a non-negative flat reduction to post-cast regeneration lockout.
+         * This writes the same signed value as {@link #flatLockoutSeconds(double)};
+         * whichever flat-lockout setter is called last wins.
+         */
+        public Builder flatLockoutReductionSeconds(double value) {
+            flatLockoutSeconds = -nonNegative(value, "flatLockoutReductionSeconds");
             return this;
         }
 

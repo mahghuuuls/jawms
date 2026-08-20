@@ -2,8 +2,6 @@ JAWMS gives every player one persistent mana pool for Electroblob's Wizardry. Ca
 
 There are already good mods that add player mana to Wizardry, including [Wizardry Player Mana](https://www.curseforge.com/minecraft/mc-mods/wizardry-player-mana) and [Wizardry Player Mana Tweaked](https://www.curseforge.com/minecraft/mc-mods/wizardryplayermanatweaked). Those solutions work well for their intended scope. JAWMS focuses on a more extensive system for players, modpack creators, and addon developers who want detailed control over the complete mana economy.
 
-<span style="color:#d6a100">**Beta release:**</span> The JAWMS API is still being tested and refined while companion addons are developed.
-
 <span style="color:#d6a100">**AI usage disclaimer:** This mod was developed with AI-agent assistance using [this agent workflow](https://github.com/mahghuuuls/minecraft-1.12.2-mod-agent-workflow). The project owner reviewed the work during development.</span>
 
 ## For Players

@@ -13,6 +13,7 @@ import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentCon
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesMessage;
 import com.mahghuuuls.jawms.internal.rules.WizardryIntegrationRules;
 import com.mahghuuuls.jawms.internal.clientbridge.ClientManaViewBridge;
+import com.mahghuuuls.jawms.internal.clientbridge.ClientConfiguredFlaskViewBridge;
 import electroblob.wizardry.item.ItemWand;
 import electroblob.wizardry.spell.Spell;
 import electroblob.wizardry.util.SpellModifiers;
@@ -35,6 +36,9 @@ public final class ClientProxy extends CommonProxy {
     public void preInit(File configurationDirectory) {
         ClientHudConfigManager.configure(configurationDirectory);
         ClientManaViewBridge.installClientView(new ClientManaViewAdapter());
+        ClientConfiguredFlaskViewBridge.installClientView(
+                ClientGameplayRules::getConfiguredFlaskSnapshot
+        );
         MinecraftForge.EVENT_BUS.register(new ManaHudRenderer());
         MinecraftForge.EVENT_BUS.register(new ManaItemTooltipHandler());
         FMLCommonHandler.instance().bus().register(new ClientManaState());

@@ -1,5 +1,7 @@
 package example.jawmsaddon;
 
+import com.mahghuuuls.jawms.api.ConfiguredFlaskSnapshot;
+import com.mahghuuuls.jawms.api.client.ClientManaApi;
 import com.mahghuuuls.jawms.api.client.ClientManaSnapshot;
 import com.mahghuuuls.jawms.api.client.ManaHudRenderEvent;
 import org.apache.logging.log4j.LogManager;
@@ -235,6 +237,7 @@ public final class ClientReplacementHudFixture extends CommandBase {
     }
 
     private String status() {
+        ConfiguredFlaskSnapshot flasks = ClientManaApi.getConfiguredFlaskSnapshot();
         return "JAWMS API HUD fixture: probe=" + probeEnabled
                 + ", mode=" + mode.name()
                 + ", earlier=" + earlierCancellationEnabled
@@ -243,7 +246,12 @@ public final class ClientReplacementHudFixture extends CommandBase {
                 + ", replacementCallbacks=" + replacementCallbacks
                 + ", earlierClaims=" + earlierClaims
                 + ", parentCancellations=" + parentCancellations
-                + ", equalClaims=" + equalClaims + ".";
+                + ", equalClaims=" + equalClaims
+                + ", flaskAvailable=" + flasks.isAvailable()
+                + ", flaskRevision="
+                + (flasks.hasKnownRevision() ? Long.toString(flasks.getRevision()) : "unknown")
+                + ", flasks=" + flasks.getSmallRestoration() + "/"
+                + flasks.getMediumRestoration() + "/" + flasks.getLargeRestoration() + ".";
     }
 
     private static void reply(ICommandSender sender, String message) {

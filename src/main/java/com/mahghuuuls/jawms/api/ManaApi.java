@@ -2,6 +2,8 @@ package com.mahghuuuls.jawms.api;
 
 import com.mahghuuuls.jawms.internal.mana.ManaService;
 import com.mahghuuuls.jawms.internal.modifier.ManaProviderRegistry;
+import com.mahghuuuls.jawms.internal.modifier.ProviderPreviewRegistry;
+import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.util.ResourceLocation;
@@ -25,6 +27,16 @@ public final class ManaApi {
     }
 
     /**
+     * Returns the authoritative accepted ordinary-flask configuration on the
+     * active logical-server thread. Other threads receive an unavailable
+     * snapshot and client code must use {@code ClientManaApi}. This read does
+     * not expose or consult Wizardry's mutable flask enum.
+     */
+    public static ConfiguredFlaskSnapshot getConfiguredFlaskSnapshot() {
+        return GameplayRulesManager.configuredFlaskSnapshot();
+    }
+
+    /**
      * Registers a globally unique provider ID during Forge pre-initialization
      * or initialization. Registrations are evaluated in provider-ID order and
      * registration closes at load-complete. Duplicate IDs and late calls fail.
@@ -35,6 +47,45 @@ public final class ManaApi {
             IItemManaModifierProvider provider
     ) {
         ManaProviderRegistry.instance().registerItem(providerId, targetItem, provider);
+    }
+
+    /**
+     * Registers an item provider together with one invariant item-wide
+     * presentation preview. The preview is the addon's promise that the value
+     * truthfully describes every matching stack independent of player, slot,
+     * or stack data. Dynamic providers should use the three-argument overload.
+     */
+    public static void registerItemProvider(
+            ResourceLocation providerId,
+            Item targetItem,
+            IItemManaModifierProvider provider,
+            ManaContribution contributionPreview
+    ) {
+        ManaProviderRegistry.instance().registerItemWithPreview(
+                providerId, targetItem, provider, contributionPreview
+        );
+    }
+
+    /**
+     * Replaces an invariant item-provider preview during an active server.
+     * This is presentation-only, requires the logical-server thread, and
+     * publishes one new complete gameplay-rules revision to clients.
+     */
+    public static void setItemProviderContributionPreview(
+            ResourceLocation providerId,
+            ManaContribution contributionPreview
+    ) {
+        GameplayRulesManager.replaceProviderPreview(providerId, contributionPreview);
+    }
+
+    /**
+     * Clears an item-provider preview during an active server. Clearing an
+     * absent declaration is a no-op; gameplay provider evaluation is unchanged.
+     */
+    public static void clearItemProviderContributionPreview(
+            ResourceLocation providerId
+    ) {
+        GameplayRulesManager.clearProviderPreview(providerId);
     }
 
     /**

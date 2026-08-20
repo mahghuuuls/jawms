@@ -41,6 +41,7 @@ public final class GameplayRules {
     private final double efficiencyScale;
     private final WizardryArmorEfficiencyProfile armorEfficiencyProfile;
     private final WizardryIntegrationRules wizardryIntegrationRules;
+    private final List<ProviderPreviewEntry> providerPreviews;
 
     public GameplayRules(
             long revision,
@@ -126,6 +127,33 @@ public final class GameplayRules {
             WizardryArmorEfficiencyProfile armorEfficiencyProfile,
             WizardryIntegrationRules wizardryIntegrationRules
     ) {
+        this(
+                revision, baseMaximum, baseRegeneration, regenerationLockoutSeconds,
+                costFormula, smallFlask, mediumFlask, largeFlask, spellCosts,
+                configuredItemRules, armorProfile, disabledProviderIds,
+                efficiencyScale, armorEfficiencyProfile, wizardryIntegrationRules,
+                Collections.emptyList()
+        );
+    }
+
+    public GameplayRules(
+            long revision,
+            int baseMaximum,
+            double baseRegeneration,
+            double regenerationLockoutSeconds,
+            String costFormula,
+            int smallFlask,
+            int mediumFlask,
+            int largeFlask,
+            Map<ResourceLocation, Double> spellCosts,
+            List<ConfiguredItemRule> configuredItemRules,
+            WizardryArmorProfile armorProfile,
+            Set<ResourceLocation> disabledProviderIds,
+            double efficiencyScale,
+            WizardryArmorEfficiencyProfile armorEfficiencyProfile,
+            WizardryIntegrationRules wizardryIntegrationRules,
+            List<ProviderPreviewEntry> providerPreviews
+    ) {
         if (revision < 0L) {
             throw new IllegalArgumentException("Revision must be non-negative.");
         }
@@ -167,6 +195,12 @@ public final class GameplayRules {
             throw new NullPointerException("wizardryIntegrationRules");
         }
         this.wizardryIntegrationRules = wizardryIntegrationRules;
+        if (providerPreviews == null) {
+            throw new NullPointerException("providerPreviews");
+        }
+        this.providerPreviews = Collections.unmodifiableList(
+                new ArrayList<>(providerPreviews)
+        );
     }
 
     public GameplayRules(
@@ -296,6 +330,10 @@ public final class GameplayRules {
         return wizardryIntegrationRules;
     }
 
+    public List<ProviderPreviewEntry> getProviderPreviews() {
+        return providerPreviews;
+    }
+
     public GameplayRules withWizardryIntegrationRules(
             WizardryIntegrationRules replacement
     ) {
@@ -303,7 +341,20 @@ public final class GameplayRules {
                 revision, baseMaximum, baseRegeneration, regenerationLockoutSeconds,
                 costFormula, smallFlask, mediumFlask, largeFlask, spellCosts,
                 configuredItemRules, armorProfile, disabledProviderIds,
-                efficiencyScale, armorEfficiencyProfile, replacement
+                efficiencyScale, armorEfficiencyProfile, replacement, providerPreviews
+        );
+    }
+
+    public GameplayRules withRevisionAndProviderPreviews(
+            long replacementRevision,
+            List<ProviderPreviewEntry> replacementPreviews
+    ) {
+        return new GameplayRules(
+                replacementRevision, baseMaximum, baseRegeneration,
+                regenerationLockoutSeconds, costFormula, smallFlask, mediumFlask,
+                largeFlask, spellCosts, configuredItemRules, armorProfile,
+                disabledProviderIds, efficiencyScale, armorEfficiencyProfile,
+                wizardryIntegrationRules, replacementPreviews
         );
     }
 

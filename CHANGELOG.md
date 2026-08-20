@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.0.0] - 2026-08-20
+
+### Added
+
+- Additive public API `1.5` configured-flask snapshots, directional regeneration-lockout helpers, invariant item-provider previews, and synchronized client preview lookup.
+- One final JAWMS tooltip section for configured and opted-in provider contributions after ordinary Forge tooltip subscribers.
+- Matching optional JAWMS Developer Tools `1.0.0` artifact with a strict JAWMS `[1.0.0,1.1.0)` dependency.
+
+### Changed
+
+- Clarified whole maximum-mana values, signed mutation deltas, committed external accounting, snapshot lifecycle, provider-preview eligibility, and tooltip-order guarantees in the addon guide.
+- Promoted the release from beta to stable after API exercises across JAWMS companion and integration addons.
+
+### Compatibility
+
+- Retained all published API `1.2`, `1.3`, and `1.4` binary surfaces and added a frozen published-`0.4.0` compatibility oracle.
+- Continued to require MixinBooter `11.8` or newer without an upper bound.
+
 ## [0.4.0] - 2026-08-15
 
 ### Added

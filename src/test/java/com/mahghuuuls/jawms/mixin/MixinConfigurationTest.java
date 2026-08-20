@@ -26,6 +26,7 @@ class MixinConfigurationTest {
         assertTrue(json.contains("\"ItemArtefactMixin\""));
         assertTrue(json.contains("\"ItemManaFlaskMixin\""));
         assertTrue(json.contains("\"ItemWandClientMixin\""));
+        assertTrue(json.contains("\"ItemStackTooltipClientMixin\""));
         assertTrue(json.contains("\"ItemManaFlaskClientMixin\""));
         assertTrue(json.contains("\"ForceArrowMixin\""));
         assertTrue(json.contains("\"EntityForceArrowMixin\""));
@@ -40,6 +41,25 @@ class MixinConfigurationTest {
         assertTrue(refmap.contains("func_135052_a"));
         assertTrue(refmap.contains("func_75116_a"));
         assertTrue(refmap.contains("func_75122_a"));
+        assertTrue(refmap.contains("func_82840_a"));
+    }
+
+    @Test
+    void finalTooltipHookIsRequiredAtCompletedReturnBoundary() {
+        Inject hook = inject(
+                ItemStackTooltipClientMixin.class,
+                "jawms$appendFinalContributionSection"
+        );
+        assertEquals(1, hook.require());
+        assertEquals(1, hook.expect());
+        assertEquals(1, hook.allow());
+        assertEquals(1, hook.at().length);
+        assertEquals("RETURN", hook.at()[0].value());
+        assertEquals(
+                "getTooltip(Lnet/minecraft/entity/player/EntityPlayer;"
+                        + "Lnet/minecraft/client/util/ITooltipFlag;)Ljava/util/List;",
+                hook.method()[0]
+        );
     }
 
     @Test

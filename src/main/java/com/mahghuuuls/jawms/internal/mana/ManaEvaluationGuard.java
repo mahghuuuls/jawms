@@ -28,6 +28,10 @@ public final class ManaEvaluationGuard {
         return EVALUATING.get().contains(playerId);
     }
 
+    public static boolean isEvaluatingOnCurrentThread() {
+        return !EVALUATING.get().isEmpty();
+    }
+
     public static final class Scope implements AutoCloseable {
 
         private final UUID playerId;

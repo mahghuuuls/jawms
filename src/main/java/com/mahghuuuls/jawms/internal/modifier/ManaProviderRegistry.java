@@ -61,6 +61,26 @@ public final class ManaProviderRegistry {
         put(id, new ItemRegistration(id, item, provider));
     }
 
+    public synchronized void registerItemWithPreview(
+            ResourceLocation id,
+            Item item,
+            IItemManaModifierProvider provider,
+            ManaContribution contributionPreview
+    ) {
+        ProviderPreviewRegistry.validateContribution(contributionPreview);
+        requireRegistration(id, provider);
+        if (item == null) {
+            throw new NullPointerException("targetItem");
+        }
+        put(id, new ItemRegistration(id, item, provider));
+        try {
+            ProviderPreviewRegistry.instance().registerInitial(id, contributionPreview);
+        } catch (RuntimeException exception) {
+            registrations.remove(id);
+            throw exception;
+        }
+    }
+
     public synchronized void registerContextual(
             ResourceLocation id,
             IContextualManaModifierProvider provider
@@ -96,6 +116,24 @@ public final class ManaProviderRegistry {
             }
         }
         return Collections.unmodifiableList(result);
+    }
+
+    synchronized ResourceLocation requireItemTargetId(ResourceLocation providerId) {
+        if (providerId == null) {
+            throw new NullPointerException("providerId");
+        }
+        Registration registration = registrations.get(providerId);
+        if (registration == null) {
+            throw new IllegalArgumentException(
+                    "Unknown JAWMS modifier-provider ID: " + providerId
+            );
+        }
+        if (!(registration instanceof ItemRegistration)) {
+            throw new IllegalArgumentException(
+                    "JAWMS provider is not item-targeted: " + providerId
+            );
+        }
+        return ((ItemRegistration) registration).item.getRegistryName();
     }
 
     public synchronized List<ManaContribution> evaluateItem(

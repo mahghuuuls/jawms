@@ -5,6 +5,7 @@ import electroblob.wizardry.constants.Element;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.util.ResourceLocation;
+import net.minecraftforge.fml.common.network.ByteBufUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -55,6 +56,14 @@ class GameplayRulesMessageTest {
                 WizardryArmorProfile.DEFAULT
         );
         rules = rules.withWizardryIntegrationRules(WizardryIntegrationRules.defaults(4L));
+        rules = rules.withRevisionAndProviderPreviews(9L, Collections.singletonList(
+                new ProviderPreviewEntry(
+                        new ResourceLocation("example", "stick_provider"),
+                        new ResourceLocation("minecraft", "stick"),
+                        ManaContribution.builder().flatMaximumMana(3).build(),
+                        java.util.Arrays.asList(0, 7)
+                )
+        ));
         GameplayRulesMessage encoded = new GameplayRulesMessage(rules);
         ByteBuf buffer = Unpooled.buffer();
         encoded.toBytes(buffer);
@@ -86,6 +95,17 @@ class GameplayRulesMessageTest {
         assertEquals(4L, decoded.getIntegrationRules().getRevision());
         assertEquals(10.0D, decoded.getIntegrationRules().getStorageManaIncreasePerLevel());
         assertTrue(decoded.getIntegrationRules().isFontLockoutPermission());
+        assertEquals(1, decoded.getProviderPreviews().size());
+        assertEquals(
+                new ResourceLocation("example", "stick_provider"),
+                decoded.getProviderPreviews().get(0).getProviderId()
+        );
+        assertEquals(3, decoded.getProviderPreviews().get(0)
+                .getContribution().getFlatMaximumMana());
+        assertEquals(
+                new java.util.TreeSet<>(java.util.Arrays.asList(0, 7)),
+                decoded.getProviderPreviews().get(0).getExcludedMetadata()
+        );
     }
 
     @Test
@@ -106,5 +126,73 @@ class GameplayRulesMessageTest {
         GameplayRules valid = GameplayRules.initialDefaults();
         GameplayRulesMessage validMessage = new GameplayRulesMessage(valid);
         assertTrue(validMessage.isValid());
+    }
+
+    @Test
+    void rejectsOversizedAndNonDeterministicPreviewTables() {
+        GameplayRules rules = GameplayRules.initialDefaults()
+                .withRevisionAndProviderPreviews(1L, java.util.Arrays.asList(
+                        new ProviderPreviewEntry(
+                                new ResourceLocation("example", "z"),
+                                new ResourceLocation("minecraft", "stick"),
+                                ManaContribution.builder().flatMaximumMana(1).build()
+                        ),
+                        new ProviderPreviewEntry(
+                                new ResourceLocation("example", "a"),
+                                new ResourceLocation("minecraft", "apple"),
+                                ManaContribution.builder().flatMaximumMana(1).build()
+                        )
+                ));
+        assertFalse(new GameplayRulesMessage(rules).isValid());
+
+        ByteBuf oversized = Unpooled.buffer();
+        oversized.writeLong(1L);
+        oversized.writeInt(60);
+        oversized.writeDouble(2.4D);
+        oversized.writeLong(40L);
+        oversized.writeInt(20);
+        oversized.writeInt(50);
+        oversized.writeInt(100);
+        oversized.writeInt(0);
+        oversized.writeInt(0);
+        oversized.writeInt(Integer.MAX_VALUE);
+        GameplayRulesMessage decoded = new GameplayRulesMessage();
+        decoded.fromBytes(oversized);
+        assertFalse(decoded.isValid());
+
+        ByteBuf oversizedIdentifier = Unpooled.buffer();
+        oversizedIdentifier.writeLong(1L);
+        oversizedIdentifier.writeInt(60);
+        oversizedIdentifier.writeDouble(2.4D);
+        oversizedIdentifier.writeLong(40L);
+        oversizedIdentifier.writeInt(20);
+        oversizedIdentifier.writeInt(50);
+        oversizedIdentifier.writeInt(100);
+        oversizedIdentifier.writeInt(0);
+        oversizedIdentifier.writeInt(0);
+        oversizedIdentifier.writeInt(1);
+        StringBuilder identifier = new StringBuilder("fixture:");
+        while (identifier.length() <= 256) {
+            identifier.append('a');
+        }
+        ByteBufUtils.writeUTF8String(oversizedIdentifier, identifier.toString());
+        GameplayRulesMessage longIdentifier = new GameplayRulesMessage();
+        longIdentifier.fromBytes(oversizedIdentifier);
+        assertFalse(longIdentifier.isValid());
+
+        java.util.List<Integer> excessiveMetadata = new java.util.ArrayList<>();
+        for (int metadata = 0; metadata <= 4096; metadata++) {
+            excessiveMetadata.add(metadata);
+        }
+        GameplayRules excessiveExclusions = GameplayRules.initialDefaults()
+                .withRevisionAndProviderPreviews(2L, Collections.singletonList(
+                        new ProviderPreviewEntry(
+                                new ResourceLocation("example", "metadata"),
+                                new ResourceLocation("minecraft", "stick"),
+                                ManaContribution.builder().flatMaximumMana(1).build(),
+                                excessiveMetadata
+                        )
+                ));
+        assertFalse(new GameplayRulesMessage(excessiveExclusions).isValid());
     }
 }

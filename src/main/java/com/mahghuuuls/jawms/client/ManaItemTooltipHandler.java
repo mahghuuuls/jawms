@@ -1,7 +1,6 @@
 package com.mahghuuuls.jawms.client;
 
 import com.mahghuuuls.jawms.api.ManaContribution;
-import com.mahghuuuls.jawms.api.ManaTooltips;
 import com.mahghuuuls.jawms.internal.modifier.ActiveStackCollector;
 import com.mahghuuuls.jawms.internal.rules.ConfiguredItemRule;
 import com.mahghuuuls.jawms.internal.integration.wizardry.WizardryPassiveContributionAdapter;
@@ -46,11 +45,6 @@ public final class ManaItemTooltipHandler {
         removeWandDurabilityLine(event);
         removeSupersededWizardryCostLines(event);
         addWizardryIntegrationPresentation(event);
-        ManaContribution contribution = contributionFor(event.getItemStack());
-        if (contribution == null) {
-            return;
-        }
-        event.getToolTip().addAll(ManaTooltips.format(contribution));
         if (event.getItemStack().getItem() instanceof ItemWizardArmour) {
             ItemWizardArmour armor = (ItemWizardArmour) event.getItemStack().getItem();
             if (armor.armourClass == ItemWizardArmour.ArmourClass.SAGE

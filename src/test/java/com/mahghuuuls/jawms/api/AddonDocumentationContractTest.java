@@ -38,15 +38,21 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("zone.rong:mixinbooter:11.8"));
         assertTrue(guide.contains("required-after:mixinbooter@[11.8,)"));
         assertTrue(guide.contains("historical `[11.11,12.0)` MixinBooter range"));
-        assertTrue(guide.contains("Published `0.1.0` beta | `8597828` | `1.2`"));
+        assertTrue(guide.contains("Published `0.1.0` | `8597828` | `1.2`"));
         assertTrue(guide.contains(
-                "Published `0.2.0` beta | `8621418` | `1.3`"
+                "Published `0.2.0` | `8621418` | `1.3`"
         ));
         assertTrue(guide.contains(
-                "Published `0.3.0` beta | `8632899` | `1.3`"
+                "Published `0.3.0` | `8632899` | `1.3`"
         ));
         assertTrue(guide.contains(
-                "Published `0.4.0` beta | `8651841` | `1.4`"
+                "Published `0.4.0` | `8651841` | `1.4`"
+        ));
+        assertTrue(guide.contains(
+                "Stable `1.0.0` candidate | Not published | `1.5`"
+        ));
+        assertTrue(guide.contains(
+                "`0.4.0` remains the canonical remote dependency recipe"
         ));
         assertTrue(guide.contains("Published API `1.4` Distribution Boundary"));
         assertTrue(guide.contains("jawms@[0.1.0,0.3.0)"));
@@ -59,6 +65,9 @@ class AddonDocumentationContractTest {
         assertFalse(guide.contains("curse.maven:just-another-wizardry-mana-system-1643697:0.4.0"));
         assertFalse(guide.contains("file identity pending"));
         assertFalse(guide.contains("Candidate `0.4.0`"));
+        assertFalse(guide.contains(
+                "curse.maven:just-another-wizardry-mana-system-1643697:1.0.0"
+        ));
         assertFalse(guide.contains("Ã"));
     }
 
@@ -89,6 +98,12 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("mana per second"));
         assertTrue(guide.contains("max(0, configured base + sum(flat))"));
         assertTrue(guide.contains("After those factors, maximum mana is floored"));
+        assertTrue(guide.contains("maximum mana are whole `int` mana points"));
+        assertTrue(guide.contains("use `getActualAmount()`, not the requested amount"));
+        assertTrue(guide.contains("`getActualDelta()` is signed"));
+        assertTrue(guide.contains("flatLockoutIncreaseSeconds(value)"));
+        assertTrue(guide.contains("flatLockoutReductionSeconds(value)"));
+        assertTrue(guide.contains("last of these three builder calls wins"));
         assertTrue(guide.contains("* (1 + sum(percentage increases) / 100)"));
         assertFalse(guide.contains("max(allowed minimum, configured base + sum(flat))"));
         assertTrue(guide.contains("ManaApi.getRegisteredProviders()"));
@@ -111,6 +126,16 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("Unmatched item providers"));
         assertTrue(guide.contains("never expose exception text"));
         assertTrue(guide.contains("Compare known revisions only within the current connection"));
+        assertTrue(guide.contains("ManaApi.getConfiguredFlaskSnapshot()"));
+        assertTrue(guide.contains("ClientManaApi.getConfiguredFlaskSnapshot()"));
+        assertTrue(guide.contains("unavailable snapshot is not three configured zero-value flasks"));
+        assertTrue(guide.contains("two snapshot types can therefore carry different revisions"));
+        assertTrue(guide.contains("four-argument registration overload"));
+        assertTrue(guide.contains("invariant presentation promise"));
+        assertTrue(guide.contains("invoke providers zero additional times"));
+        assertTrue(guide.contains("Seeing a preview on an unequipped stack is informational"));
+        assertTrue(guide.contains("after ordinary Forge tooltip-event subscribers return"));
+        assertTrue(guide.contains("not precedence over another coremod or Mixin"));
         assertTrue(guide.contains("glPushAttrib/glPopAttrib"));
         assertTrue(guide.contains(
                 "src/apiCompatibilityFixture/java/example/jawmsaddon/"
@@ -119,7 +144,8 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("plain JVM test"));
         assertTrue(guide.contains("launched Forge test"));
         assertTrue(guide.contains("docs/COMMANDS.md"));
-        assertTrue(guide.contains("jawms-devtools-0.4.0.jar"));
+        assertTrue(guide.contains("jawms-devtools-1.0.0.jar"));
+        assertTrue(guide.contains("JAWMS `[1.0.0,1.1.0)`"));
     }
 
     @Test
@@ -158,9 +184,11 @@ class AddonDocumentationContractTest {
         assertTrue(modPage.contains("(" + GUIDE_URL + ")"));
         assertTrue(rootPackage.contains(GUIDE_URL));
         assertTrue(clientPackage.contains(GUIDE_URL));
-        assertTrue(readme.contains("current published `0.4.0` release"));
-        assertTrue(readme.contains("Published JAWMS `0.4.0` file `8651841`"));
-        assertTrue(readme.contains("documented API `1.2` binary surface"));
+        assertTrue(readme.contains("stable local `1.0.0` candidate"));
+        assertTrue(readme.contains("published JAWMS `0.4.0` file `8651841`"));
+        assertTrue(readme.contains("published API `1.2`, `1.3`, and `1.4` binary surfaces"));
+        assertFalse(readme.contains("public beta"));
+        assertFalse(modPage.contains("Beta release:"));
         assertTrue(readme.contains("docs/COMMANDS.md"));
         String normalizedModPage = modPage.replace("\r\n", "\n");
         int developerStart = normalizedModPage.indexOf("## For Mod Developers");

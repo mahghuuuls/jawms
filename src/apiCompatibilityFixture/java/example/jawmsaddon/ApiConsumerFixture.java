@@ -1,6 +1,7 @@
 package example.jawmsaddon;
 
 import com.mahghuuuls.jawms.api.IManaService;
+import com.mahghuuuls.jawms.api.ConfiguredFlaskSnapshot;
 import com.mahghuuuls.jawms.api.ManaApi;
 import com.mahghuuuls.jawms.api.ManaMutationResult;
 import com.mahghuuuls.jawms.api.ManaMutationFailure;
@@ -91,7 +92,8 @@ public final class ApiConsumerFixture {
                         LAST_ITEM_CONTEXT.set(context.toString());
                         return ManaContribution.builder().flatMaximumMana(1).build();
                     }
-                }
+                },
+                ManaContribution.builder().flatMaximumMana(1).build()
         );
         ManaApi.registerItemProvider(
                 new ResourceLocation(MOD_ID, "stick_second"),
@@ -231,7 +233,8 @@ public final class ApiConsumerFixture {
                 .flatRegeneration(0.5D)
                 .regenerationIncrease(20.0D)
                 .regenerationReduction(5.0D)
-                .flatLockoutSeconds(-0.25D)
+                .flatLockoutIncreaseSeconds(0.5D)
+                .flatLockoutReductionSeconds(0.25D)
                 .lockoutIncrease(10.0D)
                 .lockoutReduction(50.0D)
                 .globalSpellEfficiency(5.0D)
@@ -267,7 +270,7 @@ public final class ApiConsumerFixture {
 
         @Override
         public String getUsage(ICommandSender sender) {
-            return "/jawms-api-fixture inspect | explain | cycle | providers <status|registrations|invalidate|dirty|contextual|contextual-deferred|null|throwing|mutation|bauble> [true|false]";
+            return "/jawms-api-fixture inspect | explain | cycle | providers <status|registrations|preview-replace|preview-clear|invalidate|dirty|contextual|contextual-deferred|null|throwing|mutation|bauble> [true|false]";
         }
 
         @Override
@@ -281,8 +284,10 @@ public final class ApiConsumerFixture {
             EntityPlayerMP player = getCommandSenderAsPlayer(sender);
             if (arguments.length == 1 && "inspect".equalsIgnoreCase(arguments[0])) {
                 ManaPublicState state = inspect(player);
+                ConfiguredFlaskSnapshot flasks = ManaApi.getConfiguredFlaskSnapshot();
                 sender.sendMessage(new TextComponentString(
-                        "JAWMS API fixture state=" + state + ", api=" + ManaApi.API_VERSION + "."
+                        "JAWMS API fixture state=" + state + ", api=" + ManaApi.API_VERSION
+                                + ", flasks=" + flasks + "."
                 ));
                 return;
             }
@@ -346,6 +351,7 @@ public final class ApiConsumerFixture {
                     return;
                 }
                 if ("status".equals(operation) && arguments.length == 2) {
+                    ConfiguredFlaskSnapshot flasks = ManaApi.getConfiguredFlaskSnapshot();
                     sender.sendMessage(new TextComponentString(
                             "providers itemCalls=" + ITEM_CALLS.get()
                                     + ", lastItemContext=" + LAST_ITEM_CONTEXT.get()
@@ -358,7 +364,33 @@ public final class ApiConsumerFixture {
                                     + ", null=" + nullEnabled
                                     + ", throwing=" + throwingEnabled
                                     + ", mutation=" + mutationProbeEnabled
-                                    + ", bauble=" + baubleProbeEnabled + "."
+                                    + ", bauble=" + baubleProbeEnabled
+                                    + ", rulesRevision="
+                                    + (flasks.hasKnownRevision()
+                                    ? Long.toString(flasks.getRevision()) : "unknown") + "."
+                    ));
+                    return;
+                }
+                if ("preview-replace".equals(operation) && arguments.length == 2) {
+                    ManaApi.setItemProviderContributionPreview(
+                            new ResourceLocation(MOD_ID, "stick_first"),
+                            ManaContribution.builder().flatMaximumMana(3).build()
+                    );
+                    sender.sendMessage(new TextComponentString(
+                            "provider preview replaced; itemCalls=" + ITEM_CALLS.get()
+                                    + ", rulesRevision="
+                                    + ManaApi.getConfiguredFlaskSnapshot().getRevision() + "."
+                    ));
+                    return;
+                }
+                if ("preview-clear".equals(operation) && arguments.length == 2) {
+                    ManaApi.clearItemProviderContributionPreview(
+                            new ResourceLocation(MOD_ID, "stick_first")
+                    );
+                    sender.sendMessage(new TextComponentString(
+                            "provider preview cleared; itemCalls=" + ITEM_CALLS.get()
+                                    + ", rulesRevision="
+                                    + ManaApi.getConfiguredFlaskSnapshot().getRevision() + "."
                     ));
                     return;
                 }

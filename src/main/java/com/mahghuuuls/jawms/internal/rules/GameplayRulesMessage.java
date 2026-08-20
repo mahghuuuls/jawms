@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
 
 public final class GameplayRulesMessage implements IMessage {
 
@@ -31,6 +32,7 @@ public final class GameplayRulesMessage implements IMessage {
     private int largeFlask;
     private Map<ResourceLocation, Double> spellCosts = new LinkedHashMap<>();
     private List<ConfiguredItemRule> itemRules = new ArrayList<>();
+    private List<ProviderPreviewEntry> providerPreviews = new ArrayList<>();
     private WizardryArmorProfile armorProfile = WizardryArmorProfile.DEFAULT;
     private List<ResourceLocation> generatedWizardryArmorIds = new ArrayList<>();
     private double efficiencyScale = GameplayRules.DEFAULT_EFFICIENCY_SCALE;
@@ -51,6 +53,7 @@ public final class GameplayRulesMessage implements IMessage {
         largeFlask = rules.getLargeFlask();
         spellCosts = new LinkedHashMap<>(rules.getSpellCosts());
         itemRules = new ArrayList<>(rules.getConfiguredItemRules());
+        providerPreviews = new ArrayList<>(rules.getProviderPreviews());
         armorProfile = rules.getArmorProfile();
         generatedWizardryArmorIds = new ArrayList<>(rules.getGeneratedWizardryArmorIds());
         efficiencyScale = rules.getEfficiencyScale();
@@ -87,6 +90,32 @@ public final class GameplayRulesMessage implements IMessage {
                 ));
             }
 
+            int previewCount = boundedCount(buffer.readInt());
+            providerPreviews = new ArrayList<>();
+            for (int index = 0; index < previewCount; index++) {
+                ResourceLocation providerId = readIdentifier(buffer);
+                ResourceLocation targetItemId = readIdentifier(buffer);
+                int excludedCount = boundedCount(buffer.readInt());
+                java.util.SortedSet<Integer> excludedMetadata = new java.util.TreeSet<>();
+                int previousMetadata = -1;
+                for (int metadataIndex = 0; metadataIndex < excludedCount; metadataIndex++) {
+                    int metadata = buffer.readInt();
+                    if (metadata <= previousMetadata || metadata > Short.MAX_VALUE) {
+                        throw new IllegalArgumentException(
+                                "Provider-preview metadata exclusions are not strictly ordered."
+                        );
+                    }
+                    excludedMetadata.add(metadata);
+                    previousMetadata = metadata;
+                }
+                providerPreviews.add(new ProviderPreviewEntry(
+                        providerId,
+                        targetItemId,
+                        readContribution(buffer),
+                        excludedMetadata
+                ));
+            }
+
             armorProfile = new WizardryArmorProfile(
                     buffer.readBoolean(),
                     buffer.readInt(),
@@ -113,6 +142,7 @@ public final class GameplayRulesMessage implements IMessage {
             malformed = true;
             spellCosts.clear();
             itemRules.clear();
+            providerPreviews.clear();
         }
     }
 
@@ -137,6 +167,17 @@ public final class GameplayRulesMessage implements IMessage {
             ByteBufUtils.writeUTF8String(buffer, rule.getItemId().toString());
             buffer.writeInt(rule.getMetadata());
             writeContribution(buffer, rule.getContribution());
+        }
+
+        buffer.writeInt(providerPreviews.size());
+        for (ProviderPreviewEntry preview : providerPreviews) {
+            ByteBufUtils.writeUTF8String(buffer, preview.getProviderId().toString());
+            ByteBufUtils.writeUTF8String(buffer, preview.getTargetItemId().toString());
+            buffer.writeInt(preview.getExcludedMetadata().size());
+            for (int metadata : preview.getExcludedMetadata()) {
+                buffer.writeInt(metadata);
+            }
+            writeContribution(buffer, preview.getContribution());
         }
 
         buffer.writeBoolean(armorProfile.isEnabled());
@@ -176,6 +217,7 @@ public final class GameplayRulesMessage implements IMessage {
                 || efficiencyScale <= 0.0D
                 || spellCosts.size() > MAX_TABLE_ENTRIES
                 || itemRules.size() > MAX_TABLE_ENTRIES
+                || providerPreviews.size() > MAX_TABLE_ENTRIES
                 || generatedWizardryArmorIds.size() > MAX_TABLE_ENTRIES) {
             return false;
         }
@@ -183,6 +225,17 @@ public final class GameplayRulesMessage implements IMessage {
             if (!SpellCostCompiler.isSupportedCost(cost)) {
                 return false;
             }
+        }
+        ResourceLocation previousProvider = null;
+        for (ProviderPreviewEntry preview : providerPreviews) {
+            if (preview.getExcludedMetadata().size() > MAX_TABLE_ENTRIES) {
+                return false;
+            }
+            if (previousProvider != null
+                    && previousProvider.compareTo(preview.getProviderId()) >= 0) {
+                return false;
+            }
+            previousProvider = preview.getProviderId();
         }
         return true;
     }
@@ -221,6 +274,10 @@ public final class GameplayRulesMessage implements IMessage {
 
     public List<ConfiguredItemRule> getItemRules() {
         return new ArrayList<>(itemRules);
+    }
+
+    public List<ProviderPreviewEntry> getProviderPreviews() {
+        return new ArrayList<>(providerPreviews);
     }
 
     public WizardryArmorProfile getArmorProfile() {
@@ -311,7 +368,13 @@ public final class GameplayRulesMessage implements IMessage {
     }
 
     private static ResourceLocation readIdentifier(ByteBuf buffer) {
-        String value = ByteBufUtils.readUTF8String(buffer);
+        int byteLength = ByteBufUtils.readVarInt(buffer, 2);
+        if (byteLength < 1 || byteLength > MAX_IDENTIFIER_LENGTH) {
+            throw new IllegalArgumentException("Registry identifier is too long.");
+        }
+        byte[] bytes = new byte[byteLength];
+        buffer.readBytes(bytes);
+        String value = new String(bytes, StandardCharsets.UTF_8);
         if (value.length() > MAX_IDENTIFIER_LENGTH) {
             throw new IllegalArgumentException("Registry identifier is too long.");
         }

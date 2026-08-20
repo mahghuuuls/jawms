@@ -18,10 +18,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 class ApiBoundaryTest {
 
     @Test
-    void apiVersionAndSurfaceAreStableAndServerSafe() {
-        assertEquals("1.4", ManaApi.API_VERSION);
+    void apiVersionAndSurfaceAreStableAndServerSafe() throws Exception {
+        assertEquals("1.5", ManaApi.API_VERSION);
         assertEquals(1, ManaApiVersion.MAJOR);
-        assertEquals(4, ManaApiVersion.MINOR);
+        assertEquals(5, ManaApiVersion.MINOR);
 
         assertPublicSignaturesDoNotExposeImplementation(ManaApi.class);
         assertPublicSignaturesDoNotExposeImplementation(IManaService.class);
@@ -38,6 +38,7 @@ class ApiBoundaryTest {
         assertPublicSignaturesDoNotExposeImplementation(ManaProviderKind.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaStateChangeEvent.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaContribution.class);
+        assertPublicSignaturesDoNotExposeImplementation(ConfiguredFlaskSnapshot.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaItemContext.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaTooltips.class);
         assertPublicSignaturesDoNotExposeImplementation(IItemManaModifierProvider.class);
@@ -46,6 +47,30 @@ class ApiBoundaryTest {
         assertPublicSignaturesDoNotExposeImplementation(ClientHudContext.class);
         assertPublicSignaturesDoNotExposeImplementation(ClientManaSnapshot.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaHudRenderEvent.class);
+
+        assertEquals(ConfiguredFlaskSnapshot.class,
+                ManaApi.class.getMethod("getConfiguredFlaskSnapshot").getReturnType());
+        assertEquals(ConfiguredFlaskSnapshot.class,
+                ClientManaApi.class.getMethod("getConfiguredFlaskSnapshot").getReturnType());
+        ManaApi.class.getMethod(
+                "registerItemProvider", net.minecraft.util.ResourceLocation.class,
+                net.minecraft.item.Item.class, IItemManaModifierProvider.class,
+                ManaContribution.class
+        );
+        ManaApi.class.getMethod(
+                "setItemProviderContributionPreview",
+                net.minecraft.util.ResourceLocation.class, ManaContribution.class
+        );
+        ManaApi.class.getMethod(
+                "clearItemProviderContributionPreview",
+                net.minecraft.util.ResourceLocation.class
+        );
+        assertEquals(int.class,
+                ManaContribution.class.getMethod("getFlatMaximumMana").getReturnType());
+        ManaContribution.Builder.class.getMethod("flatMaximumMana", int.class);
+        ManaContribution.Builder.class.getMethod("flatLockoutSeconds", double.class);
+        ManaContribution.Builder.class.getMethod("flatLockoutIncreaseSeconds", double.class);
+        ManaContribution.Builder.class.getMethod("flatLockoutReductionSeconds", double.class);
     }
 
     @Test
@@ -83,6 +108,18 @@ class ApiBoundaryTest {
             assertFalse(source.contains("ManaProfileExplanation"), path);
             assertFalse(source.contains("ManaContributionExplanation"), path);
         }
+    }
+
+    @Test
+    void configuredFlaskSnapshotReusesExistingScalarRulesFields() throws Exception {
+        String source = new String(
+                Files.readAllBytes(Paths.get(System.getProperty("user.dir")).resolve(
+                        "src/main/java/com/mahghuuuls/jawms/internal/rules/GameplayRulesMessage.java"
+                )),
+                StandardCharsets.UTF_8
+        );
+
+        assertFalse(source.contains("ConfiguredFlaskSnapshot"));
     }
 
     private static void assertPublicSignaturesDoNotExposeImplementation(Class<?> apiType) {

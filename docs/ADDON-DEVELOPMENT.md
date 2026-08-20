@@ -13,14 +13,15 @@ JAWMS mod versions, CurseForge file identities, and API versions are separate id
 
 | JAWMS distribution | CurseForge file | Public API | Direct dependency status |
 | --- | --- | --- | --- |
-| Published `0.1.0` beta | `8597828` | `1.2` | Verified from a clean ForgeDevEnv consumer |
-| Published `0.2.0` beta | `8621418` | `1.3` | Resolved through standard CurseMaven and consumed by completed companion addons |
-| Published `0.3.0` beta | `8632899` | `1.3` | Historical API-`1.3` dependency; MixinBooter `11.8` or newer |
-| Published `0.4.0` beta | `8651841` | `1.4` | Current immutable dependency recipe; MixinBooter `11.8` or newer |
+| Published `0.1.0` | `8597828` | `1.2` | Verified from a clean ForgeDevEnv consumer |
+| Published `0.2.0` | `8621418` | `1.3` | Resolved through standard CurseMaven and consumed by completed companion addons |
+| Published `0.3.0` | `8632899` | `1.3` | Historical API-`1.3` dependency; MixinBooter `11.8` or newer |
+| Published `0.4.0` | `8651841` | `1.4` | Current immutable dependency recipe; MixinBooter `11.8` or newer |
+| Stable `1.0.0` candidate | Not published | `1.5` | Compile from the candidate source only; no CurseMaven coordinate exists yet |
 
 API major `1` follows an additive compatibility policy. A higher minor version retains the documented public descriptors from supported earlier minor versions and does not add required methods to an already-published interface. A breaking change requires another major version or a parallel opt-in contract. A type may be deprecated during major `1`, but deprecation does not authorize its removal from a later `1.x` release.
 
-The current API version is available as `ManaApi.API_VERSION` and `ManaApiVersion.CURRENT`. Use the matrix above to choose a real distribution file; do not infer a CurseForge file ID from those constants.
+The stable candidate API version is available as `ManaApi.API_VERSION` and `ManaApiVersion.CURRENT`. Use the matrix above to choose a real published distribution file; do not infer a CurseForge file ID from those constants. Until `1.0.0` is published, `0.4.0` remains the canonical remote dependency recipe.
 
 ## Published `0.4.0` Dependency Recipe
 
@@ -134,7 +135,7 @@ Leaving the template's example `mixin_configs` name non-empty can put a nonexist
 
 All `IManaService` methods require a logical-server player and the Minecraft server thread. Current mana is server-authoritative; client values are display-only.
 
-The basic service and provider operations below also exist in published API `1.3`. Sections that identify an API-`1.4` addition require published JAWMS `0.4.0` file `8651841` or a later compatible release.
+The basic service and provider operations below also exist in published API `1.3`. Sections that identify an API-`1.4` addition require published JAWMS `0.4.0` file `8651841` or a later compatible release. Sections marked API `1.5` describe the stable local `1.0.0` candidate and do not yet have a published dependency coordinate.
 
 ```java
 private static final ResourceLocation POTION_RESTORE =
@@ -147,9 +148,11 @@ public void restoreFromPotion(EntityPlayer player) {
 }
 ```
 
-Mutation amounts are non-negative whole mana points. `setCurrentMana` clamps to the effective maximum, `restoreMana` restores up to the requested amount, `consumeMana` consumes the exact amount or changes nothing, and `drainMana` drains up to the requested amount. Every mutation needs a namespaced cause, applies to Creative players, synchronizes automatically, and does not start the post-cast regeneration delay.
+Mutation amounts and maximum mana are whole `int` mana points; fractional maximum mana is not part of API `1.5`. `setCurrentMana` clamps to the effective maximum, `restoreMana` restores up to the requested amount, `consumeMana` consumes the exact amount or changes nothing, and `drainMana` drains up to the requested amount. Every mutation needs a namespaced cause, applies to Creative players, synchronizes automatically, and does not start the post-cast regeneration delay.
 
 API `1.4` adds `ManaMutationResult.getFailure()`. `setCurrentMana`, `restoreMana`, and `drainMana` return successful `NONE`, including clamped or bounded no-ops. An affordable `consumeMana`, including consuming zero, also returns successful `NONE`; an exact consume that cannot be paid returns unsuccessful `INSUFFICIENT_MANA` without changing state. The service does not otherwise return `REJECTED`; the retained constructor uses that conservative reason only when an external legacy caller constructs an unsuccessful result.
+
+For external accounting, use `getActualAmount()`, not the requested amount. It is the non-negative amount that JAWMS actually committed after bounds. `getActualDelta()` is signed from the player's perspective: restoration is positive, consumption or draining is negative, and a no-op is zero. JAWMS cannot make a separate addon currency, cooldown, durability, or item mutation atomic with mana; apply that external change from the actual committed result and define the addon's own recovery behavior if its later operation fails.
 
 | Operation | Ordinary result |
 | --- | --- |
@@ -159,6 +162,16 @@ API `1.4` adds `ManaMutationResult.getFailure()`. `setCurrentMana`, `restoreMana
 | `drainMana` | Successful `NONE`; drains up to the request and can report a smaller or zero actual amount. |
 
 Invalid amounts or causes, wrong logical side or thread, a missing capability, mutation during provider evaluation, mutation-depth overflow, and setting current mana below an active reservation remain exceptions rather than ordinary failure results.
+
+### API `1.5` Configured Flask Snapshot
+
+`ManaApi.getConfiguredFlaskSnapshot()` returns the accepted ordinary Wizardry flask restoration values only on the active logical-server thread. Other threads receive `ConfiguredFlaskSnapshot.unavailable()`. Client presentation code must call `ClientManaApi.getConfiguredFlaskSnapshot()` instead. Always check `isAvailable()` before reading the three values; an unavailable snapshot is not three configured zero-value flasks.
+
+The client snapshot is unavailable before the first accepted gameplay-rules synchronization, becomes available atomically with one connection-local rules revision, and becomes unavailable again on disconnect. Its revision is an accepted identity, not a clock. Compare known revisions only within the current connection. The snapshot reads accepted JAWMS rules and never consults or exposes Wizardry's mutable flask enum.
+
+### API `1.5` Directional Lockout Helpers
+
+`ManaContribution.Builder.flatLockoutIncreaseSeconds(value)` adds a non-negative number of seconds to the post-cast regeneration delay. `flatLockoutReductionSeconds(value)` subtracts a non-negative number of seconds. They are directional clarity helpers for the same signed `flatLockoutSeconds` field, so the last of these three builder calls wins. Percentage lockout increase and reduction keep their existing independent fields and arithmetic.
 
 Subscribe to `ManaStateChangeEvent` on the ordinary Forge event bus to observe committed logical-server changes. It provides immutable old/new state, actual current-mana delta, cause, and the affected server player. The event is not a client notification and is not cancellable.
 
@@ -192,6 +205,30 @@ ManaApi.registerContextualProvider(
                 : ManaContribution.EMPTY
 );
 ```
+
+### API `1.5` Invariant Provider Previews
+
+An item provider whose complete contribution is identical for every matching stack, player, slot, and item state may opt into automatic presentation by using the four-argument registration overload:
+
+```java
+ManaContribution preview = ManaContribution.builder()
+        .flatMaximumMana(10)
+        .regenerationIncrease(25.0D)
+        .build();
+
+ManaApi.registerItemProvider(
+        new ResourceLocation("exampleaddon", "mana_ring"),
+        ModItems.MANA_RING,
+        (player, context) -> preview,
+        preview
+);
+```
+
+The preview is an invariant presentation promise, not a cached provider result and not proof that the item is equipped. Omit it for contributions that depend on the player, slot, NBT, metadata, or other changing state. Existing three-argument providers retain their gameplay behavior and receive no automatic preview. Tooltip rendering, synchronization, preview publication, replacement, and clearing invoke providers zero additional times.
+
+JAWMS accepts previews only for registered item-provider identities. `setItemProviderContributionPreview` and `clearItemProviderContributionPreview` are logical-server-thread presentation operations for an active server; they do not alter gameplay evaluation. Accepted non-neutral previews are synchronized under the gameplay-rules revision. Disabled providers, configured or enabled generated overrides, matching exact-metadata overrides, neutral values, invalid or unavailable declarations, and cleared previews are omitted. Exact-metadata configuration suppresses only that metadata; other variants may retain the provider preview.
+
+JAWMS appends applicable configured contributions followed by eligible provider previews in provider-ID order as one contiguous final JAWMS section after ordinary Forge tooltip-event subscribers return. This guarantees ordering relative to ordinary subscribers, not precedence over another coremod or Mixin that also modifies `ItemStack.getTooltip` afterward. JAWMS never discovers, moves, or rewrites addon-owned tooltip lines. Seeing a preview on an unequipped stack is informational and does not apply its contribution.
 
 Provider callbacks run on the logical server and must be deterministic, side-effect-free, and reasonably cheap. They may query JAWMS, but must not mutate mana or call `invalidateModifierCache` from inside evaluation. Return one complete immutable contribution. Returning `null` or throwing a runtime exception invalidates only that provider result and caches the failure for the rest of the evaluation tick.
 
@@ -261,6 +298,8 @@ Always check `snapshot.isAvailable()` before using its mana values. An available
 - in API `1.3`, a known or explicitly unknown snapshot revision.
 
 A known revision identifies an accepted synchronized state and never decreases within one connection. It is not a timestamp, packet age, cast-eligibility flag, remaining lockout, or continuous-cast state. Compare known revisions only within the current connection. Before initial synchronization and after disconnect, the snapshot is unavailable and its revision is unknown. The retained API-`1.2` factory also creates an available snapshot with unknown revision because externally supplied values have no synchronized identity.
+
+The API-`1.5` configured-flask snapshot follows the same connection lifecycle but belongs to the accepted gameplay-rules publication rather than the per-player mana publication. The two snapshot types can therefore carry different revisions and must not be compared with each other.
 
 ## Replacement HUD Lifecycle
 
@@ -342,7 +381,7 @@ The maintained, executable Java 8 reference is [`CacheSafeReplacementHud`](../sr
 
 ## Optional Developer Tools
 
-JAWMS `0.4.0` builds a separate `jawms-devtools-0.4.0.jar` for addon-development environments. Install it beside the matching JAWMS version when you need permission-level-4 state, mutation, provider, accepted-explanation, or cache-refresh diagnostics. It uses only the documented public API and is not required by the primary JAWMS mod. Removing the tool JAR removes `/jawms-dev` without disabling JAWMS.
+JAWMS `1.0.0` builds a separate `jawms-devtools-1.0.0.jar` for addon-development environments. Install it beside JAWMS `[1.0.0,1.1.0)` when you need permission-level-4 state, mutation, provider, accepted-explanation, or cache-refresh diagnostics. It uses only the documented public API and is not required by the primary JAWMS mod. Removing the tool JAR removes `/jawms-dev` without disabling JAWMS.
 
 The canonical [`docs/COMMANDS.md`](COMMANDS.md) reference distinguishes primary operator commands, optional Developer Tools, contributor-only development fixtures, and API compatibility fixtures. Do not distribute contributor or compatibility fixtures as addon-development tools.
 
@@ -360,4 +399,4 @@ Also test:
 - dedicated-server startup with public client API classes present but no client linkage;
 - the exact published dependency coordinate in a clean workspace without resolving JAWMS from `mavenLocal`, a copied JAWMS JAR, or an unpublished file ID.
 
-API `1.3` in published JAWMS `0.3.0` has source, Java 8, descriptor, old-binary, launched-fixture, direct CurseMaven, and completed-addon coverage. [JAWMS Hud Styles](https://www.curseforge.com/minecraft/mc-mods/jawms-hud-styles) and [JAWMS Classic Bar Integration](https://www.curseforge.com/minecraft/mc-mods/jawms-classic-bar) both consume the public HUD API. API `1.4` is published in JAWMS `0.4.0` file `8651841` and has source, build, old-binary, compatibility-fixture, and JAWMS Developer Tools runtime coverage; migration of the owner-owned JAWMS Additions project remains separate follow-up work.
+API `1.3` in published JAWMS `0.3.0` has source, Java 8, descriptor, old-binary, launched-fixture, direct CurseMaven, and completed-addon coverage. [JAWMS Hud Styles](https://www.curseforge.com/minecraft/mc-mods/jawms-hud-styles) and [JAWMS Classic Bar Integration](https://www.curseforge.com/minecraft/mc-mods/jawms-classic-bar) both consume the public HUD API. API `1.4` is published in JAWMS `0.4.0` file `8651841` and has source, build, old-binary, compatibility-fixture, and JAWMS Developer Tools runtime coverage. API `1.5` incorporates feedback from JAWMS Additions and JAWMS Integrations and is exercised by the local compatibility fixture; direct remote consumption awaits publication of `1.0.0`.

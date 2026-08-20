@@ -77,6 +77,13 @@ public final class ManaMutationResult {
         return actualDelta;
     }
 
+    /**
+     * For a result returned by {@link IManaService}, returns the non-negative
+     * amount actually committed to JAWMS state after validation and bounds. Use
+     * this value, rather than the requested amount, for a later external charge
+     * or refund. JAWMS does not make that separate external mutation atomic and
+     * cannot roll it back.
+     */
     public int getActualAmount() {
         return Math.abs(actualDelta);
     }

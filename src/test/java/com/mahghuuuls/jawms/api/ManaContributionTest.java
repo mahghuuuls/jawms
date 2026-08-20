@@ -64,4 +64,41 @@ class ManaContributionTest {
                         .elementSpellCostMultiplier(Element.FIRE, Double.NaN).build());
         assertTrue(ManaContribution.EMPTY.isEmpty());
     }
+
+    @Test
+    void directionalFlatLockoutHelpersUseOneSignedLastCallWinsField() {
+        assertEquals(2.5D, ManaContribution.builder()
+                .flatLockoutReductionSeconds(1.0D)
+                .flatLockoutIncreaseSeconds(2.5D)
+                .build().getFlatLockoutSeconds());
+        assertEquals(-1.5D, ManaContribution.builder()
+                .flatLockoutSeconds(4.0D)
+                .flatLockoutReductionSeconds(1.5D)
+                .build().getFlatLockoutSeconds());
+        assertEquals(-2.0D, ManaContribution.builder()
+                .flatLockoutIncreaseSeconds(4.0D)
+                .flatLockoutReductionSeconds(2.0D)
+                .build().getFlatLockoutSeconds());
+        assertEquals(3.0D, ManaContribution.builder()
+                .flatLockoutReductionSeconds(1.0D)
+                .flatLockoutSeconds(3.0D)
+                .build().getFlatLockoutSeconds());
+        assertEquals(2.0D, ManaContribution.builder()
+                .flatLockoutSeconds(-4.0D)
+                .flatLockoutIncreaseSeconds(2.0D)
+                .build().getFlatLockoutSeconds());
+        assertEquals(-3.0D, ManaContribution.builder()
+                .flatLockoutIncreaseSeconds(1.0D)
+                .flatLockoutSeconds(-3.0D)
+                .build().getFlatLockoutSeconds());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ManaContribution.builder().flatLockoutIncreaseSeconds(-0.1D));
+        assertThrows(IllegalArgumentException.class,
+                () -> ManaContribution.builder().flatLockoutReductionSeconds(-0.1D));
+        assertThrows(IllegalArgumentException.class,
+                () -> ManaContribution.builder().flatLockoutIncreaseSeconds(Double.NaN));
+        assertThrows(IllegalArgumentException.class,
+                () -> ManaContribution.builder().flatLockoutReductionSeconds(Double.POSITIVE_INFINITY));
+    }
 }
