@@ -31,7 +31,7 @@ import java.lang.reflect.Method;
 public final class JustAnotherWizardryManaSystemMod {
 
     public static final String DEPENDENCIES =
-            "required-after:ebwizardry@[4.3.19,4.3.20);"
+            "required-after:ebwizardry@[4.3.19,);"
                     + "required-after:mixinbooter@[11.8,);"
                     + "after:baubles@[1.5.2,)";
 

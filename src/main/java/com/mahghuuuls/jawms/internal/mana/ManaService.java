@@ -148,6 +148,25 @@ public final class ManaService implements IManaService {
         });
     }
 
+    @Override
+    public long startRegenerationLockout(
+            EntityPlayer player,
+            ResourceLocation cause
+    ) {
+        ResourceLocation checkedCause = requireCause(cause);
+        ManaState state = requireAcceptedMutableState(player);
+        long duration = state.getEffectiveLockoutTicks();
+        boolean wasActive = state.getRemainingLockoutTicks() > 0L;
+        transition(
+                player,
+                state,
+                checkedCause,
+                duration > 0L || wasActive,
+                () -> state.startRegenerationLockout(duration)
+        );
+        return duration;
+    }
+
     private static ManaMutationResult mutate(
             EntityPlayer player,
             int requestedAmount,
@@ -219,12 +238,22 @@ public final class ManaService implements IManaService {
 
     private static ManaState requireMutableState(EntityPlayer player) {
         ManaState state = requireState(player);
+        requireMutationAllowed(player);
+        return state;
+    }
+
+    private static ManaState requireAcceptedMutableState(EntityPlayer player) {
+        ManaState state = requireServerState(player);
+        requireMutationAllowed(player);
+        return state;
+    }
+
+    private static void requireMutationAllowed(EntityPlayer player) {
         if (ManaEvaluationGuard.isEvaluating(player.getUniqueID())) {
             throw new IllegalStateException(
                     "JAWMS mana cannot be mutated during modifier-provider evaluation."
             );
         }
-        return state;
     }
 
     public static int getAvailableMana(EntityPlayer player) {
@@ -246,7 +275,8 @@ public final class ManaService implements IManaService {
         if (reservation == null || !reservation.belongsTo(state)) {
             throw new IllegalStateException("Successful wand cast has no matching mana reservation.");
         }
-        transition(player, ManaCauses.SPELL_COST, false, () -> state.commit(reservation));
+        transition(player, state, ManaCauses.SPELL_COST, false,
+                () -> state.commit(reservation));
         startRegenerationLockout(player, state);
     }
 
@@ -262,7 +292,8 @@ public final class ManaService implements IManaService {
                     "Successful continuous cast has no matching mana reservation."
             );
         }
-        transition(player, ManaCauses.SPELL_COST, false, () -> state.commit(reservation));
+        transition(player, state, ManaCauses.SPELL_COST, false,
+                () -> state.commit(reservation));
         state.markContinuousCastSuccessful(hand, spellId);
     }
 
@@ -294,7 +325,7 @@ public final class ManaService implements IManaService {
                     "Successful cast payment would cross its captured hunger floor."
             );
         }
-        transition(player, ManaCauses.SPELL_COST, false, () -> {
+        transition(player, state, ManaCauses.SPELL_COST, false, () -> {
             state.commit(reservation);
             if (hunger > 0) {
                 player.getFoodStats().addStats(-hunger, 0.0F);
@@ -315,6 +346,7 @@ public final class ManaService implements IManaService {
         ManaState state = requireMutableState(player);
         transition(
                 player,
+                state,
                 ManaCauses.CONTINUOUS_START,
                 false,
                 () -> state.beginContinuousCast(hand, spellId)
@@ -365,7 +397,7 @@ public final class ManaService implements IManaService {
         ManaState state = requireMutableState(player);
         boolean wasActive = state.isContinuousCastActive();
         boolean[] lockoutStarted = new boolean[1];
-        transition(player, ManaCauses.CONTINUOUS_END, wasActive,
+        transition(player, state, ManaCauses.CONTINUOUS_END, wasActive,
                 () -> lockoutStarted[0] = state.finishContinuousCast());
         if (lockoutStarted[0]) {
             startRegenerationLockout(player, state);
@@ -376,7 +408,8 @@ public final class ManaService implements IManaService {
     public static void clearTransientLifecycleState(EntityPlayer player) {
         ManaState state = requireMutableState(player);
         boolean force = state.isContinuousCastActive() || state.getRemainingLockoutTicks() > 0L;
-        transition(player, ManaCauses.LIFECYCLE, force, state::clearTransientLifecycleState);
+        transition(player, state, ManaCauses.LIFECYCLE, force,
+                state::clearTransientLifecycleState);
         ManaMutationCoordinator.clear(player.getUniqueID());
         CastCostContextManager.clearAll(player);
         CastPaymentContextManager.clearAll(player);
@@ -500,6 +533,7 @@ public final class ManaService implements IManaService {
         boolean restart = state.getRemainingLockoutTicks() > 0L;
         transition(
                 player,
+                state,
                 restart ? ManaCauses.LOCKOUT_RESTART : ManaCauses.LOCKOUT_START,
                 duration > 0L,
                 () -> state.startRegenerationLockout(duration)
@@ -508,11 +542,11 @@ public final class ManaService implements IManaService {
 
     private static void transition(
             EntityPlayer player,
+            ManaState state,
             ResourceLocation cause,
             boolean forceEvent,
             Runnable mutation
     ) {
-        ManaState state = requireMutableState(player);
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
             ManaPublicState oldState = snapshot(state);
@@ -589,7 +623,7 @@ public final class ManaService implements IManaService {
 
     private static ResourceLocation requireCause(ResourceLocation cause) {
         if (cause == null) {
-            throw new NullPointerException("Mutation cause must not be null.");
+            throw new NullPointerException("Operation cause must not be null.");
         }
         return cause;
     }

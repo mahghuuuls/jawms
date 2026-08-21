@@ -10,7 +10,9 @@ import net.minecraft.util.ResourceLocation;
  * <p>Every method must be called for a logical-server player on the Minecraft
  * server thread. Mutation amounts are whole mana points and must not be
  * negative. Every mutation requires a namespaced cause, applies to creative
- * players, synchronizes automatically, and does not start cast lockout.</p>
+ * players, and synchronizes automatically. Ordinary mana mutations do not
+ * start cast lockout; use {@link #startRegenerationLockout(EntityPlayer,
+ * ResourceLocation)} when an ability needs that behavior explicitly.</p>
  */
 public interface IManaService {
 
@@ -42,6 +44,31 @@ public interface IManaService {
     boolean canRegenerateDuringPostCastLockout(EntityPlayer player);
 
     boolean canRegenerateDuringContinuousCasting(EntityPlayer player);
+
+    /**
+     * Starts or restarts the player's regeneration lockout using the currently
+     * accepted effective duration and returns that duration in ticks.
+     *
+     * <p>This operation does not evaluate modifier providers, simulate a
+     * spell, reserve or consume mana, change hunger, or alter continuous-cast
+     * state. A zero duration clears an active lockout and is otherwise a
+     * no-op. The supplied cause is used for any resulting state-change event.</p>
+     *
+     * <p>The default exists so implementations compiled against older JAWMS
+     * API versions remain binary compatible. Such implementations must opt in
+     * before this operation is available.</p>
+     *
+     * @throws UnsupportedOperationException if an alternate service
+     *         implementation does not support explicit lockout
+     */
+    default long startRegenerationLockout(
+            EntityPlayer player,
+            ResourceLocation cause
+    ) {
+        throw new UnsupportedOperationException(
+                "This mana service does not support explicit regeneration lockout."
+        );
+    }
 
     /**
      * Returns the efficiency points applicable to this registered spell.

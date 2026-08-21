@@ -6,7 +6,7 @@
     "mcversion": "1.12.2",
     "description": "Optional server-side commands for developing and diagnosing JAWMS addons.",
     "authorList": ["mahghuuuls"],
-    "requiredMods": ["jawms@[${jawms_min_version},${jawms_max_version})"],
+    "requiredMods": ["jawms@[${jawms_min_version},)"],
     "dependencies": []
   }
 ]

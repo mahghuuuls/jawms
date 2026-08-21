@@ -24,7 +24,9 @@ apply from: 'gradle/scripts/helpers.gradle'
 assertProperty 'mod_version'
 assertProperty 'developer_tools_version'
 assertProperty 'developer_tools_jawms_min_version'
-assertProperty 'developer_tools_jawms_max_version'
+assertProperty 'wizardry_min_version'
+assertProperty 'baubles_min_version'
+assertProperty 'mixin_booter_min_version'
 assertProperty 'root_package'
 assertProperty 'mod_id'
 assertProperty 'mod_name'
@@ -48,6 +50,24 @@ setDefaultProperty 'extra_jvm_args', false, ''
 setDefaultProperty 'extra_tweak_classes', false, ''
 setDefaultProperty 'change_minecraft_sources', false, false
 setDefaultProperty 'publish_to_curseforge', true, false
+
+def openRuntimeRange = { String modId, String minimumProperty ->
+    def minimum = propertyString(minimumProperty)
+    if (minimum.isEmpty() || minimum.find(/[\[\]()@,\s]/)) {
+        throw new GradleException("Invalid runtime minimum ${minimumProperty}=${minimum}")
+    }
+    "${modId}@[${minimum},)"
+}
+def assertExactOpenRuntimeRanges = { Collection<String> actual,
+        Collection<String> expected, String surface ->
+    def openRangePattern = /^[a-z0-9_.-]+@\[[^,\]\)]+,\)$/
+    if (actual.any { !(it ==~ openRangePattern) }
+            || actual.toSet() != expected.toSet()
+            || actual.size() != expected.size()) {
+        throw new GradleException(
+                "${surface} does not contain exactly the build-owned open runtime ranges.")
+    }
+}
 
 version = propertyString('mod_version')
 group = propertyString('root_package')
@@ -188,6 +208,9 @@ sourceSets {
     api14BinaryFixture {
         java.srcDir 'src/api14BinaryFixture/java'
     }
+    api15BinaryFixture {
+        java.srcDir 'src/api15BinaryFixture/java'
+    }
 }
 
 configurations {
@@ -202,6 +225,11 @@ configurations {
         transitive = false
     }
     api14PublishedArtifact {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
+    api15PublishedArtifact {
         canBeConsumed = false
         canBeResolved = true
         transitive = false
@@ -224,6 +252,9 @@ dependencies {
     api14PublishedArtifact 'curse.maven:just-another-wizardry-mana-system-1643697:8651841'
     api14BinaryFixtureCompileOnly rfg.deobf(
             'curse.maven:just-another-wizardry-mana-system-1643697:8651841')
+    api15PublishedArtifact 'curse.maven:just-another-wizardry-mana-system-1643697:8695521'
+    api15BinaryFixtureCompileOnly rfg.deobf(
+            'curse.maven:just-another-wizardry-mana-system-1643697:8695521')
 }
 
 tasks.named(sourceSets.developerTools.compileJavaTaskName, JavaCompile).configure {
@@ -235,12 +266,10 @@ tasks.named(sourceSets.developerTools.compileJavaTaskName, JavaCompile).configur
 tasks.named(sourceSets.developerTools.processResourcesTaskName, ProcessResources).configure {
     inputs.property 'tool_version', propertyString('developer_tools_version')
     inputs.property 'jawms_min_version', propertyString('developer_tools_jawms_min_version')
-    inputs.property 'jawms_max_version', propertyString('developer_tools_jawms_max_version')
     filesMatching('mcmod.info') {
         expand(
                 'tool_version': propertyString('developer_tools_version'),
-                'jawms_min_version': propertyString('developer_tools_jawms_min_version'),
-                'jawms_max_version': propertyString('developer_tools_jawms_max_version')
+                'jawms_min_version': propertyString('developer_tools_jawms_min_version')
         )
     }
 }
@@ -334,6 +363,27 @@ compileApi14BinaryFixture.configure {
     }
 }
 
+def compileApi15BinaryFixture = tasks.named(
+        sourceSets.api15BinaryFixture.compileJavaTaskName,
+        JavaCompile
+)
+compileApi15BinaryFixture.configure {
+    dependsOn tasks.named(sourceSets.main.compileJavaTaskName)
+    classpath = tasks.named('compileJava', JavaCompile).get().classpath +
+            configurations.api15BinaryFixtureCompileClasspath
+    sourceCompatibility = targetCompatibility = 8
+    doFirst {
+        def candidateOutputs = sourceSets.main.output.files.collect { it.canonicalFile }
+        def leakedCandidateOutputs = classpath.files.collect { it.canonicalFile }.findAll {
+            candidateOutputs.contains(it)
+        }
+        if (!leakedCandidateOutputs.empty) {
+            throw new GradleException(
+                    "API 1.5 binary fixture classpath includes candidate output: ${leakedCandidateOutputs}")
+        }
+    }
+}
+
 def api12BinaryFixtureJar = tasks.register('api12BinaryFixtureJar', Jar) {
     group = 'verification'
     description = 'Packages the deobfuscated API 1.2 old-binary fixture.'
@@ -376,6 +426,20 @@ def api14BinaryFixtureJar = tasks.register('api14BinaryFixtureJar', Jar) {
 
 def reobfApi14BinaryFixtureJar = tasks.named('reobfApi14BinaryFixtureJar')
 
+def api15BinaryFixtureJar = tasks.register('api15BinaryFixtureJar', Jar) {
+    group = 'verification'
+    description = 'Packages the deobfuscated API 1.5 old-binary fixture.'
+    dependsOn sourceSets.api15BinaryFixture.classesTaskName
+    from sourceSets.api15BinaryFixture.output
+    archiveBaseName.set('jawms-api-binary-fixture')
+    archiveVersion.set('1.5')
+    archiveClassifier.set('dev')
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+
+def reobfApi15BinaryFixtureJar = tasks.named('reobfApi15BinaryFixtureJar')
+
 def apiCompatibilityFixtureJar = tasks.register('apiCompatibilityFixtureJar', Jar) {
     group = 'verification'
     description = 'Packages the deobfuscated external API compatibility fixture.'
@@ -412,6 +476,7 @@ tasks.register('verifyDeveloperToolsArtifact') {
             reobfApi12BinaryFixtureJar,
             reobfApi13BinaryFixtureJar,
             reobfApi14BinaryFixtureJar,
+            reobfApi15BinaryFixtureJar,
             tasks.named('reobfJar')
     doLast {
         def forbiddenSources = sourceSets.developerTools.allJava.files.findAll { source ->
@@ -504,13 +569,20 @@ tasks.register('verifyDeveloperToolsArtifact') {
             def expectedToolVersion = propertyString('developer_tools_version')
             def expectedPrimaryVersion = propertyString('mod_version')
             def expectedJawmsMinimum = propertyString('developer_tools_jawms_min_version')
-            def expectedJawmsMaximum = propertyString('developer_tools_jawms_max_version')
             if (expectedToolVersion != expectedPrimaryVersion
                     || expectedJawmsMinimum != expectedPrimaryVersion) {
                 throw new GradleException(
                         'Developer Tools version and minimum JAWMS version must match the primary candidate.')
             }
-            def expectedJawmsRange = "jawms@[${expectedJawmsMinimum},${expectedJawmsMaximum})"
+            def expectedJawmsRange = openRuntimeRange(
+                    'jawms', 'developer_tools_jawms_min_version')
+            def toolRanges = []
+            def toolRangeMatcher = metadata =~ /jawms@[^"\s]+/
+            while (toolRangeMatcher.find()) {
+                toolRanges.add(toolRangeMatcher.group())
+            }
+            assertExactOpenRuntimeRanges(
+                    toolRanges, [expectedJawmsRange], 'Developer Tools metadata')
             if (!metadata.contains('"modid": "jawms_devtools"')
                     || !metadata.contains('"version": "' + expectedToolVersion + '"')
                     || !metadata.contains(expectedJawmsRange)
@@ -549,7 +621,8 @@ tasks.register('verifyDeveloperToolsArtifact') {
                 reobfApiCompatibilityFixtureJar.get().archiveFile.get().asFile,
                 reobfApi12BinaryFixtureJar.get().archiveFile.get().asFile,
                 reobfApi13BinaryFixtureJar.get().archiveFile.get().asFile,
-                reobfApi14BinaryFixtureJar.get().archiveFile.get().asFile
+                reobfApi14BinaryFixtureJar.get().archiveFile.get().asFile,
+                reobfApi15BinaryFixtureJar.get().archiveFile.get().asFile
         ]
         def fixtureToolLeaks = fixtureJars.findAll { fixtureJar ->
             !zipTree(fixtureJar).matching {
@@ -569,6 +642,7 @@ tasks.register('verifyApiCompatibilityFixture') {
             reobfApi12BinaryFixtureJar,
             reobfApi13BinaryFixtureJar,
             reobfApi14BinaryFixtureJar,
+            reobfApi15BinaryFixtureJar,
             tasks.named('reobfJar')
     doLast {
         def publishedApi12Files = configurations.api12PublishedArtifact.incoming.artifactView {
@@ -635,6 +709,28 @@ tasks.register('verifyApiCompatibilityFixture') {
             throw new GradleException(
                     "Published API 1.4 artifact identity mismatch: ${publishedApi14}, "
                             + "size=${publishedApi14.length()}, sha256=${publishedApi14Digest}")
+        }
+
+        def publishedApi15Files = configurations.api15PublishedArtifact.incoming.artifactView {
+            attributes {
+                attribute(
+                        Attribute.of('rfgDeobfuscatorTransformed', Boolean),
+                        false
+                )
+            }
+        }.files.files
+        if (publishedApi15Files.size() != 1) {
+            throw new GradleException(
+                    "Expected one published API 1.5 artifact, found ${publishedApi15Files}")
+        }
+        def publishedApi15 = publishedApi15Files.first()
+        def publishedApi15Digest = java.security.MessageDigest.getInstance('SHA-256')
+                .digest(publishedApi15.bytes).encodeHex().toString().toUpperCase(Locale.ROOT)
+        if (publishedApi15.length() != 354804L
+                || publishedApi15Digest != '55F804795E0A8CB05B15EFD1CF6C43CF134C12F5837D0A3E54D11A897A90CDA3') {
+            throw new GradleException(
+                    "Published API 1.5 artifact identity mismatch: ${publishedApi15}, "
+                            + "size=${publishedApi15.length()}, sha256=${publishedApi15Digest}")
         }
 
         def readPublicApiClass = { byte[] bytes ->
@@ -828,6 +924,7 @@ tasks.register('verifyApiCompatibilityFixture') {
         comparePublishedApi(publishedApi12, '1.2')
         comparePublishedApi(publishedApi13, '1.3')
         comparePublishedApi(publishedApi14, '1.4')
+        comparePublishedApi(publishedApi15, '1.5')
 
         def candidateOutputs = sourceSets.main.output.files.collect { it.canonicalFile }
         def api12CompileClasspath = compileApi12BinaryFixture.get().classpath.files
@@ -858,6 +955,16 @@ tasks.register('verifyApiCompatibilityFixture') {
         if (!leakedApi14CandidateOutputs.empty) {
             throw new GradleException(
                     "API 1.4 binary fixture used candidate output: ${leakedApi14CandidateOutputs}")
+        }
+
+        def api15CompileClasspath = compileApi15BinaryFixture.get().classpath.files
+                .collect { it.canonicalFile }
+        def leakedApi15CandidateOutputs = api15CompileClasspath.findAll {
+            candidateOutputs.contains(it)
+        }
+        if (!leakedApi15CandidateOutputs.empty) {
+            throw new GradleException(
+                    "API 1.5 binary fixture used candidate output: ${leakedApi15CandidateOutputs}")
         }
 
         def api12Classes = sourceSets.api12BinaryFixture.output.classesDirs.asFileTree.matching {
@@ -1056,6 +1163,72 @@ tasks.register('verifyApiCompatibilityFixture') {
             api14Archive.close()
         }
 
+        def api15Classes = sourceSets.api15BinaryFixture.output.classesDirs.asFileTree.matching {
+            include '**/*.class'
+        }.files
+        if (api15Classes.empty) {
+            throw new GradleException('API 1.5 binary fixture contains no classes')
+        }
+        def nonJava8Api15Classes = api15Classes.findAll { classFile ->
+            byte[] bytes = classFile.bytes
+            bytes.length < 8 || (((bytes[6] & 0xff) << 8) | (bytes[7] & 0xff)) != 52
+        }
+        if (!nonJava8Api15Classes.empty) {
+            throw new GradleException(
+                    "API 1.5 binary fixture is not Java 8 bytecode: ${nonJava8Api15Classes}")
+        }
+        def api15Bytecode = api15Classes.collect {
+            new String(it.bytes, 'ISO-8859-1')
+        }.join('\n')
+        def requiredApi15Names = [
+                'ConfiguredFlaskSnapshot', 'getConfiguredFlaskSnapshot',
+                'setItemProviderContributionPreview', 'clearItemProviderContributionPreview'
+        ]
+        def missingApi15Names = requiredApi15Names.findAll { !api15Bytecode.contains(it) }
+        if (!missingApi15Names.empty) {
+            throw new GradleException(
+                    "API 1.5 binary fixture does not exercise API 1.5 names: ${missingApi15Names}")
+        }
+
+        def reobfuscatedApi15 = reobfApi15BinaryFixtureJar.get().archiveFile.get().asFile
+        def frozenApi15Digest = java.security.MessageDigest.getInstance('SHA-256')
+                .digest(reobfuscatedApi15.bytes).encodeHex().toString().toUpperCase(Locale.ROOT)
+        if (reobfuscatedApi15.length() != 4188L
+                || frozenApi15Digest != '24E4C8EC8CE0D16007A7083D6C5D65305069FF25BB5238F016E143A47CFDCCD3') {
+            throw new GradleException(
+                    "Frozen reobfuscated API 1.5 fixture changed: ${reobfuscatedApi15}, "
+                            + "size=${reobfuscatedApi15.length()}, sha256=${frozenApi15Digest}")
+        }
+        def api15Archive = new java.util.zip.ZipFile(reobfuscatedApi15)
+        try {
+            def api15Entries = api15Archive.entries().findAll {
+                !it.directory && it.name.endsWith('.class')
+            }
+            if (api15Entries.empty) {
+                throw new GradleException('Reobfuscated API 1.5 fixture contains no classes')
+            }
+            def invalidApi15Entries = api15Entries.findAll { entry ->
+                byte[] bytes = api15Archive.getInputStream(entry).bytes
+                bytes.length < 8 || (((bytes[6] & 0xff) << 8) | (bytes[7] & 0xff)) != 52
+            }*.name
+            if (!invalidApi15Entries.empty) {
+                throw new GradleException(
+                        "Reobfuscated API 1.5 fixture is not Java 8 bytecode: ${invalidApi15Entries}")
+            }
+            def reobfuscatedApi15Bytecode = api15Entries.collect { entry ->
+                new String(api15Archive.getInputStream(entry).bytes, 'ISO-8859-1')
+            }.join('\n')
+            def missingReobfuscatedApi15Names = requiredApi15Names.findAll {
+                !reobfuscatedApi15Bytecode.contains(it)
+            }
+            if (!missingReobfuscatedApi15Names.empty) {
+                throw new GradleException(
+                        "Reobfuscated API 1.5 fixture lost API 1.5 probes: ${missingReobfuscatedApi15Names}")
+            }
+        } finally {
+            api15Archive.close()
+        }
+
         def forbiddenJawmsSources = sourceSets.apiCompatibilityFixture.allJava.files.findAll { source ->
             def text = source.getText('UTF-8')
             def jawmsReferences = (text =~ /com\.mahghuuuls\.jawms\.[A-Za-z0-9_$.]+/)
@@ -1072,18 +1245,19 @@ tasks.register('verifyApiCompatibilityFixture') {
         def currentFixtureSource = sourceSets.apiCompatibilityFixture.allJava.files.collect {
             it.getText('UTF-8')
         }.join('\n')
-        def requiredApi15FixtureNames = [
+        def requiredCurrentFixtureNames = [
                 'getConfiguredFlaskSnapshot', 'flatLockoutIncreaseSeconds',
                 'flatLockoutReductionSeconds', 'registerItemProvider',
                 'setItemProviderContributionPreview',
-                'clearItemProviderContributionPreview'
+                'clearItemProviderContributionPreview',
+                'startRegenerationLockout'
         ]
-        def missingApi15FixtureNames = requiredApi15FixtureNames.findAll {
+        def missingCurrentFixtureNames = requiredCurrentFixtureNames.findAll {
             !currentFixtureSource.contains(it)
         }
-        if (!missingApi15FixtureNames.empty) {
+        if (!missingCurrentFixtureNames.empty) {
             throw new GradleException(
-                    "Current compatibility fixture does not exercise API 1.5 names: ${missingApi15FixtureNames}")
+                    "Current compatibility fixture does not exercise current API names: ${missingCurrentFixtureNames}")
         }
 
         def nonJava8Classes = sourceSets.apiCompatibilityFixture.output.classesDirs.asFileTree.matching {
@@ -1160,6 +1334,7 @@ tasks.register('verifyApiCompatibilityFixture') {
             include 'example/jawmsapi12/**'
             include 'example/jawmsapi13/**'
             include 'example/jawmsapi14/**'
+            include 'example/jawmsapi15/**'
         }.files
         if (!packagedFixtures.empty) {
             throw new GradleException("Development/API fixture leaked into the production jar: ${packagedFixtures}")
@@ -1212,21 +1387,51 @@ tasks.register('verifyApiCompatibilityFixture') {
             }
 
             def metadataText = archive.getInputStream(archive.getEntry('mcmod.info')).getText('UTF-8')
-            def expectedMixinRange = "mixinbooter@[${propertyString('mixin_booter_version')},)"
-            def boundedMixinRange = metadataText =~ /mixinbooter@\[[^,]+,[^)]+\)/
-            if (!metadataText.contains('ebwizardry@[4.3.19,4.3.20)')
-                    || !metadataText.contains(expectedMixinRange)
-                    || metadataText.count('mixinbooter@') != 1
-                    || boundedMixinRange.find()) {
-                throw new GradleException('Production metadata does not contain exactly the approved open MixinBooter range.')
+            def expectedWizardryRange = openRuntimeRange(
+                    'ebwizardry', 'wizardry_min_version')
+            def expectedMixinRange = openRuntimeRange(
+                    'mixinbooter', 'mixin_booter_min_version')
+            def expectedBaublesRange = openRuntimeRange(
+                    'baubles', 'baubles_min_version')
+            def expectedRuntimeRanges = [
+                    expectedWizardryRange, expectedMixinRange, expectedBaublesRange
+            ]
+            def currentDependencyRanges = []
+            def dependencyRangeMatcher = metadataText =~ /(?:ebwizardry|mixinbooter|baubles)@[^"\s]+/
+            while (dependencyRangeMatcher.find()) {
+                currentDependencyRanges.add(dependencyRangeMatcher.group())
+            }
+            assertExactOpenRuntimeRanges(
+                    currentDependencyRanges, expectedRuntimeRanges, 'Production metadata')
+
+            def priorClosedSamples = [
+                    ['ebwizardry@[4.3.19,4.3.20)', [expectedWizardryRange]],
+                    ['jawms@[1.0.0,1.1.0)', [openRuntimeRange(
+                            'jawms', 'developer_tools_jawms_min_version')]]
+            ]
+            priorClosedSamples.each { sample ->
+                try {
+                    assertExactOpenRuntimeRanges(
+                            [sample[0]], sample[1] as Collection<String>, 'Sensitivity sample')
+                    throw new GradleException(
+                            "Open-range verifier accepted prior closed range ${sample[0]}")
+                } catch (GradleException expectedRejection) {
+                    if (expectedRejection.message.startsWith('Open-range verifier accepted')) {
+                        throw expectedRejection
+                    }
+                }
             }
 
             def modClassEntry = archive.getEntry(
                     'com/mahghuuuls/jawms/JustAnotherWizardryManaSystemMod.class'
             )
             def modClassText = archive.getInputStream(modClassEntry).getText('ISO-8859-1')
-            if (!modClassText.contains("required-after:${expectedMixinRange};")) {
-                throw new GradleException('Authoritative @Mod metadata does not match the selected MixinBooter build input.')
+            def expectedModDependencies = ("required-after:${expectedWizardryRange};"
+                    + "required-after:${expectedMixinRange};"
+                    + "after:${expectedBaublesRange}")
+            if (!modClassText.contains(expectedModDependencies)) {
+                throw new GradleException(
+                        'Authoritative @Mod metadata does not match the build-owned open runtime ranges.')
             }
 
             def nonJava8Entries = archive.entries().findAll { entry ->
@@ -1289,21 +1494,21 @@ tasks.register('verifyStableReleaseMetadata') {
     inputs.file 'README.md'
     inputs.file 'MOD-PAGE.md'
     doLast {
-        def expectedVersion = '1.0.0'
+        def expectedVersion = '1.1.0'
         if (propertyString('mod_version') != expectedVersion
                 || propertyString('developer_tools_version') != expectedVersion
                 || propertyString('release_type') != 'release') {
             throw new GradleException(
-                    'Stable candidate must use primary/tool version 1.0.0 and release_type=release.')
+                    'Stable candidate must use primary/tool version 1.1.0 and release_type=release.')
         }
         def changelog = file('CHANGELOG.md').getText('UTF-8')
         def readme = file('README.md').getText('UTF-8')
         def modPage = file('MOD-PAGE.md').getText('UTF-8')
-        if (!changelog.contains('## [1.0.0]')
+        if (!changelog.contains('## [1.1.0]')
                 || readme.contains('public beta')
                 || modPage.contains('Beta release:')) {
             throw new GradleException(
-                    'Stable 1.0.0 changelog or public release labeling is inconsistent.')
+                    'Stable 1.1.0 changelog or public release labeling is inconsistent.')
         }
     }
 }
@@ -1323,7 +1528,8 @@ def includeDeveloperToolsInRuns = providers.gradleProperty('jawmsIncludeDevelope
                 sourceSets.apiCompatibilityFixture.classesTaskName,
                 reobfApi12BinaryFixtureJar,
                 reobfApi13BinaryFixtureJar,
-                reobfApi14BinaryFixtureJar
+                reobfApi14BinaryFixtureJar,
+                reobfApi15BinaryFixtureJar
         if (includeDeveloperToolsInRuns) {
             dependsOn sourceSets.developerTools.classesTaskName
         }
@@ -1333,6 +1539,7 @@ def includeDeveloperToolsInRuns = providers.gradleProperty('jawmsIncludeDevelope
             classpath += files(reobfApi12BinaryFixtureJar.get().archiveFile.get().asFile)
             classpath += files(reobfApi13BinaryFixtureJar.get().archiveFile.get().asFile)
             classpath += files(reobfApi14BinaryFixtureJar.get().archiveFile.get().asFile)
+            classpath += files(reobfApi15BinaryFixtureJar.get().archiveFile.get().asFile)
             if (includeDeveloperToolsInRuns) {
                 classpath += sourceSets.developerTools.output
             }
@@ -1367,6 +1574,9 @@ processResources {
     inputs.property 'mixin_refmap', propertyString('mixin_refmap')
     inputs.property 'mixin_package', propertyString('mixin_package')
     inputs.property 'mixin_configs', propertyStringList('mixin_configs').join(' ')
+    inputs.property 'wizardry_min_version', propertyString('wizardry_min_version')
+    inputs.property 'mixin_booter_min_version', propertyString('mixin_booter_min_version')
+    inputs.property 'baubles_min_version', propertyString('baubles_min_version')
 
     def filterList = ['mcmod.info', 'pack.mcmeta']
     filterList.addAll(propertyStringList('mixin_configs').collect(config -> "mixins.${config}.json" as String))
@@ -1383,7 +1593,10 @@ processResources {
                 'mod_update_json': propertyString('mod_update_json'),
                 'mod_logo_path': propertyString('mod_logo_path'),
                 'mixin_refmap': propertyString('mixin_refmap'),
-                'mixin_package': propertyString('mixin_package')
+                'mixin_package': propertyString('mixin_package'),
+                'wizardry_min_version': propertyString('wizardry_min_version'),
+                'mixin_booter_min_version': propertyString('mixin_booter_min_version'),
+                'baubles_min_version': propertyString('baubles_min_version')
         )
     }
 

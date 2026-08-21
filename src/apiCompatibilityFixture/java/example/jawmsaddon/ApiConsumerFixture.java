@@ -34,6 +34,10 @@ import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -59,6 +63,8 @@ public final class ApiConsumerFixture {
 
     private static final ResourceLocation CAUSE =
             new ResourceLocation("exampleaddon", "fixture_operation");
+    private static final ResourceLocation LOCKOUT_CAUSE =
+            new ResourceLocation("exampleaddon", "fixture_lockout");
     private static final AtomicInteger ITEM_CALLS = new AtomicInteger();
     private static final AtomicInteger CONTEXT_CALLS = new AtomicInteger();
     private static final AtomicInteger FAILURE_CALLS = new AtomicInteger();
@@ -74,7 +80,7 @@ public final class ApiConsumerFixture {
     private static volatile boolean mutationProbeEnabled;
     private static volatile boolean baubleProbeEnabled;
 
-    private ManaStateChangeEvent lastEvent;
+    private final Map<EventKey, EventObservation> stateEvents = new HashMap<>();
 
     @Mod.EventHandler
     public void initialize(FMLInitializationEvent event) {
@@ -248,11 +254,26 @@ public final class ApiConsumerFixture {
 
     @SubscribeEvent
     public void observe(ManaStateChangeEvent event) {
-        lastEvent = event;
+        EventKey key = new EventKey(event.getPlayer().getUniqueID(), event.getCause());
+        EventObservation observation = stateEvents.computeIfAbsent(
+                key, ignored -> new EventObservation()
+        );
+        observation.lastEvent = event;
+        observation.count++;
     }
 
-    public ManaStateChangeEvent getLastEvent() {
-        return lastEvent;
+    public ManaStateChangeEvent getLastEvent(EntityPlayer player, ResourceLocation cause) {
+        EventObservation observation = stateEvents.get(
+                new EventKey(player.getUniqueID(), cause)
+        );
+        return observation == null ? null : observation.lastEvent;
+    }
+
+    public int getStateEventCount(EntityPlayer player, ResourceLocation cause) {
+        EventObservation observation = stateEvents.get(
+                new EventKey(player.getUniqueID(), cause)
+        );
+        return observation == null ? 0 : observation.count;
     }
 
     private static final class FixtureCommand extends CommandBase {
@@ -270,7 +291,7 @@ public final class ApiConsumerFixture {
 
         @Override
         public String getUsage(ICommandSender sender) {
-            return "/jawms-api-fixture inspect | explain | cycle | providers <status|registrations|preview-replace|preview-clear|invalidate|dirty|contextual|contextual-deferred|null|throwing|mutation|bauble> [true|false]";
+            return "/jawms-api-fixture inspect | explain | cycle | lockout | providers <status|registrations|preview-replace|preview-clear|invalidate|dirty|contextual|contextual-deferred|null|throwing|mutation|bauble> [true|false]";
         }
 
         @Override
@@ -320,10 +341,35 @@ public final class ApiConsumerFixture {
                 consume(player, 1);
                 drain(player, 1);
                 set(player, original);
-                ManaStateChangeEvent event = fixture.getLastEvent();
+                ManaStateChangeEvent event = fixture.getLastEvent(player, CAUSE);
                 sender.sendMessage(new TextComponentString(
                         "JAWMS API fixture cycle complete; restored=" + original
                                 + ", lastCause=" + (event == null ? "none" : event.getCause()) + "."
+                ));
+                return;
+            }
+            if (arguments.length == 1 && "lockout".equalsIgnoreCase(arguments[0])) {
+                IManaService service = ManaApi.getManaService();
+                ManaPublicState before = service.getState(player);
+                int eventsBefore = fixture.getStateEventCount(player, LOCKOUT_CAUSE);
+                int providerCallsBefore = ITEM_CALLS.get() + CONTEXT_CALLS.get()
+                        + FAILURE_CALLS.get();
+                long appliedTicks = service.startRegenerationLockout(player, LOCKOUT_CAUSE);
+                ManaPublicState after = service.getState(player);
+                int providerCallsAfter = ITEM_CALLS.get() + CONTEXT_CALLS.get()
+                        + FAILURE_CALLS.get();
+                ManaStateChangeEvent event = fixture.getLastEvent(player, LOCKOUT_CAUSE);
+                sender.sendMessage(new TextComponentString(
+                        "JAWMS API fixture lockout appliedTicks=" + appliedTicks
+                                + ", before=" + before
+                                + ", after=" + after
+                                + ", eventCountDelta="
+                                + (fixture.getStateEventCount(player, LOCKOUT_CAUSE)
+                                - eventsBefore)
+                                + ", lastCause="
+                                + (event == null ? "none" : event.getCause())
+                                + ", providerCallsBefore=" + providerCallsBefore
+                                + ", providerCallsAfter=" + providerCallsAfter + "."
                 ));
                 return;
             }
@@ -432,5 +478,35 @@ public final class ApiConsumerFixture {
             }
             throw new CommandException("Expected true or false.");
         }
+    }
+
+    private static final class EventKey {
+
+        private final UUID playerId;
+        private final ResourceLocation cause;
+
+        private EventKey(UUID playerId, ResourceLocation cause) {
+            this.playerId = playerId;
+            this.cause = cause;
+        }
+
+        @Override
+        public boolean equals(Object value) {
+            if (this == value) return true;
+            if (!(value instanceof EventKey)) return false;
+            EventKey other = (EventKey) value;
+            return playerId.equals(other.playerId) && cause.equals(other.cause);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(playerId, cause);
+        }
+    }
+
+    private static final class EventObservation {
+
+        private ManaStateChangeEvent lastEvent;
+        private int count;
     }
 }

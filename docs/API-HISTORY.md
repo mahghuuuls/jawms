@@ -1,6 +1,6 @@
 # JAWMS API History
 
-This reference records older JAWMS releases and the public API additions they introduced. New addons should use the current [Addon Development Guide](ADDON-DEVELOPMENT.md) and target JAWMS `1.0.0` / API `1.5` unless they intentionally support an older release.
+This reference records older JAWMS releases and the public API additions they introduced. New addons should use the current [Addon Development Guide](ADDON-DEVELOPMENT.md) and target JAWMS `1.1.0` / API `1.6` unless they intentionally support an older release.
 
 ## Release Matrix
 
@@ -11,6 +11,7 @@ This reference records older JAWMS releases and the public API additions they in
 | `0.3.0` | `8632899` | `1.3` | Same API generation with the open MixinBooter `11.8+` boundary |
 | `0.4.0` | `8651841` | `1.4` | Typed mutation failures, provider observation, cache refresh, profile explanations, and Developer Tools |
 | `1.0.0` | See the CurseForge Files page | `1.5` | Configured-flask snapshots, directional lockout helpers, invariant provider previews, and final JAWMS tooltip placement |
+| `1.1.0` | See the CurseForge Files page | `1.6` | Explicit attributed regeneration-lockout requests and open minimum-or-newer runtime dependency ranges |
 
 CurseForge file IDs identify immutable uploaded files. They are not mod versions or API versions.
 
@@ -18,7 +19,7 @@ CurseForge file IDs identify immutable uploaded files. They are not mod versions
 
 API major `1` is additive. A later `1.x` API retains the documented public descriptors from supported earlier minor versions and does not add required methods to an already-published interface. Breaking changes require another API major or a parallel opt-in contract.
 
-JAWMS `1.0.0` retains the published API `1.2`, `1.3`, and `1.4` binary surfaces. New source should use API `1.5`; the older descriptions below exist for maintaining already-published addons.
+JAWMS `1.1.0` retains the published API `1.2`, `1.3`, `1.4`, and `1.5` binary surfaces. New source should use API `1.6`; the older descriptions below exist for maintaining already-published addons.
 
 ## Historical Dependency Coordinates
 
@@ -31,7 +32,7 @@ implementation rfg.deobf('curse.maven:just-another-wizardry-mana-system-1643697:
 implementation rfg.deobf('curse.maven:just-another-wizardry-mana-system-1643697:8651841') // 0.4.0 / API 1.4
 ```
 
-Use only one JAWMS dependency. The current `1.0.0` coordinate uses the numeric file ID displayed for `jawms-1.0.0.jar` on CurseForge.
+Use only one JAWMS dependency. Current releases use the numeric file ID displayed for their JAR on the CurseForge Files page.
 
 ## API 1.2
 
@@ -59,7 +60,7 @@ Published JAWMS `0.4.0` file `8651841` is the immutable API-1.4 dependency for a
 
 ## API 1.5
 
-API `1.5` is the current stable API in JAWMS `1.0.0`. It adds:
+API `1.5` was introduced by JAWMS `1.0.0`. It adds:
 
 - common/server and synchronized-client configured-flask snapshots;
 - explicit flat regeneration-lockout increase and reduction helpers;
@@ -68,3 +69,9 @@ API `1.5` is the current stable API in JAWMS `1.0.0`. It adds:
 - clearer whole-mana, mutation-accounting, and provider-preview contracts.
 
 Current addons should follow [Addon Development](ADDON-DEVELOPMENT.md), not reconstruct current usage by combining the historical sections above.
+
+## API 1.6
+
+API `1.6` is the current stable API in JAWMS `1.1.0`. It adds an attributed logical-server operation that starts or restarts the player's currently accepted regeneration lockout without simulating a spell, consuming mana or hunger, reserving payment, or changing continuous-cast state.
+
+JAWMS `1.1.0` also changes current runtime requirements to minimum-or-newer ranges. Those ranges admit later dependency versions without claiming every later version has been tested.

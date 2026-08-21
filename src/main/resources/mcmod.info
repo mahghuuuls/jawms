@@ -10,10 +10,10 @@
 	"updateJSON": "${mod_update_json}",
 	"logoFile": "${mod_logo_path}",
 	"requiredMods": [
-		"ebwizardry@[4.3.19,4.3.20)",
-		"mixinbooter@[11.8,)"
+		"ebwizardry@[${wizardry_min_version},)",
+		"mixinbooter@[${mixin_booter_min_version},)"
 	],
 	"dependencies": [
-		"baubles@[1.5.2,)"
+		"baubles@[${baubles_min_version},)"
 	]
 }]

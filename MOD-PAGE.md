@@ -33,12 +33,12 @@ Players can customize or extend JAWMS with companion addons:
 
 Required:
 
-- Electroblob's Wizardry `4.3.19`
+- Electroblob's Wizardry `4.3.19` or newer
 - MixinBooter `11.8` or newer
 
 Optional:
 
-- Baubles `1.5.2+` for equipped Baubles-slot effects
+- Baubles `1.5.2` or newer for equipped Baubles-slot effects
 
 ## For Modpack Creators
 

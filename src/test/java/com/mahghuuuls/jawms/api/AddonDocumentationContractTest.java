@@ -5,10 +5,17 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.io.BufferedReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Properties;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 class AddonDocumentationContractTest {
@@ -21,9 +28,18 @@ class AddonDocumentationContractTest {
     void currentGuideStaysCurrentAndHistoryOwnsOlderVersions() throws IOException {
         String guide = read(GUIDE_PATH);
         String history = read("docs/API-HISTORY.md");
+        String jawmsRange = openRange(
+                "jawms", property("developer_tools_jawms_min_version")
+        );
+        String wizardryRange = openRange(
+                "ebwizardry", property("wizardry_min_version")
+        );
+        String mixinRange = openRange(
+                "mixinbooter", property("mixin_booter_min_version")
+        );
 
         assertTrue(guide.contains(
-                "JAWMS `1.0.0` provides API `1.5`"
+                "JAWMS `1.1.0` provides API `1.6`"
         ));
         assertTrue(guide.contains("[API History](API-HISTORY.md)"));
         assertTrue(guide.contains("jawms_curseforge_file=REPLACE_WITH_NUMERIC_FILE_ID"));
@@ -32,8 +48,11 @@ class AddonDocumentationContractTest {
         ));
         assertTrue(guide.contains("curse.maven:electroblobs-wizardry-265642:8320066"));
         assertTrue(guide.contains("zone.rong:mixinbooter:11.8"));
-        assertTrue(guide.contains("required-after:mixinbooter@[11.8,)"));
-        assertTrue(guide.contains("jawms@[1.0.0,1.1.0)"));
+        assertTrue(guide.contains("required-after:" + mixinRange));
+        assertTrue(guide.contains(jawmsRange));
+        assertTrue(guide.contains(wizardryRange));
+        assertFalse(guide.contains("jawms@[1.0.0,1.1.0)"));
+        assertFalse(guide.contains("ebwizardry@[4.3.19,4.3.20)"));
         assertFalse(guide.contains("0.1.0"));
         assertFalse(guide.contains("0.2.0"));
         assertFalse(guide.contains("0.3.0"));
@@ -41,16 +60,62 @@ class AddonDocumentationContractTest {
         assertFalse(guide.contains("API `1.2`"));
         assertFalse(guide.contains("API `1.3`"));
         assertFalse(guide.contains("API `1.4`"));
+        assertFalse(guide.contains("API `1.5`"));
 
         assertTrue(history.contains("`0.1.0` | `8597828` | `1.2`"));
         assertTrue(history.contains("`0.2.0` | `8621418` | `1.3`"));
         assertTrue(history.contains("`0.3.0` | `8632899` | `1.3`"));
         assertTrue(history.contains("`0.4.0` | `8651841` | `1.4`"));
         assertTrue(history.contains("`1.0.0` | See the CurseForge Files page | `1.5`"));
+        assertTrue(history.contains("`1.1.0` | See the CurseForge Files page | `1.6`"));
         assertTrue(history.contains("jawms@[0.4.0,0.5.0)"));
         assertTrue(history.contains("MixinBooter `[11.11,12.0)`"));
         assertFalse(guide.contains("Ã"));
         assertFalse(history.contains("Ã"));
+    }
+
+    @Test
+    void currentDependencyGuidanceUsesBuildOwnedOpenMinimums() throws IOException {
+        String jawmsMinimum = property("developer_tools_jawms_min_version");
+        String wizardryMinimum = property("wizardry_min_version");
+        String mixinMinimum = property("mixin_booter_min_version");
+        String baublesMinimum = property("baubles_min_version");
+        String jawmsRange = openRange("jawms", jawmsMinimum);
+        String wizardryRange = openRange("ebwizardry", wizardryMinimum);
+        String mixinRange = openRange("mixinbooter", mixinMinimum);
+
+        String guide = read(GUIDE_PATH);
+        String commands = read("docs/COMMANDS.md");
+        String readme = read("README.md");
+        String modPage = read("MOD-PAGE.md");
+
+        assertTrue(guide.contains(jawmsRange));
+        assertTrue(guide.contains(wizardryRange));
+        assertTrue(guide.contains(mixinRange));
+        assertTrue(commands.contains("JAWMS `[" + jawmsMinimum + ",)`"));
+        assertTrue(readme.contains(
+                "Electroblob's Wizardry `" + wizardryMinimum + "` or newer"
+        ));
+        assertTrue(readme.contains("MixinBooter `" + mixinMinimum + "` or newer"));
+        assertTrue(readme.contains("Baubles `" + baublesMinimum + "` or newer is optional"));
+        assertTrue(modPage.contains(
+                "Electroblob's Wizardry `" + wizardryMinimum + "` or newer"
+        ));
+        assertTrue(modPage.contains("MixinBooter `" + mixinMinimum + "` or newer"));
+        assertTrue(modPage.contains("Baubles `" + baublesMinimum + "` or newer"));
+
+        Set<String> expectedRanges = new HashSet<>(Arrays.asList(
+                jawmsRange, wizardryRange, mixinRange
+        ));
+        Matcher currentRange = Pattern.compile(
+                "(?:jawms|ebwizardry|mixinbooter|baubles)@[^\\s\"`;]+"
+        ).matcher(guide + "\n" + commands);
+        while (currentRange.find()) {
+            assertTrue(
+                    expectedRanges.contains(currentRange.group()),
+                    "Unexpected current dependency range: " + currentRange.group()
+            );
+        }
     }
 
     @Test
@@ -119,8 +184,8 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("plain JVM test"));
         assertTrue(guide.contains("launched Forge test"));
         assertTrue(guide.contains("docs/COMMANDS.md"));
-        assertTrue(guide.contains("jawms-devtools-1.0.0.jar"));
-        assertTrue(guide.contains("JAWMS `[1.0.0,1.1.0)`"));
+        assertTrue(guide.contains("jawms-devtools-1.1.0.jar"));
+        assertTrue(guide.contains("JAWMS `[1.1.0,)`"));
     }
 
     @Test
@@ -160,10 +225,12 @@ class AddonDocumentationContractTest {
         assertTrue(modPage.contains("(" + GUIDE_URL + ")"));
         assertTrue(rootPackage.contains(GUIDE_URL));
         assertTrue(clientPackage.contains(GUIDE_URL));
-        assertTrue(readme.contains("JAWMS `1.0.0` uses additive addon API `1.5`"));
+        assertTrue(readme.contains("JAWMS `1.1.0` uses additive addon API `1.6`"));
         assertTrue(readme.contains("Use the guide for current dependency setup and API usage"));
         assertTrue(readme.contains("[API History](docs/API-HISTORY.md)"));
-        assertTrue(readme.contains("published API `1.2`, `1.3`, and `1.4` binary surfaces"));
+        assertTrue(readme.contains(
+                "published API `1.2`, `1.3`, `1.4`, and `1.5` binary surfaces"
+        ));
         assertFalse(readme.contains("public beta"));
         assertFalse(modPage.contains("Beta release:"));
         assertTrue(readme.contains("docs/COMMANDS.md"));
@@ -216,5 +283,20 @@ class AddonDocumentationContractTest {
     private static String read(String relativePath) throws IOException {
         Path path = Paths.get(System.getProperty("user.dir")).resolve(relativePath);
         return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+    }
+
+    private static String property(String name) throws IOException {
+        Properties properties = new Properties();
+        Path path = Paths.get(System.getProperty("user.dir")).resolve("gradle.properties");
+        try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            properties.load(reader);
+        }
+        String value = properties.getProperty(name);
+        assertTrue(value != null && !value.trim().isEmpty(), name);
+        return value.trim();
+    }
+
+    private static String openRange(String modId, String minimum) {
+        return modId + "@[" + minimum + ",)";
     }
 }

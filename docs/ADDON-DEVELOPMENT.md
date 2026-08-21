@@ -9,15 +9,15 @@ Types under `com.mahghuuuls.jawms.internal` are implementation details and carry
 
 ## Setup
 
-JAWMS `1.0.0` provides API `1.5`. Depend on the full JAWMS mod; there is no separate API artifact. Older releases and API changes are recorded in [API History](API-HISTORY.md), not in this current-version guide.
+JAWMS `1.1.0` provides API `1.6`. Depend on the full JAWMS mod; there is no separate API artifact. Older releases and API changes are recorded in [API History](API-HISTORY.md), not in this current-version guide.
 
-CurseForge assigns a numeric file ID independently from the version. Find `jawms-1.0.0.jar` on the JAWMS Files page and place that number in your addon's `gradle.properties`:
+CurseForge assigns a numeric file ID independently from the version. Find `jawms-1.1.0.jar` on the JAWMS Files page and place that number in your addon's `gradle.properties`:
 
 ```properties
 jawms_curseforge_file=REPLACE_WITH_NUMERIC_FILE_ID
 ```
 
-Do not substitute `1.0.0` for the numeric ID. In a current [CleanroomMC ForgeDevEnv](https://github.com/CleanroomMC/ForgeDevEnv) project, add these repositories:
+Do not substitute `1.1.0` for the numeric ID. In a current [CleanroomMC ForgeDevEnv](https://github.com/CleanroomMC/ForgeDevEnv) project, add these repositories:
 
 ```groovy
 repositories {
@@ -60,8 +60,8 @@ Declare the runtime requirements in the addon's Forge metadata. The `@Mod` decla
         modid = "exampleaddon",
         name = "Example JAWMS Addon",
         version = "1.0.0",
-        dependencies = "required-after:jawms@[1.0.0,1.1.0);"
-                + "required-after:ebwizardry@[4.3.19,4.3.20);"
+        dependencies = "required-after:jawms@[1.1.0,);"
+                + "required-after:ebwizardry@[4.3.19,);"
                 + "required-after:mixinbooter@[11.8,)"
 )
 public final class ExampleAddon {
@@ -72,13 +72,13 @@ Also list the three ranges in `mcmod.info` if that file is part of the project:
 
 ```json
 "requiredMods": [
-  "jawms@[1.0.0,1.1.0)",
-  "ebwizardry@[4.3.19,4.3.20)",
+  "jawms@[1.1.0,)",
+  "ebwizardry@[4.3.19,)",
   "mixinbooter@[11.8,)"
 ]
 ```
 
-Do not rely on CurseMaven transitive metadata to install Wizardry or MixinBooter. They are explicit runtime dependencies of JAWMS on standard Forge and must be present in development and in the installed modpack. MixinBooter `11.8` is the supported minimum; the accepted range has no upper bound.
+Do not rely on CurseMaven transitive metadata to install Wizardry or MixinBooter. They are explicit runtime dependencies of JAWMS on standard Forge and must be present in development and in the installed modpack. JAWMS uses minimum-or-newer runtime ranges: JAWMS `1.1.0`, Wizardry `4.3.19`, and MixinBooter `11.8` are the minimums in this example. These open ranges prevent newer versions from being rejected solely by metadata; they do not claim that every later version has been tested. Keep development artifacts pinned to exact coordinates for reproducible builds.
 
 If addon source directly uses Wizardry types exposed by the server API, such as `Spell` or `Element`, change the Wizardry declaration from `runtimeOnly` to `implementation` while keeping the same deobfuscated coordinate. The replacement-HUD-only example does not directly use those types, so `runtimeOnly` is sufficient there.
 
@@ -106,7 +106,7 @@ public void restoreFromPotion(EntityPlayer player) {
 }
 ```
 
-Mutation amounts and maximum mana are whole `int` mana points; fractional maximum mana is not part of API `1.5`. `setCurrentMana` clamps to the effective maximum, `restoreMana` restores up to the requested amount, `consumeMana` consumes the exact amount or changes nothing, and `drainMana` drains up to the requested amount. Every mutation needs a namespaced cause, applies to Creative players, synchronizes automatically, and does not start the post-cast regeneration delay.
+Mutation amounts and maximum mana are whole `int` mana points; fractional maximum mana is not part of the API. `setCurrentMana` clamps to the effective maximum, `restoreMana` restores up to the requested amount, `consumeMana` consumes the exact amount or changes nothing, and `drainMana` drains up to the requested amount. Every mutation needs a namespaced cause, applies to Creative players, synchronizes automatically, and does not start the post-cast regeneration delay.
 
 `setCurrentMana`, `restoreMana`, and `drainMana` return successful `NONE`, including clamped or bounded no-ops. An affordable `consumeMana`, including consuming zero, also returns successful `NONE`; an exact consume that cannot be paid returns unsuccessful `INSUFFICIENT_MANA` without changing state. The service does not otherwise return `REJECTED`.
 
@@ -120,6 +120,20 @@ For external accounting, use `getActualAmount()`, not the requested amount. It i
 | `drainMana` | Successful `NONE`; drains up to the request and can report a smaller or zero actual amount. |
 
 Invalid amounts or causes, wrong logical side or thread, a missing capability, mutation during provider evaluation, mutation-depth overflow, and setting current mana below an active reservation remain exceptions rather than ordinary failure results.
+
+### Starting Regeneration Lockout
+
+An ability that should pause mana regeneration like a successful cast can request the currently accepted duration without simulating or charging a spell:
+
+```java
+private static final ResourceLocation ABILITY_CAUSE =
+        new ResourceLocation("exampleaddon", "special_ability");
+
+long appliedTicks = ManaApi.getManaService()
+        .startRegenerationLockout(player, ABILITY_CAUSE);
+```
+
+The operation starts or restarts the countdown, works for Creative players, publishes the supplied cause, and returns the duration captured before event listeners run. If the effective duration is zero, it clears an active countdown or does nothing when already inactive. It does not evaluate providers, alter mana or hunger, reserve payment, simulate a spell, or change continuous-cast state. As with other mutations, call it only for a logical-server player on the server thread and not during provider evaluation.
 
 ### Configured Flask Snapshot
 
@@ -332,7 +346,7 @@ The maintained, executable Java 8 reference is [`CacheSafeReplacementHud`](../sr
 
 ## Optional Developer Tools
 
-JAWMS `1.0.0` builds a separate `jawms-devtools-1.0.0.jar` for addon-development environments. Install it beside JAWMS `[1.0.0,1.1.0)` when you need permission-level-4 state, mutation, provider, accepted-explanation, or cache-refresh diagnostics. It uses only the documented public API and is not required by the primary JAWMS mod. Removing the tool JAR removes `/jawms-dev` without disabling JAWMS.
+JAWMS `1.1.0` builds a separate `jawms-devtools-1.1.0.jar` for addon-development environments. Install it beside JAWMS `[1.1.0,)` when you need permission-level-4 state, mutation, provider, accepted-explanation, cache-refresh, or regeneration-lockout diagnostics. It uses only the documented public API and is not required by the primary JAWMS mod. Removing the tool JAR removes `/jawms-dev` without disabling JAWMS.
 
 The canonical [`docs/COMMANDS.md`](COMMANDS.md) reference distinguishes primary operator commands, optional Developer Tools, contributor-only development fixtures, and API compatibility fixtures. Do not distribute contributor or compatibility fixtures as addon-development tools.
 
@@ -348,4 +362,4 @@ Also test:
 - parent `Chat` cancellation coexistence;
 - normal and exceptional renderer exit paths;
 - dedicated-server startup with public client API classes present but no client linkage;
-- the exact `1.0.0` dependency in a clean workspace without resolving JAWMS from `mavenLocal` or a copied JAR.
+- the exact `1.1.0` dependency in a clean workspace without resolving JAWMS from `mavenLocal` or a copied JAR.

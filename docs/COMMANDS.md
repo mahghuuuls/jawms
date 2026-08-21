@@ -24,7 +24,7 @@ Authoritative usage:
 
 ## Optional JAWMS Developer Tools
 
-Availability: install the separate matching `jawms-devtools-1.0.0.jar` alongside JAWMS `[1.0.0,1.1.0)`, which provides API 1.5. Installing it is the enablement mechanism; JAWMS has no gameplay configuration toggle for it. Audience: addon developers and controlled test servers. Side: logical server; explicit player targets work from dedicated-server console. Permission level: 4. Output is sent to the command sender and logged with the `[jawms-dev]` prefix.
+Availability: install the separate matching `jawms-devtools-1.1.0.jar` alongside JAWMS `[1.1.0,)`, which provides API 1.6. The runtime range admits newer JAWMS versions without claiming they have all been tested; use matching tool and primary versions for the validated setup. Installing it is the enablement mechanism; JAWMS has no gameplay configuration toggle for it. Audience: addon developers and controlled test servers. Side: logical server; explicit player targets work from dedicated-server console. Permission level: 4. Output is sent to the command sender and logged with the `[jawms-dev]` prefix.
 
 ### `/jawms-dev`
 
@@ -102,10 +102,10 @@ Side: logical server/integrated server. Permission level: 2.
 Authoritative usage:
 
 ```text
-/jawms-api-fixture inspect | explain | cycle | providers <status|registrations|preview-replace|preview-clear|invalidate|dirty|contextual|contextual-deferred|null|throwing|mutation|bauble> [true|false]
+/jawms-api-fixture inspect | explain | cycle | lockout | providers <status|registrations|preview-replace|preview-clear|invalidate|dirty|contextual|contextual-deferred|null|throwing|mutation|bauble> [true|false]
 ```
 
-`inspect` reports API state/version; `explain` reports retained evaluation identity and before/after provider counters; `cycle` performs the fixture mutation round-trip; provider `status` and `registrations` inspect counters/descriptors; `preview-replace` and `preview-clear` exercise invariant-preview publication while retaining provider call counters; `invalidate` and `dirty` exercise refresh timing; and the boolean provider operations enable or disable contextual, deferred-contextual, null, throwing, recursive-mutation, or Baubles probes. Failures include invalid player context, syntax, boolean, or unavailable accepted evaluation. Cleanup: use `preview-clear`, disable every enabled provider probe, invalidate the cache after non-deferred state changes, restore mana, and inspect status before ending the session.
+`inspect` reports API state/version; `explain` reports retained evaluation identity and before/after provider counters; `cycle` performs the fixture mutation round-trip; `lockout` applies the accepted regeneration lockout and reports before/after state, applied ticks, event count, cause, and provider counters; provider `status` and `registrations` inspect counters/descriptors; `preview-replace` and `preview-clear` exercise invariant-preview publication while retaining provider call counters; `invalidate` and `dirty` exercise refresh timing; and the boolean provider operations enable or disable contextual, deferred-contextual, null, throwing, recursive-mutation, or Baubles probes. Failures include invalid player context, syntax, boolean, or unavailable accepted evaluation. Cleanup: let the requested lockout expire, use `preview-clear`, disable every enabled provider probe, invalidate the cache after non-deferred state changes, restore mana, and inspect status before ending the session.
 
 ### `/jawms-api-hud`
 

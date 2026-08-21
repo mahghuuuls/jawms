@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.0] - 2026-08-21
+
+### Added
+
+- Public API `1.6` operation that lets addons start or restart a player's normal mana-regeneration delay without simulating or charging a spell.
+
+### Changed
+
+- Opened Wizardry, MixinBooter, optional Baubles, and Developer Tools runtime requirements to minimum-or-newer ranges while retaining exact pinned development inputs.
+- Updated addon documentation for JAWMS `1.1.0` and API `1.6`.
+
+### Compatibility
+
+- Existing addons built for API `1.2` through `1.5` remain supported.
+- Open ranges prevent newer dependencies from being rejected solely by metadata; they do not claim every future version has been tested.
+
 ## [1.0.0] - 2026-08-20
 
 ### Added
