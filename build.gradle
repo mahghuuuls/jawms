@@ -476,6 +476,13 @@ def castCostFixtureJar = tasks.register('castCostFixtureJar', Jar) {
     reproducibleFileOrder = true
 }
 def reobfCastCostFixtureJar = tasks.named('reobfCastCostFixtureJar')
+tasks.named('test', Test).configure {
+    dependsOn castCostFixtureJar
+    inputs.file(castCostFixtureJar.flatMap { it.archiveFile })
+    systemProperty 'jawms.castCostFixtureJar',
+            castCostFixtureJar.get().archiveFile.get().asFile.absolutePath
+}
+
 tasks.register('verifyCastCostFixture') {
     group = 'verification'
     dependsOn reobfCastCostFixtureJar, tasks.named('reobfJar')
@@ -506,6 +513,30 @@ tasks.register('verifyCastCostFixture') {
             include 'example/jawmscast/**'
         }.files
         if (!leaked.empty) throw new GradleException('Cast-cost fixture leaked into primary JAR')
+    }
+}
+
+tasks.register('verifyCastCostFixtureDevelopmentLaunch') {
+    group = 'verification'
+    description = 'Checks the configured fixture origin without executing a client or server.'
+    dependsOn castCostFixtureJar
+    def enabled = providers.gradleProperty('jawmsIncludeCastCostFixture')
+            .getOrElse('false').toBoolean()
+    inputs.property 'fixtureEnabled', enabled
+    doLast {
+        File fixtureJar = castCostFixtureJar.get().archiveFile.get().asFile.canonicalFile
+        Set<File> possibleOrigins = sourceSets.castCostFixture.output.files
+                .collect { it.canonicalFile } as Set
+        possibleOrigins.add(fixtureJar)
+        ['runClient', 'runServer'].each { taskName ->
+            Set<File> configuredOrigins = tasks.named(taskName).get().classpath.files
+                    .collect { it.canonicalFile }.findAll { possibleOrigins.contains(it) } as Set
+            Set<File> expectedOrigins = enabled ? [fixtureJar] as Set : [] as Set
+            if (configuredOrigins != expectedOrigins) {
+                throw new GradleException("${taskName} fixture origins ${configuredOrigins}; "
+                        + "expected ${expectedOrigins}. Wizardry scans one mod source for spell JSON.")
+            }
+        }
     }
 }
 
@@ -1601,6 +1632,7 @@ tasks.register('verifyReleasePresentation') {
 }
 
 tasks.named('check').configure {
+    dependsOn tasks.named('verifyCastCostFixtureDevelopmentLaunch')
     dependsOn tasks.named('verifyCastCostFixture')
     dependsOn tasks.named('verifyApiCompatibilityFixture'),
             tasks.named('verifyDeveloperToolsArtifact'),
@@ -1613,8 +1645,9 @@ def includeDeveloperToolsInRuns = providers.gradleProperty('jawmsIncludeDevelope
 ['runClient', 'runServer'].each { runTaskName ->
     tasks.named(runTaskName).configure {
         if (providers.gradleProperty('jawmsIncludeCastCostFixture').getOrElse('false').toBoolean()) {
-            dependsOn sourceSets.castCostFixture.classesTaskName
-            doFirst { classpath += sourceSets.castCostFixture.output }
+            dependsOn castCostFixtureJar
+            // Wizardry scans the mod's own origin, not separate resource classpath roots.
+            classpath += files(castCostFixtureJar.flatMap { it.archiveFile })
         }
         dependsOn sourceSets.developmentFixture.classesTaskName,
                 sourceSets.apiCompatibilityFixture.classesTaskName,
