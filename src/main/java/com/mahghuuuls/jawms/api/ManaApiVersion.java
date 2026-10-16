@@ -4,7 +4,7 @@ package com.mahghuuuls.jawms.api;
 public final class ManaApiVersion {
 
     public static final int MAJOR = 1;
-    public static final int MINOR = 6;
+    public static final int MINOR = 7;
     public static final String CURRENT = MAJOR + "." + MINOR;
 
     private ManaApiVersion() {

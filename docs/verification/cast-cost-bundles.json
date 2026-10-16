@@ -1,0 +1,70 @@
+{
+  "cycle007_discrete_setup": {
+    "description": "Attribute the disposable runtime and enable narrow item-use evidence",
+    "stopOnFailure": true,
+    "commands": [
+      "devtool session start jawms_discrete",
+      "devtool capabilities", "devtool environment", "devtool mods",
+      "gamemode creative @p", "gamerule keepInventory true", "gamerule doMobSpawning false",
+      "devtool log all off", "devtool log item_use on", "devtool log player_interaction on",
+      "devtool run cycle007_discrete_reset"
+    ]
+  },
+  "cycle007_discrete_reset": {
+    "description": "Reset a Survival paid-discrete probe with independently inspected start values",
+    "commands": [
+      "jawms-cast-fixture setup allow", "gamemode survival @p",
+      "devtool inspect player", "jawms-cast-fixture inspect",
+      "devtool mark JAWMS_DISCRETE_ALLOW_READY"
+    ]
+  },
+  "cycle007_discrete_refuse": {
+    "description": "Reset an explicitly refused discrete probe",
+    "commands": [
+      "jawms-cast-fixture setup refuse", "gamemode survival @p",
+      "devtool inspect player", "jawms-cast-fixture inspect",
+      "devtool mark JAWMS_DISCRETE_REFUSE_READY"
+    ]
+  },
+  "cycle007_discrete_absent": {
+    "description": "Reset a registered but inapplicable probe to distinguish legacy event/payment ordering",
+    "commands": [
+      "jawms-cast-fixture setup absent", "gamemode survival @p",
+      "devtool inspect player", "jawms-cast-fixture inspect",
+      "devtool mark JAWMS_DISCRETE_ABSENT_READY"
+    ]
+  },
+  "cycle007_discrete_free": {
+    "description": "Reset an explicit free provider receipt with ordinary JAWMS cost",
+    "commands": [
+      "jawms-cast-fixture setup free", "gamemode survival @p",
+      "devtool inspect player", "jawms-cast-fixture inspect",
+      "devtool mark JAWMS_DISCRETE_FREE_READY"
+    ]
+  },
+  "cycle007_discrete_false": {
+    "description": "Invoke the false effect through the owning wand boundary after same-bundle reset",
+    "commands": [
+      "devtool run cycle007_discrete_reset", "devtool mark JAWMS_FALSE_BEGIN",
+      "jawms-cast-fixture probe false", "jawms-cast-fixture inspect", "devtool mark JAWMS_FALSE_END"
+    ]
+  },
+  "cycle007_discrete_throw": {
+    "description": "Invoke and safely catch an intentional effect throwable outside the wand call",
+    "commands": [
+      "devtool run cycle007_discrete_reset", "devtool mark JAWMS_THROW_BEGIN",
+      "jawms-cast-fixture probe throw", "jawms-cast-fixture inspect", "devtool mark JAWMS_THROW_END"
+    ]
+  },
+  "cycle007_discrete_inspect": {
+    "description": "Read fixture-owned resource/effect/order counters and actual player/wand state",
+    "commands": [
+      "jawms-cast-fixture inspect", "devtool inspect player", "devtool mark JAWMS_DISCRETE_INSPECTED"
+    ]
+  },
+  "cycle007_discrete_teardown": {
+    "description": "Disable the fixture/logging; agent restores backed-up config/inventory separately",
+    "stopOnFailure": false,
+    "commands": [ "devtool log all off", "jawms-cast-fixture teardown", "devtool session stop" ]
+  }
+}

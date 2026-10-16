@@ -24,7 +24,7 @@ Authoritative usage:
 
 ## Optional JAWMS Developer Tools
 
-Availability: install the separate matching `jawms-devtools-1.1.0.jar` alongside JAWMS `[1.1.0,)`, which provides API 1.6. The runtime range admits newer JAWMS versions without claiming they have all been tested; use matching tool and primary versions for the validated setup. Installing it is the enablement mechanism; JAWMS has no gameplay configuration toggle for it. Audience: addon developers and controlled test servers. Side: logical server; explicit player targets work from dedicated-server console. Permission level: 4. Output is sent to the command sender and logged with the `[jawms-dev]` prefix.
+Availability: the unreleased development candidate builds the separate matching `jawms-devtools-1.2.0.jar` alongside JAWMS `[1.2.0,)`, which provides API 1.7. The runtime range admits newer JAWMS versions without claiming they have all been tested; matching candidate versions still require validation before release. Installing it is the enablement mechanism; JAWMS has no gameplay configuration toggle for it. Audience: addon developers and controlled test servers. Side: logical server; explicit player targets work from dedicated-server console. Permission level: 4. Output is sent to the command sender and logged with the `[jawms-dev]` prefix.
 
 ### `/jawms-dev`
 
@@ -92,6 +92,18 @@ Authoritative usage:
 ## API Compatibility Fixtures
 
 Availability: separately compiled compatibility fixtures used by the JAWMS project; not shipped in primary JAWMS or Developer Tools. Audience: JAWMS API maintainers and compatibility reviewers. Fixture behavior is not a public compatibility promise.
+
+### `/jawms-cast-fixture`
+
+Command contract: Permission level: 2. Side: logical server/integrated server, separate cast-cost fixture. Audience: JAWMS casting/API maintainers. Purpose/result: prepare an independently counted synthetic resource and harmless addon spell, inspect actual effects/payments/order, or safely catch intentional false/throwing effects at a command boundary. Failure conditions: invalid syntax/mode, non-player sender, or an unequipped probe wand fails; intentional probe exceptions alone are caught. Cleanup/reset: `setup` resets counters/resource and replaces the held wand; `teardown` disables this player's participation. Use only disposable worlds, restore inventory/config after the session, and remove the fixture JAR afterward.
+
+Authoritative usage:
+
+```text
+/jawms-cast-fixture setup <absent|allow|refuse|free> [base] | inspect | probe <false|throw> | teardown
+```
+
+`base` equips the registered Wizardry Light spell instead of the fixture spell. Every setup starts the fixture balance at 40, mana at 50 and hunger at 20. A paid fixture effect costs four fixture units. Absent/refuse/free cases are explicit and log the distinction. The ordinary synthetic effect shows "Cast fixture: effect reached" without damaging entities or changing blocks. Probe false/throw uses the real wand canCast/cast path with intentional exceptions caught outside the effect, not an ordinary uncaught world tick. Build with `castCostFixtureJar`/`reobfCastCostFixtureJar`; add `-PjawmsIncludeCastCostFixture=true` to development launches. Logs use `CAST_FIXTURE`. Never install the frozen API-1.6 consumer and rebuilt API compatibility fixture together; their mod IDs match.
 
 ### `/jawms-api-fixture`
 

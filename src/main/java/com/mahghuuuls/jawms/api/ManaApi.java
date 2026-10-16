@@ -27,6 +27,19 @@ public final class ManaApi {
     }
 
     /**
+     * Register during pre-initialization/initialization, before load-complete.
+     * IDs are unique; callbacks and settlement follow lexicographic full-ID order.
+     * Applicability is decided per effect, independently of spell namespace.
+     * Registrations survive world restart; enablement changes require callbacks
+     * to return not-applicable or an application restart to change registration.
+     */
+    public static void registerCastCostParticipant(
+            ResourceLocation participantId, ICastCostParticipant participant) {
+        com.mahghuuuls.jawms.internal.casting.CastCostRegistry.instance()
+                .register(participantId, participant);
+    }
+
+    /**
      * Returns the authoritative accepted ordinary-flask configuration on the
      * active logical-server thread. Other threads receive an unavailable
      * snapshot and client code must use {@code ClientManaApi}. This read does

@@ -66,6 +66,18 @@ public final class CastCostContextManager {
         return calculatedCost;
     }
 
+    /** Maps the retained record without running formulas or modifier providers. */
+    public static synchronized com.mahghuuuls.jawms.api.CastAttemptContext.AcceptedCost acceptedCost(
+            EntityPlayer player, EnumHand hand, Spell spell) {
+        Context context = CONTEXTS.get(new Key(player.getUniqueID(), player.world.isRemote, hand));
+        if (context == null || !Objects.equals(context.spellId, spell.getRegistryName())) {
+            throw new IllegalStateException("No accepted cast cost for the owning spell.");
+        }
+        return new com.mahghuuuls.jawms.api.CastAttemptContext.AcceptedCost(
+                context.perSecondCost, context.configuredBase, context.contextualFactor,
+                context.profileMultiplier, context.efficiencyPoints, context.scale);
+    }
+
     public static synchronized void clear(EntityPlayer player, EnumHand hand) {
         clear(player.getUniqueID(), player.world.isRemote, hand);
     }

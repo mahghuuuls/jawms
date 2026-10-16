@@ -283,9 +283,16 @@ public abstract class ItemWandMixin {
             EntityPlayer caster,
             EnumHand hand,
             int castingTick,
-            SpellModifiers modifiers
+            SpellModifiers modifiers,
+            ItemStack owningStack,
+            Spell owningSpell,
+            EntityPlayer owningCaster,
+            EnumHand owningHand,
+            int owningCastingTick,
+            SpellModifiers owningModifiers
     ) {
         return WizardryWandBridge.castWithReservation(
+                owningStack,
                 spell,
                 world,
                 caster,
@@ -365,6 +372,7 @@ public abstract class ItemWandMixin {
             Operation<Boolean> original
     ) {
         int initialDepth = WizardryWandBridge.captureAttemptDepth();
+        if (!caster.world.isRemote && !WizardryWandBridge.isCastAllowed()) return false;
         try {
             return original.call(
                     stack,

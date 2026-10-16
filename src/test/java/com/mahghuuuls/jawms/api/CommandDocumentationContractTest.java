@@ -24,6 +24,10 @@ class CommandDocumentationContractTest {
 
     private static final List<Contract> CONTRACTS = Arrays.asList(
             new Contract(
+                    "API Compatibility Fixtures", "jawms-cast-fixture",
+                    "CastFixtureCommand", "src/castCostFixture/java/example/jawmscast/CastCostFixture.java"
+            ),
+            new Contract(
                     "Primary JAWMS", "jawms",
                     "JawmsCommand",
                     "src/main/java/com/mahghuuuls/jawms/internal/rules/JawmsCommand.java"
@@ -119,7 +123,7 @@ class CommandDocumentationContractTest {
         );
         for (String sourceRoot : Arrays.asList(
                 "src/main/java", "src/developerTools/java",
-                "src/developmentFixture/java", "src/apiCompatibilityFixture/java"
+                "src/developmentFixture/java", "src/apiCompatibilityFixture/java", "src/castCostFixture/java"
         )) {
             try (java.util.stream.Stream<Path> files = Files.walk(Paths.get(sourceRoot))) {
                 files.filter(path -> path.toString().endsWith(".java"))

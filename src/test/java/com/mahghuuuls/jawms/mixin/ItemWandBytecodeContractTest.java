@@ -58,6 +58,10 @@ class ItemWandBytecodeContractTest {
         assertEquals(1, visitor.castSpellCalls);
         assertEquals(1, visitor.castConsumeManaCalls);
         assertEquals(4, visitor.castContinuousFieldReads);
+        assertTrue(visitor.effectPosition < visitor.postPosition,
+                "Coordination must be able to reject before Wizardry success notifications");
+        assertTrue(visitor.postPosition < visitor.debitPosition,
+                "Legacy ordering must remain Post before late deduction");
         assertEquals(4, visitor.rightClickReturns);
         assertEquals(1, visitor.usingTickStopActiveHandCalls);
         assertEquals(1, visitor.stoppedUsingGetManaCalls);
@@ -85,6 +89,7 @@ class ItemWandBytecodeContractTest {
         private int castIntegerSlotEightStores;
         private int castSpellCalls;
         private int castConsumeManaCalls;
+        private int castCallPosition, effectPosition, postPosition, debitPosition;
         private int castContinuousFieldReads;
         private int rightClickReturns;
         private int usingTickStopActiveHandCalls;
@@ -162,10 +167,14 @@ class ItemWandBytecodeContractTest {
                         if ("electroblob/wizardry/spell/Spell".equals(owner)
                                 && "cast".equals(invokedName)) {
                             castSpellCalls++;
+                            effectPosition = ++castCallPosition;
                         }
+                        if ("electroblob/wizardry/event/SpellCastEvent$Post".equals(owner)
+                                && "<init>".equals(invokedName)) postPosition = ++castCallPosition;
                         if ("electroblob/wizardry/item/ItemWand".equals(owner)
                                 && "consumeMana".equals(invokedName)) {
                             castConsumeManaCalls++;
+                            debitPosition = ++castCallPosition;
                         }
                     }
 

@@ -82,11 +82,13 @@ public final class JustAnotherWizardryManaSystemMod {
     public void loadComplete(FMLLoadCompleteEvent event) {
         GameplayRulesManager.completeProviderRegistration();
         ManaProviderRegistry.instance().freeze();
+        com.mahghuuuls.jawms.internal.casting.CastCostRegistry.instance().freeze();
     }
 
     @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
         GameplayRulesManager.serverStarted(event.getServer());
+        com.mahghuuuls.jawms.internal.casting.WizardryWandBridge.beginServerRun();
         event.registerServerCommand(new JawmsCommand());
         if (!Boolean.getBoolean("jawms.enableTestCommands")) {
             return;

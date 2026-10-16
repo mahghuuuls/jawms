@@ -14,6 +14,7 @@ public final class CastPaymentReservation {
     private final ResourceLocation spellId;
     private final boolean continuous;
     private boolean active = true;
+    private boolean committed;
 
     CastPaymentReservation(
             ManaReservation manaReservation,
@@ -40,6 +41,12 @@ public final class CastPaymentReservation {
     public int getPaidMana() { return plan.getMana(); }
     public int getPaidHunger() { return plan.getHunger(); }
     public boolean isActive() { return active; }
+    public boolean isCommitted() { return committed; }
+
+    void resolveCommitted() {
+        resolve();
+        committed = true;
+    }
 
     void resolve() {
         if (!active) {

@@ -522,6 +522,11 @@ public final class ManaState {
         }
     }
 
+    boolean hasPayableReservation(ManaReservation reservation) {
+        return reservation != null && reservation.belongsTo(this) && reservation.isActive()
+                && reservation.getAmount() <= reservedMana && currentMana >= reservedMana;
+    }
+
     private void requireActiveReservation(ManaReservation reservation) {
         if (reservation == null || !reservation.belongsTo(this) || !reservation.isActive()) {
             throw new IllegalStateException("Mana reservation is not active for this state.");

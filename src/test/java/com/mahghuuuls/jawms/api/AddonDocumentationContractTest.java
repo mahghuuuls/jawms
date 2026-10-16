@@ -39,7 +39,7 @@ class AddonDocumentationContractTest {
         );
 
         assertTrue(guide.contains(
-                "JAWMS `1.1.0` provides API `1.6`"
+                "JAWMS `1.2.0` provides API `1.7`"
         ));
         assertTrue(guide.contains("[API History](API-HISTORY.md)"));
         assertTrue(guide.contains("jawms_curseforge_file=REPLACE_WITH_NUMERIC_FILE_ID"));
@@ -184,8 +184,8 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("plain JVM test"));
         assertTrue(guide.contains("launched Forge test"));
         assertTrue(guide.contains("docs/COMMANDS.md"));
-        assertTrue(guide.contains("jawms-devtools-1.1.0.jar"));
-        assertTrue(guide.contains("JAWMS `[1.1.0,)`"));
+        assertTrue(guide.contains("jawms-devtools-1.2.0.jar"));
+        assertTrue(guide.contains("JAWMS `[1.2.0,)`"));
     }
 
     @Test

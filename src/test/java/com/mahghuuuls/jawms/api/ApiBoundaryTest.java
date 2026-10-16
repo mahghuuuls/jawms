@@ -14,14 +14,25 @@ import java.nio.file.Paths;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ApiBoundaryTest {
 
     @Test
     void apiVersionAndSurfaceAreStableAndServerSafe() throws Exception {
-        assertEquals("1.6", ManaApi.API_VERSION);
+        assertEquals("1.7", ManaApi.API_VERSION);
         assertEquals(1, ManaApiVersion.MAJOR);
-        assertEquals(6, ManaApiVersion.MINOR);
+        assertEquals(7, ManaApiVersion.MINOR);
+        String packageContract = new String(Files.readAllBytes(Paths.get(
+                "src/main/java/com/mahghuuuls/jawms/api/package-info.java")), StandardCharsets.UTF_8);
+        assertTrue(packageContract.contains("JAWMS API, version " + ManaApi.API_VERSION + "."));
+        for (Class<?> type : new Class<?>[] { ICastCostParticipant.class,
+                ICastCostReservation.class, CastCostPreparation.class, CastCostSettlement.class,
+                CastCostReleaseReason.class, CastAttemptContext.class,
+                CastAttemptContext.AcceptedCost.class, CastAttemptOutcome.class,
+                CastParticipantOutcome.class }) {
+            assertPublicSignaturesDoNotExposeImplementation(type);
+        }
 
         assertPublicSignaturesDoNotExposeImplementation(ManaApi.class);
         assertPublicSignaturesDoNotExposeImplementation(IManaService.class);

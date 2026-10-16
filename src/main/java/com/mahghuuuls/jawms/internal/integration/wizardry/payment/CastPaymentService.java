@@ -109,6 +109,31 @@ public final class CastPaymentService {
                 hand, spellId, "committed");
     }
 
+    /** Validates the accepted allocation; only hunger spenders require a protected food floor. */
+    public static synchronized boolean isValid(EntityPlayer player, CastPaymentReservation reservation) {
+        if (reservation == null || !reservation.isActive()) return false;
+        return ManaService.isReservationValid(player, reservation.getManaReservation())
+                && (reservation.getPaidHunger() == 0
+                || player.getFoodStats().getFoodLevel() - reservedHunger(player)
+                >= reservation.getPolicy().getMinimumHunger());
+    }
+
+    /** Local resources/receipt first; accepted-success markers are coordinated separately. */
+    public static synchronized void commitParticipating(
+            EntityPlayer player, CastPaymentReservation reservation) {
+        requireActive(reservation);
+        if (!isValid(player, reservation)) {
+            throw new IllegalStateException("Participating payment claim was invalidated.");
+        }
+        ManaService.commitParticipatingCastPayment(player, reservation.getManaReservation(),
+                reservation.getPaidHunger(), reservation.getPolicy().getMinimumHunger(), () -> {
+                    releaseHungerClaim(player, reservation.getPaidHunger());
+                    reservation.resolveCommitted();
+                    record(player, reservation.getPolicy(), reservation.getPlan(),
+                            reservation.getHand(), reservation.getSpellId(), "committed");
+                });
+    }
+
     public static synchronized void release(
             EntityPlayer player, CastPaymentReservation reservation
     ) {

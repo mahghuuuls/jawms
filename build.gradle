@@ -187,6 +187,11 @@ dependencies {
 apply from: 'gradle/scripts/dependencies.gradle'
 
 sourceSets {
+    castCostFixture {
+        java.srcDir 'src/castCostFixture/java'
+        resources.setSrcDirs(['src/castCostFixture/resources'])
+        runtimeClasspath += output + sourceSets.main.runtimeClasspath
+    }
     developerTools {
         java.srcDir 'src/developerTools/java'
         runtimeClasspath += output + sourceSets.main.runtimeClasspath
@@ -214,6 +219,8 @@ sourceSets {
 }
 
 configurations {
+    castCostFixtureImplementation.extendsFrom implementation
+    castCostFixtureCompileOnly.extendsFrom compileOnly
     api12PublishedArtifact {
         canBeConsumed = false
         canBeResolved = true
@@ -280,6 +287,8 @@ tasks.named(sourceSets.developmentFixture.compileJavaTaskName, JavaCompile).conf
 }
 
 tasks.named('compileTestJava', JavaCompile).configure {
+    dependsOn sourceSets.castCostFixture.classesTaskName
+    classpath += sourceSets.castCostFixture.output
     dependsOn sourceSets.developmentFixture.classesTaskName,
             sourceSets.apiCompatibilityFixture.classesTaskName,
             sourceSets.developerTools.classesTaskName
@@ -289,6 +298,7 @@ tasks.named('compileTestJava', JavaCompile).configure {
 }
 
 tasks.named('test', Test).configure {
+    classpath += sourceSets.castCostFixture.output
     classpath += sourceSets.developmentFixture.output
     classpath += sourceSets.apiCompatibilityFixture.output
     classpath += sourceSets.developerTools.output
@@ -448,6 +458,55 @@ def apiCompatibilityFixtureJar = tasks.register('apiCompatibilityFixtureJar', Ja
     archiveBaseName.set('jawms-api-fixture')
     archiveVersion.set('1.0')
     archiveClassifier.set('dev')
+}
+
+tasks.named(sourceSets.castCostFixture.compileJavaTaskName, JavaCompile).configure {
+    dependsOn tasks.named(sourceSets.main.classesTaskName)
+    classpath = tasks.named('compileJava', JavaCompile).get().classpath + sourceSets.main.output
+    sourceCompatibility = targetCompatibility = 8
+}
+def castCostFixtureJar = tasks.register('castCostFixtureJar', Jar) {
+    group = 'verification'
+    dependsOn sourceSets.castCostFixture.classesTaskName
+    from sourceSets.castCostFixture.output
+    archiveBaseName.set('jawms-cast-fixture')
+    archiveVersion.set('1.7')
+    archiveClassifier.set('dev')
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+def reobfCastCostFixtureJar = tasks.named('reobfCastCostFixtureJar')
+tasks.register('verifyCastCostFixture') {
+    group = 'verification'
+    dependsOn reobfCastCostFixtureJar, tasks.named('reobfJar')
+    inputs.files(sourceSets.castCostFixture.allSource)
+    doLast {
+        def forbiddenSource = sourceSets.castCostFixture.allJava.files.findAll {
+            it.getText('UTF-8') =~ /com\.mahghuuuls\.jawms\.(?!api[.;])/
+        }
+        if (!forbiddenSource.empty) throw new GradleException("Non-public fixture imports: ${forbiddenSource}")
+        def fixture = new java.util.zip.ZipFile(reobfCastCostFixtureJar.get().archiveFile.get().asFile)
+        try {
+            def classes = fixture.entries().findAll { !it.directory && it.name.endsWith('.class') }
+            if (classes.empty) throw new GradleException('Cast-cost fixture has no classes')
+            classes.each { entry ->
+                byte[] bytes = fixture.getInputStream(entry).bytes
+                if ((bytes[6] & 255) != 0 || (bytes[7] & 255) != 52) {
+                    throw new GradleException("Cast-cost fixture is not Java 8: ${entry.name}")
+                }
+                def text = new String(bytes, 'ISO-8859-1')
+                if (text.contains('com/mahghuuuls/jawms/internal/')
+                        || text.contains('com/mahghuuuls/jawms/client/')
+                        || text.contains('net/minecraft/client/')) {
+                    throw new GradleException("Cast-cost fixture leaks non-public/client linkage: ${entry.name}")
+                }
+            }
+        } finally { fixture.close() }
+        def leaked = zipTree(tasks.named('reobfJar').get().archiveFile.get().asFile).matching {
+            include 'example/jawmscast/**'
+        }.files
+        if (!leaked.empty) throw new GradleException('Cast-cost fixture leaked into primary JAR')
+    }
 }
 
 // RetroFuturaGradle creates reobf<JarTaskName> tasks on demand. The fixture is
@@ -925,6 +984,22 @@ tasks.register('verifyApiCompatibilityFixture') {
         comparePublishedApi(publishedApi13, '1.3')
         comparePublishedApi(publishedApi14, '1.4')
         comparePublishedApi(publishedApi15, '1.5')
+
+        // Local release-ready API 1.6 has no fabricated publication coordinate.
+        def api16Files = [
+                'jawms-1.1.0.jar': '3BB68BCEA775B4E42534865C2E788A01ECB363A0AD6247F540E781DBB79FED98',
+                'jawms-1.1.0-dev.jar': 'F6D955D2B3D68598B354A231A22F8259296F6E3CDC225A1A621AD9065BC93AED',
+                'jawms-api-fixture-1.0.jar': 'F89B5DBC82EC81D14334B7743AC6BA548241B95D90497E17C65A7A06938FC02A',
+                'jawms-api-fixture-1.0-dev.jar': 'E7D6F737CF671579FE17C264D5CDC576B55B76AC4C7865AB792EEA63697E1E2F'
+        ]
+        api16Files.each { name, expected ->
+            def retained = file("src/api16BinaryFixture/artifacts/${name}")
+            if (!retained.isFile() || java.security.MessageDigest.getInstance('SHA-256')
+                    .digest(retained.bytes).encodeHex().toString().toUpperCase(Locale.ROOT) != expected) {
+                throw new GradleException("Frozen API 1.6 artifact changed or missing: ${name}")
+            }
+        }
+        comparePublishedApi(file('src/api16BinaryFixture/artifacts/jawms-1.1.0.jar'), '1.6')
 
         def candidateOutputs = sourceSets.main.output.files.collect { it.canonicalFile }
         def api12CompileClasspath = compileApi12BinaryFixture.get().classpath.files
@@ -1494,26 +1569,39 @@ tasks.register('verifyStableReleaseMetadata') {
     inputs.file 'README.md'
     inputs.file 'MOD-PAGE.md'
     doLast {
-        def expectedVersion = '1.1.0'
+        def expectedVersion = '1.2.0'
         if (propertyString('mod_version') != expectedVersion
                 || propertyString('developer_tools_version') != expectedVersion
                 || propertyString('release_type') != 'release') {
             throw new GradleException(
-                    'Stable candidate must use primary/tool version 1.1.0 and release_type=release.')
+                    'Candidate must use primary/tool version 1.2.0 and release_type=release.')
         }
+    }
+}
+
+// Release copy is checked explicitly at presentation; intermediate candidates
+// must have honest identity without pretending their gameplay is release-ready.
+tasks.register('verifyReleasePresentation') {
+    group = 'verification'
+    dependsOn tasks.named('verifyStableReleaseMetadata')
+    inputs.file 'CHANGELOG.md'
+    inputs.file 'README.md'
+    inputs.file 'MOD-PAGE.md'
+    doLast {
         def changelog = file('CHANGELOG.md').getText('UTF-8')
         def readme = file('README.md').getText('UTF-8')
         def modPage = file('MOD-PAGE.md').getText('UTF-8')
-        if (!changelog.contains('## [1.1.0]')
+        if (!changelog.contains('## [1.2.0]')
                 || readme.contains('public beta')
                 || modPage.contains('Beta release:')) {
             throw new GradleException(
-                    'Stable 1.1.0 changelog or public release labeling is inconsistent.')
+                    'Stable 1.2.0 release copy is not ready for presentation.')
         }
     }
 }
 
 tasks.named('check').configure {
+    dependsOn tasks.named('verifyCastCostFixture')
     dependsOn tasks.named('verifyApiCompatibilityFixture'),
             tasks.named('verifyDeveloperToolsArtifact'),
             tasks.named('verifyStableReleaseMetadata')
@@ -1524,6 +1612,10 @@ def includeDeveloperToolsInRuns = providers.gradleProperty('jawmsIncludeDevelope
 
 ['runClient', 'runServer'].each { runTaskName ->
     tasks.named(runTaskName).configure {
+        if (providers.gradleProperty('jawmsIncludeCastCostFixture').getOrElse('false').toBoolean()) {
+            dependsOn sourceSets.castCostFixture.classesTaskName
+            doFirst { classpath += sourceSets.castCostFixture.output }
+        }
         dependsOn sourceSets.developmentFixture.classesTaskName,
                 sourceSets.apiCompatibilityFixture.classesTaskName,
                 reobfApi12BinaryFixtureJar,

@@ -338,6 +338,37 @@ public final class ManaService implements IManaService {
         }
     }
 
+    /** Participating debit: resolve the local receipt inside mutation, before observers. */
+    public static void commitParticipatingCastPayment(EntityPlayer player,
+            ManaReservation reservation, int hunger, int minimumHunger, Runnable finalizeReceipt) {
+        requireNonNegative(hunger);
+        requireNonNegative(minimumHunger);
+        ManaState state = requireMutableState(player);
+        if (!isReservationValid(player, reservation)
+                || (hunger > 0 && player.getFoodStats().getFoodLevel() - hunger < minimumHunger)) {
+            throw new IllegalStateException("Participating payment is no longer valid.");
+        }
+        transition(player, state, ManaCauses.SPELL_COST, false, () -> {
+            state.commit(reservation);
+            if (hunger > 0) player.getFoodStats().addStats(-hunger, 0.0F);
+            finalizeReceipt.run();
+        });
+    }
+
+    public static boolean isReservationValid(EntityPlayer player, ManaReservation reservation) {
+        ManaState state = requireServerState(player);
+        return reservation != null && reservation.belongsTo(state) && reservation.isActive()
+                && state.hasPayableReservation(reservation);
+    }
+
+    /** Success markers belong to aggregate acceptance, not merely the first debit. */
+    public static void completeParticipatingCast(EntityPlayer player, boolean continuous,
+            EnumHand hand, ResourceLocation spellId) {
+        ManaState state = requireMutableState(player);
+        if (continuous) state.markContinuousCastSuccessful(hand, spellId);
+        else if (!player.isCreative()) startRegenerationLockout(player, state);
+    }
+
     public static void beginContinuousCast(
             EntityPlayer player,
             EnumHand hand,
