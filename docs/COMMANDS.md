@@ -58,6 +58,8 @@ Availability: source-checkout development runs only (`src/developmentFixture`); 
 
 Command contract: Permission level: 2. Side: logical server in source-checkout development runs. Audience: JAWMS contributors. Purpose/result: prepare and inspect internal regression states that are deliberately not public API. Failure conditions: invalid syntax, value, player context, item, target, spell, or fixture precondition fails the command. Cleanup/reset: disable probes, use matching clear operations, remove targets, restore player/items, or discard the disposable world.
 
+Player-only operations use the sender's server-player entity, including when a command runner wraps the sender. Feedback and permission checks remain on the original sender; a console or non-player entity is not an implicit player target.
+
 Authoritative usage:
 
 ```text

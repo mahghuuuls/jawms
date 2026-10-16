@@ -37,6 +37,7 @@ import electroblob.wizardry.util.WandHelper;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
+import net.minecraft.command.PlayerNotFoundException;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.SharedMonsterAttributes;
@@ -509,8 +510,18 @@ public final class ManaTestFixture {
             throw new CommandException(getUsage(sender));
         }
 
+        private static EntityPlayerMP requireFixturePlayer(ICommandSender sender)
+                throws PlayerNotFoundException {
+            // Bundled commands may wrap the sender while retaining its player entity.
+            Entity entity = sender.getCommandSenderEntity();
+            if (!(entity instanceof EntityPlayerMP)) {
+                throw new PlayerNotFoundException("commands.generic.player.unspecified");
+            }
+            return (EntityPlayerMP) entity;
+        }
+
         private static void setMana(ICommandSender sender, String amount) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             IManaService service = ManaApi.getManaService();
             int target = parseInt(amount, 0, service.getMaximumMana(player));
             service.setCurrentMana(player, target, ManaCauses.DEVELOPMENT_COMMAND);
@@ -523,7 +534,7 @@ public final class ManaTestFixture {
 
         private static void setHunger(ICommandSender sender, String amount)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             int target = parseInt(amount, 0, 20);
             player.getFoodStats().setFoodLevel(target);
             sender.sendMessage(new TextComponentString(
@@ -533,7 +544,7 @@ public final class ManaTestFixture {
 
         private static void scheduleRulesReload(ICommandSender sender, String ticksValue)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             int ticks = parseInt(ticksValue, 1, 1200);
             CAST_CANCELLATION.armRulesReloadFor(player, ticks);
             sender.sendMessage(new TextComponentString(
@@ -544,7 +555,7 @@ public final class ManaTestFixture {
 
         private static void inspectCastPayment(ICommandSender sender)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             sender.sendMessage(new TextComponentString(
                     "JAWMS cast payment "
                             + CastPaymentService.describeLastPayment(player) + "."
@@ -553,7 +564,7 @@ public final class ManaTestFixture {
 
         private static void clearCastPayment(ICommandSender sender)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             CastPaymentService.clearLastPayment(player);
             sender.sendMessage(new TextComponentString("JAWMS cast payment cleared."));
         }
@@ -583,7 +594,7 @@ public final class ManaTestFixture {
         }
 
         private static void inspectIntegration(ICommandSender sender) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             GameplayRules rules = GameplayRulesManager.current();
             WizardryIntegrationRules integration = rules.getWizardryIntegrationRules();
             int storage = WizardryPassiveContributionAdapter.aggregateHeldUpgrade(
@@ -638,7 +649,7 @@ public final class ManaTestFixture {
 
         private static void inspectLastIntegrationEffect(ICommandSender sender)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             sender.sendMessage(new TextComponentString(
                     WizardryKillManaService.describeLastEffect(player)
             ));
@@ -646,7 +657,7 @@ public final class ManaTestFixture {
 
         private static void clearLastIntegrationEffect(ICommandSender sender)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             WizardryKillManaService.clearLastEffect(player);
             sender.sendMessage(new TextComponentString(
                     "JAWMS integration last-effect cleared."
@@ -655,7 +666,7 @@ public final class ManaTestFixture {
 
         private static void inspectLastMelee(ICommandSender sender)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             sender.sendMessage(new TextComponentString(
                     WizardryMeleeManaService.describeLastMelee(player)
             ));
@@ -663,7 +674,7 @@ public final class ManaTestFixture {
 
         private static void clearLastMelee(ICommandSender sender)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             WizardryMeleeManaService.clearLastMelee(player);
             sender.sendMessage(new TextComponentString(
                     "JAWMS integration last-melee cleared."
@@ -672,7 +683,7 @@ public final class ManaTestFixture {
 
         private static void setMeleeEvent(ICommandSender sender, String value)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             MeleeDamageFixture.Mode mode;
             try {
                 mode = MeleeDamageFixture.Mode.valueOf(value.toUpperCase(java.util.Locale.ROOT));
@@ -687,7 +698,7 @@ public final class ManaTestFixture {
 
         private static void createMeleeTarget(ICommandSender sender, String healthValue)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             float health = (float) parseDouble(healthValue, 1.0D, 1024.0D);
             WorldServer world = player.getServerWorld();
             UUID previous = MELEE_TARGETS.remove(player.getUniqueID());
@@ -719,7 +730,7 @@ public final class ManaTestFixture {
 
         private static void inspectMeleeTarget(ICommandSender sender)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             UUID targetId = MELEE_TARGETS.get(player.getUniqueID());
             Entity entity = targetId == null ? null
                     : player.getServerWorld().getEntityFromUuid(targetId);
@@ -743,7 +754,7 @@ public final class ManaTestFixture {
         }
 
         private static void inspectMana(ICommandSender sender) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             IManaService service = ManaApi.getManaService();
             ManaPublicState state = service.getState(player);
             int activeContributions = ActiveStackCollector.collect(
@@ -768,7 +779,7 @@ public final class ManaTestFixture {
         }
 
         private static void inspectFlask(ICommandSender sender) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             IManaService service = ManaApi.getManaService();
             StringBuilder armor = new StringBuilder();
             for (int slot = 0; slot < player.inventory.armorInventory.size(); slot++) {
@@ -799,14 +810,14 @@ public final class ManaTestFixture {
         }
 
         private static void inspectProjectile(ICommandSender sender) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             sender.sendMessage(new TextComponentString(
                     ForceArrowRefundTracker.describe(player)
             ));
         }
 
         private static void clearLastProjectile(ICommandSender sender) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             ForceArrowRefundTracker.clearLast(player);
             inspectProjectile(sender);
         }
@@ -814,7 +825,7 @@ public final class ManaTestFixture {
         private static void setProjectileActivation(
                 ICommandSender sender, String mode
         ) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             CAST_CANCELLATION.setPerfectionistOverride(player, parseActivation(mode, true));
             sender.sendMessage(new TextComponentString(
                     "JAWMS test Perfectionist effective activation=" + mode.toLowerCase() + "."
@@ -824,7 +835,7 @@ public final class ManaTestFixture {
         private static void scheduleProjectileActivation(
                 ICommandSender sender, String mode, String ticksValue
         ) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             Boolean active = parseActivation(mode, false);
             int ticks = parseInt(ticksValue, 1, 20);
             CAST_CANCELLATION.armPerfectionistOverride(player, active, ticks);
@@ -837,7 +848,7 @@ public final class ManaTestFixture {
         private static void scheduleProjectileMana(
                 ICommandSender sender, String amountValue, String ticksValue
         ) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             int amount = parseInt(
                     amountValue, 0, ManaApi.getManaService().getMaximumMana(player)
             );
@@ -862,7 +873,7 @@ public final class ManaTestFixture {
         private static void setArmorMana(
                 ICommandSender sender, String slotName, String amount
         ) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             int slot = parseArmorSlot(slotName);
             ItemStack stack = player.inventory.armorInventory.get(slot);
             if (!(stack.getItem() instanceof ItemWizardArmour)
@@ -887,7 +898,7 @@ public final class ManaTestFixture {
                 String value,
                 String operation
         ) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             int amount = parseInt(value, 0);
             IManaService service = ManaApi.getManaService();
             ManaMutationResult result;
@@ -913,7 +924,7 @@ public final class ManaTestFixture {
             if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
                 throw new CommandException("Expected true or false.");
             }
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             MANA_EVENT_PROBE.setEnabled(player, Boolean.parseBoolean(value));
             sender.sendMessage(new TextComponentString(
                     "JAWMS mana event probe enabled=" + MANA_EVENT_PROBE.appliesTo(player) + "."
@@ -925,7 +936,7 @@ public final class ManaTestFixture {
             if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
                 throw new CommandException("Expected true or false.");
             }
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             boolean enabled = Boolean.parseBoolean(value);
             if (enabled) {
                 REGENERATION_DISABLED.remove(player.getUniqueID());
@@ -943,7 +954,7 @@ public final class ManaTestFixture {
             if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
                 throw new CommandException("Expected true or false.");
             }
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             boolean paused = Boolean.parseBoolean(value);
             if (paused) {
                 REGENERATION_DISABLED.add(player.getUniqueID());
@@ -957,7 +968,7 @@ public final class ManaTestFixture {
         }
 
         private static void inspectManaEvent(ICommandSender sender) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             sender.sendMessage(new TextComponentString(MANA_EVENT_PROBE.describe(player)));
         }
 
@@ -978,7 +989,7 @@ public final class ManaTestFixture {
 
         private static void inspectCastingCancellation(ICommandSender sender)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             sender.sendMessage(new TextComponentString(
                     "JAWMS deterministic wand pre-cancellation enabled="
                             + CAST_CANCELLATION.appliesTo(player) + "."
@@ -990,7 +1001,7 @@ public final class ManaTestFixture {
             if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
                 throw new CommandException("Expected true or false.");
             }
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             if (Boolean.parseBoolean(value)) {
                 CAST_CANCELLATION.enableFor(player);
             } else {
@@ -1001,7 +1012,7 @@ public final class ManaTestFixture {
 
         private static void inspectCastingTickCancellation(ICommandSender sender)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             sender.sendMessage(new TextComponentString(
                     "JAWMS deterministic wand tick-cancellation enabled="
                             + CAST_CANCELLATION.tickAppliesTo(player) + "."
@@ -1015,7 +1026,7 @@ public final class ManaTestFixture {
             if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
                 throw new CommandException("Expected true or false.");
             }
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             if (Boolean.parseBoolean(value)) {
                 CAST_CANCELLATION.enableTickFor(player);
             } else {
@@ -1042,7 +1053,7 @@ public final class ManaTestFixture {
 
         private static void setCastingFactor(ICommandSender sender, String value)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             float factor = parseCastingFactor(value);
             CAST_CANCELLATION.setFactorFor(player, factor);
             sender.sendMessage(new TextComponentString(
@@ -1053,7 +1064,7 @@ public final class ManaTestFixture {
         private static void scheduleCastingFactor(
                 ICommandSender sender, String value, String ticksValue
         ) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             float factor = parseCastingFactor(value);
             int ticks = parseInt(ticksValue, 1, 1200);
             CAST_CANCELLATION.scheduleFactorFor(player, factor, ticks);
@@ -1081,7 +1092,7 @@ public final class ManaTestFixture {
                 String handName,
                 String identifier
         ) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             EnumHand hand = parseHand(handName);
             ItemStack stack = player.getHeldItem(hand);
             if (!(stack.getItem() instanceof ItemWand)) {
@@ -1099,7 +1110,7 @@ public final class ManaTestFixture {
         private static void setWandMana(
                 ICommandSender sender, String handName, String amount
         ) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             EnumHand hand = parseHand(handName);
             ItemStack stack = player.getHeldItem(hand);
             if (!(stack.getItem() instanceof ItemWand)) {
@@ -1119,7 +1130,7 @@ public final class ManaTestFixture {
         private static void setWandSiphon(
                 ICommandSender sender, String handName, String levelValue
         ) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             EnumHand hand = parseHand(handName);
             ItemStack stack = player.getHeldItem(hand);
             if (!(stack.getItem() instanceof ItemWand)) {
@@ -1139,7 +1150,7 @@ public final class ManaTestFixture {
         private static void setWandMelee(
                 ICommandSender sender, String handName, String levelValue
         ) throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             EnumHand hand = parseHand(handName);
             ItemStack stack = player.getHeldItem(hand);
             if (!(stack.getItem() instanceof ItemWand)) {
@@ -1169,7 +1180,7 @@ public final class ManaTestFixture {
 
         private static void inspectWand(ICommandSender sender, String handName)
                 throws CommandException {
-            EntityPlayerMP player = getCommandSenderAsPlayer(sender);
+            EntityPlayerMP player = requireFixturePlayer(sender);
             EnumHand hand = parseHand(handName);
             ItemStack stack = player.getHeldItem(hand);
             if (!(stack.getItem() instanceof ItemWand)) {
