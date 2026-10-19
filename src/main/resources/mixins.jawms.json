@@ -6,6 +6,13 @@
 	"minVersion": "0.8.5",
 	"compatibilityLevel": "JAVA_8",
 	"mixins": [
+		"WandHelperBindingMutationMixin",
+		"ContainerWandPublicationMixin",
+		"EntityPlayerMPWandPublicationMixin",
+		"InventoryPlayerWandPublicationMixin",
+		"NetHandlerWandPublicationServerMixin",
+		"NetworkManagerWandPublicationMixin",
+		"NonNullListWandMutationMixin",
 		"EntityForceArrowMixin",
 		"EntityLivingBaseMixin",
 		"EntityPlayerMixin",
@@ -17,6 +24,9 @@
 	],
 	"server": [],
 	"client": [
+		"MinecraftWandSelectionClientMixin",
+		"NetHandlerWandPublicationClientMixin",
+		"PlayerControllerParticipantUseMixin",
 		"GuiSpellInfoMixin",
 		"ItemStackTooltipClientMixin",
 		"ItemWandClientMixin",

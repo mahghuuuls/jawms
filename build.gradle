@@ -511,6 +511,8 @@ tasks.register('verifyCastCostFixture') {
         } finally { fixture.close() }
         def leaked = zipTree(tasks.named('reobfJar').get().archiveFile.get().asFile).matching {
             include 'example/jawmscast/**'
+            include 'com/mahghuuuls/jawms/testfixture/**'
+            include 'mixins.jawms-publication-observer.json'
         }.files
         if (!leaked.empty) throw new GradleException('Cast-cost fixture leaked into primary JAR')
     }

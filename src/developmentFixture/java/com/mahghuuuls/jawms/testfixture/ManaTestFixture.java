@@ -92,6 +92,7 @@ public final class ManaTestFixture {
     }
 
     public static void preInitialize() {
+        ContinuousTransportFixture.initialize();
         if (developmentProviderRegistered) {
             return;
         }
@@ -114,6 +115,7 @@ public final class ManaTestFixture {
     }
 
     public static void register(FMLServerStartingEvent event) {
+        ContinuousTransportFixture.register(event);
         CAST_CANCELLATION.clear();
         REGENERATION_DISABLED.clear();
         BALANCE_PERCENT_BOOST.clear();

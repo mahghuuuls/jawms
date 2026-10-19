@@ -3,6 +3,7 @@ package com.mahghuuuls.jawms.internal.mana;
 import com.mahghuuuls.jawms.Tags;
 import com.mahghuuuls.jawms.internal.casting.ContinuousCastStopMessage;
 import com.mahghuuuls.jawms.internal.casting.ContinuousCastReleaseMessage;
+import com.mahghuuuls.jawms.internal.casting.ParticipantUseMessages;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.GameplayRulesMessage;
 import net.minecraft.entity.player.EntityPlayer;
@@ -21,6 +22,10 @@ public final class ManaNetwork {
     }
 
     public static void register() {
+        CHANNEL.registerMessage(ParticipantUseMessages.CapabilityHandler.class, ParticipantUseMessages.Capability.class, 4, Side.CLIENT);
+        CHANNEL.registerMessage(ParticipantUseMessages.IntentHandler.class, ParticipantUseMessages.Intent.class, 5, Side.SERVER);
+        CHANNEL.registerMessage(ParticipantUseMessages.ReleaseHandler.class, ParticipantUseMessages.Release.class, 6, Side.SERVER);
+        CHANNEL.registerMessage(ParticipantUseMessages.CloseHandler.class, ParticipantUseMessages.Close.class, 7, Side.CLIENT);
         CHANNEL.registerMessage(ManaStateMessage.Handler.class, ManaStateMessage.class, 0, Side.CLIENT);
         CHANNEL.registerMessage(GameplayRulesMessage.Handler.class, GameplayRulesMessage.class, 1, Side.CLIENT);
         CHANNEL.registerMessage(
@@ -54,6 +59,13 @@ public final class ManaNetwork {
             );
         }
     }
+
+    public static void participantCapability(EntityPlayerMP player, java.util.UUID epoch) {
+        CHANNEL.sendTo(new ParticipantUseMessages.Capability(epoch), player);
+    }
+    public static void participantIntent(ParticipantUseMessages.Intent message) { CHANNEL.sendToServer(message); }
+    public static void participantRelease(ParticipantUseMessages.Release message) { CHANNEL.sendToServer(message); }
+    public static void participantClose(EntityPlayerMP player, ParticipantUseMessages.Close message) { CHANNEL.sendTo(message, player); }
 
     public static void synchronizeRules(EntityPlayer player, GameplayRules rules) {
         if (player instanceof EntityPlayerMP) {

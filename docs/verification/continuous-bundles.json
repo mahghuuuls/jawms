@@ -1,0 +1,171 @@
+{
+  "cycle007_terminal_begin": {
+    "description": "MV-02 disposable development world identity and narrow recording; no automatic cast",
+    "commands": ["devtool session start jawms_c007_terminal", "devtool capabilities", "devtool environment", "devtool mods", "gamerule keepInventory true", "gamerule doMobSpawning false", "jawms-test regen pause true", "jawms-test casting debug true", "jawms-use-transport normal", "devtool log all off", "devtool log item_use on", "devtool mark C007_TERMINAL_BEGIN"]
+  },
+  "cycle007_terminal_p1_normal_setup": {
+    "description": "Rate4 Survival actual continue; release after multiple effects",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P1_NORMAL_READY"]
+  },
+  "cycle007_terminal_p1_offhand_setup": {
+    "description": "Normal continuous offhand with empty main hand",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup normal off", "devtool inspect player", "devtool mark C007_P1_OFFHAND_READY"]
+  },
+  "cycle007_terminal_p2_terminal_setup": {
+    "description": "One exhausting effect; provider2 and rate4 first mana portion2",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup terminal main", "devtool inspect player", "devtool mark C007_P2_TERMINAL_READY"]
+  },
+  "cycle007_terminal_p3_creative_setup": {
+    "description": "Creative terminal provider2 with no local mana/hunger allocation",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup creative main", "devtool inspect player", "devtool mark C007_P3_CREATIVE_READY"]
+  },
+  "cycle007_terminal_p3_zero_setup": {
+    "description": "Rate0 still participates and stops after permitted debit2",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup zero main", "devtool inspect player", "devtool mark C007_P3_ZERO_READY"]
+  },
+  "cycle007_terminal_p4_zero_portion_setup": {
+    "description": "Rate1/provider5; two effects, including a zero mana portion",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup zero-portion main", "devtool inspect player", "devtool mark C007_P4_ZERO_PORTION_READY"]
+  },
+  "cycle007_terminal_p5_prediction_setup": {
+    "description": "Provider logs terminal estimate but returns actual continue; normal release",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup prediction main", "devtool inspect player", "devtool mark C007_P5_PREDICTION_READY"]
+  },
+  "cycle007_terminal_p6_delayed_terminal_setup": {
+    "description": "Hold real terminal close until a genuine blocked following press is observed",
+    "commands": ["jawms-use-transport gate", "jawms-continuous-fixture setup terminal main", "devtool inspect player", "devtool mark C007_P6_DELAY_READY"]
+  },
+  "cycle007_terminal_p7_delayed_normal_setup": {
+    "description": "P7A: actual paired slot install plus genuine rejected following press precede real normal permission",
+    "commands": ["jawms-use-transport pub-first", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P7_NORMAL_DELAY_READY"]
+  },
+  "cycle007_terminal_p7_inapplicable_setup": {
+    "description": "Registered but not applicable; baseline server and negotiated client delay",
+    "commands": ["jawms-use-transport pub-first", "jawms-continuous-fixture setup inapplicable main", "devtool inspect player", "devtool mark C007_P7_INAPPLICABLE_READY"]
+  },
+  "cycle007_terminal_p7_offhand_setup": {
+    "description": "P7A offhand source/install mapping and blocked following press; empty main hand",
+    "commands": ["jawms-use-transport pub-first", "jawms-continuous-fixture setup normal off", "devtool inspect player", "devtool mark C007_P7_OFFHAND_READY"]
+  },
+  "cycle007_terminal_p7_close_first_setup": {
+    "description": "P7B: hold complete real publication pairs, consume real normal close on main thread first, then drain",
+    "commands": ["jawms-use-transport pair-first", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P7_CLOSE_FIRST_READY"]
+  },
+  "cycle007_terminal_p7_bulk_setup": {
+    "description": "P7C: actual sendAllContents with live mapped full window while close held; blocked following press releases it",
+    "commands": ["jawms-use-transport bulk", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P7_BULK_READY"]
+  },
+  "cycle007_terminal_p7_bulk_offhand_setup": {
+    "description": "P7C offhand bulk mapping, including unrelated unchanged inventory slots",
+    "commands": ["jawms-use-transport bulk", "jawms-continuous-fixture setup normal off", "devtool inspect player", "devtool mark C007_P7_BULK_OFFHAND_READY"]
+  },
+  "cycle007_terminal_p7_direct_setup": {
+    "description": "P7D: real MC|PickItem direct correction for same selected wand; fills other hotbar slots in disposable world",
+    "commands": ["jawms-use-transport direct", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P7_DIRECT_READY"]
+  },
+  "cycle007_terminal_p8_late_publication_setup": {
+    "description": "P8 healthy: first cast/release then fresh same-wand cast WITHOUT setup replacement; drain old complete pairs at newer real binding",
+    "commands": ["jawms-use-transport late", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P8_LATE_PUBLICATION_READY"]
+  },
+  "cycle007_terminal_p8_stale_publication_setup": {
+    "description": "P8 stale serial: old pairs released only after newer-use higher-serial actual install; no setup between gestures",
+    "commands": ["jawms-use-transport stale-pair", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P8_STALE_PUBLICATION_READY"]
+  },
+  "cycle007_terminal_p8_stale_setup": {
+    "description": "Requires prior completed normal use/history; replay actual old frames after new effect and close",
+    "commands": ["jawms-use-transport stale", "jawms-continuous-fixture setup terminal main", "devtool inspect player", "devtool mark C007_P8_STALE_READY"]
+  },
+  "cycle007_terminal_p8_offhand_setup": {
+    "description": "Offhand stale-frame/own-release variant with empty main hand",
+    "commands": ["jawms-use-transport stale", "jawms-continuous-fixture setup terminal off", "devtool inspect player", "devtool mark C007_P8_OFFHAND_READY"]
+  },
+  "cycle007_terminal_p9_chargeup_setup": {
+    "description": "Release before harmless 200-tick charge-up completes; no effect or claim",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup chargeup main", "devtool inspect player", "devtool mark C007_P9_CHARGEUP_READY"]
+  },
+  "cycle007_terminal_p9_synthetic_setup": {
+    "description": "Direct terminal child debit2 must not stop its continuing physical parent",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup synthetic main", "devtool inspect player", "devtool mark C007_P9_SYNTHETIC_READY"]
+  },
+  "cycle007_terminal_p9_no_finish_setup": {
+    "description": "Fixture cancels only server ordinary stop callback; no client finish invented",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup nofinish main", "devtool inspect player", "devtool mark C007_P9_NO_FINISH_READY"]
+  },
+  "cycle007_terminal_p9_tick_interrupt_setup": {
+    "description": "All-not-applicable use: actual server Tick cancellation after two successful effects must retain ordinary server Finish",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup tick-interrupt main", "devtool inspect player", "devtool mark C007_P9_TICK_INTERRUPT_READY"]
+  },
+  "cycle007_terminal_p9_creative_interrupt_setup": {
+    "description": "Creative all-not-applicable repeat: real Tick cancellation is not an exhaustion/refusal close",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup creative-interrupt main", "devtool inspect player", "devtool mark C007_P9_CREATIVE_INTERRUPT_READY"]
+  },
+  "cycle007_terminal_p9_refused_setup": {
+    "description": "Explicit pre-effect refusal; no effect/payment/finish",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup refused main", "devtool inspect player", "devtool mark C007_P9_REFUSED_READY"]
+  },
+  "cycle007_terminal_p9_invalidated_setup": {
+    "description": "Fixture invalidates its own claim inside effect; no rollback/payment/finish",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup invalidated main", "devtool inspect player", "devtool mark C007_P9_INVALIDATED_READY"]
+  },
+  "cycle007_terminal_p10_cancel_setup": {
+    "description": "Hold normal close; owner changes original selected item after release",
+    "commands": ["jawms-use-transport change", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P10_CANCEL_READY"]
+  },
+  "cycle007_terminal_p10_equal_replacement_setup": {
+    "description": "P10B: real server inventory write with equal distinct stack; independent retirement cannot rely on a dirty slot",
+    "commands": ["jawms-use-transport replace", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P10_EQUAL_REPLACEMENT_READY"]
+  },
+  "cycle007_terminal_p10_same_tick_selection_setup": {
+    "description": "P10C: client invokes real wheel transition away and back in one owning-thread tick after capture",
+    "commands": ["jawms-use-transport wheel", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P10_SAME_TICK_READY"]
+  },
+  "cycle007_terminal_p10_spell_slot_setup": {
+    "description": "P10D: real selected-spell-slot change while the Spell object remains equal in all fixture slots",
+    "commands": ["jawms-use-transport spell", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P10_SPELL_SLOT_READY"]
+  },
+  "cycle007_terminal_p10_upgrade_setup": {
+    "description": "P10D: real WandHelper.applyUpgrade mutation on the same original object",
+    "commands": ["jawms-use-transport upgrade", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P10_UPGRADE_READY"]
+  },
+  "cycle007_terminal_p11_pair_fault_setup": {
+    "description": "P11 only: suppress actual vanilla partner after capture, send real unrelated held-slot correction, require fault and reconnect",
+    "commands": ["jawms-use-transport pair-fault", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P11_PAIR_FAULT_READY"]
+  },
+  "cycle007_terminal_p12_source_reentry_setup": {
+    "description": "P12A: equal source replacement inside real sendSlotContents callback after snapshot but before send",
+    "commands": ["jawms-use-transport source-reentry", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P12_SOURCE_REENTRY_READY"]
+  },
+  "cycle007_terminal_p12_callback_setup": {
+    "description": "P12B: replace real client inventory from inside original permitted Finish callback; no remaining old body/cooldown",
+    "commands": ["jawms-use-transport callback", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P12_CALLBACK_READY"]
+  },
+  "cycle007_terminal_p10_deadline_setup": {
+    "description": "Hold normal close through real 30-second active-time deadline; reconnect-only recovery",
+    "commands": ["jawms-use-transport stall", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_P10_DEADLINE_READY"]
+  },
+  "cycle007_terminal_negative_capability_setup": {
+    "description": "Withhold next connection capability for this operator; reconnect before applicable attempt",
+    "commands": ["jawms-use-transport capability-off", "devtool mark C007_CAPABILITY_RECONNECT_REQUIRED"]
+  },
+  "cycle007_terminal_l0_legacy_setup": {
+    "description": "Only in startup registration-off launch: immediate empty-registry legacy finish",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_L0_LEGACY_READY"]
+  },
+  "cycle007_terminal_l1_depletion_setup": {
+    "description": "Only in empty-registry launch: mana3 normal portion followed by insufficiency",
+    "commands": ["jawms-use-transport normal", "jawms-continuous-fixture setup normal main", "jawms-test mana set 3", "devtool inspect player", "devtool mark C007_L1_DEPLETION_READY"]
+  },
+  "cycle007_terminal_inspect": {
+    "description": "Agent reads independent fixture counters, resources, transport queue and original player state",
+    "commands": ["jawms-continuous-fixture inspect", "jawms-use-transport inspect", "devtool inspect player", "devtool inspect inventory", "devtool mark C007_TERMINAL_INSPECTED"]
+  },
+  "cycle007_terminal_reset": {
+    "description": "Readback only: release input first; agent must verify no pending use before the next setup",
+    "commands": ["jawms-use-transport inspect", "jawms-continuous-fixture inspect", "devtool inspect player", "devtool mark C007_TERMINAL_RESET_READBACK"]
+  },
+  "cycle007_terminal_teardown": {
+    "description": "Release key first; disarm/drain actual frames without touching guard authority, remove resource fixture state",
+    "stopOnFailure": false,
+    "commands": ["jawms-use-transport reset", "jawms-continuous-fixture teardown", "jawms-test regen pause false", "jawms-test casting debug false", "devtool log all off", "devtool mark C007_TERMINAL_TEARDOWN", "devtool session stop"]
+  }
+}

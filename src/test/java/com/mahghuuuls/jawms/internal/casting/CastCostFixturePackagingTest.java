@@ -20,6 +20,8 @@ import java.nio.file.Files;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.zip.ZipFile;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -46,15 +48,15 @@ class CastCostFixturePackagingTest {
                 .getDeclaredConstructor(JsonObject.class, Spell.class);
         parser.setAccessible(true);
         AtomicInteger found = new AtomicInteger();
-        AtomicReference<SpellProperties> properties = new AtomicReference<>();
+        Map<String, SpellProperties> properties = new HashMap<>();
 
         assertTrue(CraftingHelper.findFiles(mod, "assets/jawms_cast_fixture/spells", null,
                 (root, file) -> {
                     if (!Files.isRegularFile(file)) return true;
-                    assertEquals("probe.json", root.relativize(file).toString());
+                    String name = root.relativize(file).toString();
                     try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
                         JsonObject json = new JsonParser().parse(reader).getAsJsonObject();
-                        properties.set(parser.newInstance(json, spell));
+                        properties.put(name, parser.newInstance(json, spell));
                         found.incrementAndGet();
                         return true;
                     } catch (Exception failure) {
@@ -62,18 +64,21 @@ class CastCostFixturePackagingTest {
                     }
                 }, true, true));
         // findFiles returns true even when the requested root is absent.
-        assertEquals(1, found.get());
-        assertNotNull(properties.get());
-        ByteBuf payload = Unpooled.buffer();
-        try {
-            new PacketSpellProperties.Message(properties.get()).toBytes(payload);
-            SpellProperties received = new SpellProperties(spell, payload);
-            assertEquals(12, received.cost);
-            assertEquals(0, received.chargeup);
-            assertEquals(20, received.cooldown);
-            assertEquals(0, payload.readableBytes());
-        } finally {
-            payload.release();
+        assertEquals(5, found.get());
+        String[] names = { "probe.json", "stream.json", "slow_stream.json", "free_stream.json", "charging_stream.json" };
+        int[] costs = { 12, 4, 1, 0, 4 };
+        for (int i = 0; i < names.length; i++) {
+            SpellProperties value = properties.get(names[i]);
+            assertNotNull(value, names[i]);
+            ByteBuf payload = Unpooled.buffer();
+            try {
+                new PacketSpellProperties.Message(value).toBytes(payload);
+                SpellProperties received = new SpellProperties(spell, payload);
+                assertEquals(costs[i], received.cost);
+                assertEquals(i == 4 ? 200 : 0, received.chargeup);
+                assertEquals(20, received.cooldown);
+                assertEquals(0, payload.readableBytes());
+            } finally { payload.release(); }
         }
     }
 

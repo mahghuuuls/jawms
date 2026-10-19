@@ -49,6 +49,7 @@ public final class WizardryWandBridge {
         runEpoch = UUID.randomUUID();
         attemptSequence = 0L;
         ATTEMPTS.remove();
+        ParticipantUseService.clear();
     }
 
     public static boolean isCastAllowed() {
@@ -201,8 +202,7 @@ public final class WizardryWandBridge {
             ItemStack owningStack, Spell spell, World world, EntityPlayer caster,
             EnumHand hand, int castingTick, SpellModifiers modifiers) {
         if (!world.isRemote && !isCastAllowed()) return false;
-        // Continuous coordination and physical-gesture transport are enabled together.
-        if (world.isRemote || spell.isContinuous || CastCostRegistry.instance().isEmpty()) {
+        if (world.isRemote || CastCostRegistry.instance().isEmpty()) {
             return castLegacyWithReservation(spell, world, caster, hand, castingTick, modifiers);
         }
         ManaState originalState = ManaService.requireState(caster);
@@ -210,8 +210,12 @@ public final class WizardryWandBridge {
         CastPaymentReservation reservation = CastPaymentService.reserve(caster,
                 caster.isCreative() ? 0 : cost,
                 caster.isCreative() ? DemonicSealPolicy.inactive() : paymentPolicy(caster, hand),
-                false, hand, spell.getRegistryName());
-        if (reservation == null) return false;
+                spell.isContinuous, hand, spell.getRegistryName());
+        if (reservation == null) {
+            if (spell.isContinuous && ParticipantUseService.syntheticCast()) return false;
+            if (spell.isContinuous && ParticipantUseService.interrupt(caster)) return false;
+            return castLegacyWithReservation(spell, world, caster, hand, castingTick, modifiers);
+        }
         CastAttempt attempt = new CastAttempt(reservation, spell.getRegistryName(), hand,
                 true, caster.getUniqueID(), perfectionistPolicy(caster, spell));
         attempt.coordinated = true;
@@ -220,9 +224,11 @@ public final class WizardryWandBridge {
             throw new IllegalStateException("Cast identity sequence exhausted.");
         }
         String id = runEpoch + "/" + (++attemptSequence);
+        ParticipantUseService.Scope use = ParticipantUseService.current();
+        if (use != null) use.preparing();
         CastAttemptContext context = new CastAttemptContext(caster, spell, spell.getRegistryName(),
-                owningStack, hand, false, caster.isCreative(), castingTick,
-                id + "/use", id + "/attempt", CastCostContextManager.acceptedCost(caster, hand, spell),
+                owningStack, hand, spell.isContinuous, caster.isCreative(), castingTick,
+                use == null ? id + "/use" : use.id(), id + "/attempt", CastCostContextManager.acceptedCost(caster, hand, spell),
                 cost, reservation.getPaidMana(), reservation.getPaidHunger());
         final int tick = world.getMinecraftServer().getTickCounter();
         final boolean physicalBinding = caster.getHeldItem(hand) == owningStack;
@@ -230,9 +236,10 @@ public final class WizardryWandBridge {
         CastAttemptOutcome outcome = CastCostCoordinator.execute(CastCostRegistry.instance(), context,
                 new CastCostCoordinator.LocalPayment() {
                     public boolean isValid() {
-                        if (ATTEMPTS.get().size() > 16 || caster.world != world
+                        if (ATTEMPTS.get().size() > 16 || (spell.isContinuous && use != null && !use.valid()) || caster.world != world
                                 || world.getMinecraftServer().getTickCounter() != tick
-                                || !ItemStack.areItemStacksEqual(acceptedStack, owningStack)
+                                || (spell.isContinuous ? !WandBinding.semanticEquals(acceptedStack, owningStack)
+                                        : !ItemStack.areItemStacksEqual(acceptedStack, owningStack))
                                 || (physicalBinding && caster.getHeldItem(hand) != owningStack)) return false;
                         try {
                             return ManaService.requireState(caster) == originalState
@@ -242,7 +249,7 @@ public final class WizardryWandBridge {
                     }
                     public void commit() { CastPaymentService.commitParticipating(caster, reservation); }
                     public void completeAccepted() {
-                        ManaService.completeParticipatingCast(caster, false, hand, spell.getRegistryName());
+                        ManaService.completeParticipatingCast(caster, spell.isContinuous, hand, spell.getRegistryName());
                         if (isValid()) promotePendingForceArrows(caster, attempt);
                     }
                     public void release() { CastPaymentService.release(caster, reservation); }
@@ -251,10 +258,13 @@ public final class WizardryWandBridge {
                     public int paidHunger() { return isCommitted() ? reservation.getPaidHunger() : 0; }
                 }, () -> spell.cast(world, caster, hand, castingTick, modifiers));
         if (outcome.getStatus() == CastAttemptOutcome.Status.LEGACY) {
+            if (use != null) use.outcome(outcome);
             ATTEMPTS.get().pop();
+            if (spell.isContinuous && use != null && !use.permitsLegacy()) return false;
             return castLegacyWithReservation(spell, world, caster, hand, castingTick, modifiers);
         }
         CastingDiagnostics.participation(outcome, tick);
+        if (use != null) use.outcome(outcome);
         return outcome.isAccepted();
     }
 
@@ -312,6 +322,7 @@ public final class WizardryWandBridge {
                     available
             );
             if (spell.isContinuous) {
+                if (ParticipantUseService.syntheticCast() || ParticipantUseService.interrupt(caster)) return false;
                 ManaService.exhaustContinuousCastMana(
                         caster,
                         hand,
@@ -405,6 +416,7 @@ public final class WizardryWandBridge {
             if (alreadyBlocked) {
                 return;
             }
+            if (ParticipantUseService.rejectStart(caster, hand, stack, spell)) return;
             ManaNetwork.stopContinuousCastVisual(
                     caster,
                     hand,
@@ -436,6 +448,7 @@ public final class WizardryWandBridge {
     }
 
     public static void interruptContinuousCast(EntityPlayer caster, Spell spell, EnumHand hand) {
+        boolean correlatedStop = !caster.world.isRemote && ParticipantUseService.ownsPhysicalStop(caster);
         CastCostContextManager.clear(caster, hand);
         CastPaymentContextManager.clear(caster, hand);
         if (caster.world.isRemote || !spell.isContinuous) {
@@ -444,12 +457,9 @@ public final class WizardryWandBridge {
         boolean manaExhausted = ManaService.requireState(caster)
                 .wasContinuousCastManaExhausted();
         ManaService.interruptContinuousCast(caster, hand, spell.getRegistryName());
-        ManaNetwork.stopContinuousCastVisual(
-                caster,
-                hand,
-                spell.getRegistryName(),
-                manaExhausted
-        );
+        // In the negotiated envelope, the enclosing actual stop callback owns NORMAL_FINISH versus
+        // NORMAL_NO_FINISH. Do not reset the hand before it or also send an ambiguous legacy stop.
+        if (!correlatedStop) ManaNetwork.stopContinuousCastVisual(caster, hand, spell.getRegistryName(), manaExhausted);
         CastingDiagnostics.trace(
                 "continuous_interrupted",
                 caster,

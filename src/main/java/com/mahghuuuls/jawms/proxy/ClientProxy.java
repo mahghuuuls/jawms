@@ -32,6 +32,41 @@ import java.util.Map;
 
 public final class ClientProxy extends CommonProxy {
 
+    @Override public boolean allowWandPacket(net.minecraft.network.NetworkManager manager, net.minecraft.network.INetHandler handler,
+            net.minecraft.network.Packet<?> packet) { return com.mahghuuuls.jawms.client.ClientWandPublications.receive(handler, packet); }
+    @Override public void wandInventoryWrite(net.minecraft.entity.player.InventoryPlayer inventory, int index,
+            ItemStack previous, ItemStack installed) { com.mahghuuuls.jawms.client.ClientWandPublications.wrote(inventory, index, previous, installed); }
+    @Override public void wandSelectionChanged(net.minecraft.entity.player.InventoryPlayer inventory) {
+        com.mahghuuuls.jawms.client.ClientWandPublications.tick();
+    }
+    @Override public void observeParticipantUseArgument(EntityPlayer player, ItemStack stack) {
+        com.mahghuuuls.jawms.client.ClientParticipantUseGuard.observeArgument(player, stack);
+    }
+
+    @Override public void acceptParticipantUseCapability(com.mahghuuuls.jawms.internal.casting.ParticipantUseMessages.Capability message, Object handler) {
+        com.mahghuuuls.jawms.client.ClientParticipantUseGuard.capability(message, handler);
+    }
+    @Override public void acceptParticipantUseClose(com.mahghuuuls.jawms.internal.casting.ParticipantUseMessages.Close message, Object handler) {
+        com.mahghuuuls.jawms.client.ClientParticipantUseGuard.close(message, handler);
+    }
+    @Override public boolean isParticipantInputBlocked() { return com.mahghuuuls.jawms.client.ClientParticipantUseGuard.blocked(); }
+    @Override public void participantInputStarted(EntityPlayer player, EnumHand hand) {
+        com.mahghuuuls.jawms.client.ClientParticipantUseGuard.started(player, hand);
+    }
+    @Override public boolean isParticipantFinishSuppressed(EnumHand hand, ResourceLocation spell) {
+        return com.mahghuuuls.jawms.client.ClientParticipantUseGuard.suppressed(hand, spell);
+    }
+    @Override public com.mahghuuuls.jawms.internal.casting.FinishContinuation.Capture beginParticipantFinish(EntityPlayer player, ItemStack stack, EnumHand hand, Spell spell) {
+        return com.mahghuuuls.jawms.client.ClientParticipantUseGuard.begin(player, stack, hand, spell);
+    }
+    @Override public void endParticipantFinish(boolean completed) { com.mahghuuuls.jawms.client.ClientParticipantUseGuard.end(completed); }
+    @Override public boolean deferParticipantFinishAction(Runnable action) { return com.mahghuuuls.jawms.client.ClientParticipantUseGuard.defer(action); }
+    @Override public boolean isParticipantFinishCaptureActive() { return com.mahghuuuls.jawms.client.ClientParticipantUseGuard.capturing(); }
+    @Override public void captureParticipantBaseCooldown(int base) { com.mahghuuuls.jawms.client.ClientParticipantUseGuard.baseCooldown(base); }
+    @Override public boolean deferParticipantCooldown(int fallback, SpellModifiers modifiers, java.util.function.BiConsumer<ItemStack, Integer> operation) {
+        return com.mahghuuuls.jawms.client.ClientParticipantUseGuard.cooldown(fallback, modifiers, operation);
+    }
+
     @Override
     public void preInit(File configurationDirectory) {
         ClientHudConfigManager.configure(configurationDirectory);
@@ -44,6 +79,7 @@ public final class ClientProxy extends CommonProxy {
         FMLCommonHandler.instance().bus().register(new ClientManaState());
         FMLCommonHandler.instance().bus().register(new ClientGameplayRules());
         FMLCommonHandler.instance().bus().register(new ClientContinuousCastGuard());
+        FMLCommonHandler.instance().bus().register(new com.mahghuuuls.jawms.client.ClientParticipantUseGuard());
         FMLCommonHandler.instance().bus().register(new ClientHudConfigManager());
     }
 

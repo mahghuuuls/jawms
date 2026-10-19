@@ -2,6 +2,12 @@ package com.mahghuuuls.jawms.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
+import com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod;
+import com.mahghuuuls.jawms.internal.casting.ParticipantUseService;
+import com.mahghuuuls.jawms.internal.casting.CastCostRegistry;
+import com.mahghuuuls.jawms.internal.casting.FinishContinuation;
 import com.mahghuuuls.jawms.internal.casting.WizardryWandBridge;
 import electroblob.wizardry.item.ItemWand;
 import electroblob.wizardry.spell.Spell;
@@ -373,7 +379,10 @@ public abstract class ItemWandMixin {
     ) {
         int initialDepth = WizardryWandBridge.captureAttemptDepth();
         if (!caster.world.isRemote && !WizardryWandBridge.isCastAllowed()) return false;
+        ParticipantUseService.Scope scope = caster.world.isRemote || CastCostRegistry.instance().isEmpty()
+                ? null : ParticipantUseService.enterCast(caster, stack, spell, hand);
         try {
+            if (scope != null && !ParticipantUseService.supportedDepth()) return false;
             return original.call(
                     stack,
                     spell,
@@ -383,9 +392,51 @@ public abstract class ItemWandMixin {
                     modifiers
             );
         } finally {
-            WizardryWandBridge.cleanupToDepth(caster, initialDepth);
-            WizardryWandBridge.endDiscreteCast(caster, hand, spell);
+            try { if (scope != null) ParticipantUseService.exitCast(scope); }
+            finally {
+                WizardryWandBridge.cleanupToDepth(caster, initialDepth);
+                WizardryWandBridge.endDiscreteCast(caster, hand, spell);
+            }
         }
+    }
+
+    @Inject(method = CAN_CAST, at = @At("HEAD"), cancellable = true, require = 1, expect = 1, remap = false)
+    private void jawms$guardParticipantRetry(ItemStack stack, Spell spell, EntityPlayer player,
+            EnumHand hand, int tick, SpellModifiers modifiers, CallbackInfoReturnable<Boolean> callback) {
+        if ((player.world.isRemote && JustAnotherWizardryManaSystemMod.proxy.isParticipantInputBlocked())
+                || (!player.world.isRemote && ParticipantUseService.retryBlocked(player))) callback.setReturnValue(false);
+    }
+
+    @WrapMethod(method = RIGHT_CLICK, require = 1, expect = 1, remap = true)
+    private ActionResult<ItemStack> jawms$physicalOrigin(World world, EntityPlayer player, EnumHand hand,
+            Operation<ActionResult<ItemStack>> original) {
+        if (!world.isRemote && ParticipantUseService.retryBlocked(player)) {
+            return new ActionResult<>(net.minecraft.util.EnumActionResult.FAIL, player.getHeldItem(hand));
+        }
+        if (world.isRemote) {
+            ActionResult<ItemStack> result = original.call(world, player, hand);
+            if (result.getType() == net.minecraft.util.EnumActionResult.SUCCESS)
+                JustAnotherWizardryManaSystemMod.proxy.participantInputStarted(player, hand);
+            return result;
+        }
+        ParticipantUseService.enterOrigin(player, player.getHeldItem(hand), hand, true);
+        try {
+            ActionResult<ItemStack> result = original.call(world, player, hand);
+            if (result.getType() == net.minecraft.util.EnumActionResult.SUCCESS) ParticipantUseService.bindStarted(player, hand);
+            return result;
+        } finally { ParticipantUseService.exitOrigin(); }
+    }
+
+    @WrapMethod(method = USING_TICK, require = 1, expect = 1, remap = false)
+    private void jawms$usingOrigin(ItemStack stack, EntityLivingBase user, int count, Operation<Void> original) {
+        if (user instanceof EntityPlayer && user.world.isRemote)
+            JustAnotherWizardryManaSystemMod.proxy.observeParticipantUseArgument((EntityPlayer) user, stack);
+        if (!(user instanceof EntityPlayer) || user.world.isRemote) { original.call(stack, user, count); return; }
+        EntityPlayer player = (EntityPlayer) user;
+        if (ParticipantUseService.retryBlocked(player)) { player.resetActiveHand(); return; }
+        ParticipantUseService.enterOrigin(player, stack, player.getActiveHand(), false);
+        try { original.call(stack, user, count); }
+        finally { ParticipantUseService.exitOrigin(); }
     }
 
     @Inject(method = RIGHT_CLICK, at = @At("HEAD"), require = 1, expect = 1, remap = true)
@@ -492,10 +543,66 @@ public abstract class ItemWandMixin {
         EntityPlayer player = (EntityPlayer) user;
         Spell spell = electroblob.wizardry.util.WandHelper.getCurrentSpell(stack);
         EnumHand hand = player.getActiveHand();
+        if (!world.isRemote && (ParticipantUseService.suppressesFinish(player, hand, spell)
+                || !ParticipantUseService.permitsFinish(player, stack, hand, spell))) return;
+        FinishContinuation.Capture capture = world.isRemote
+                ? JustAnotherWizardryManaSystemMod.proxy.beginParticipantFinish(player, stack, hand, spell)
+                : FinishContinuation.Capture.LEGACY;
+        if (capture == FinishContinuation.Capture.SUPPRESSED) return;
+        boolean completed = false;
         try {
             original.call(stack, world, user, timeLeft);
+            completed = true;
         } finally {
-            WizardryWandBridge.finishContinuousCast(player, spell, hand);
+            try {
+                if (!world.isRemote) ParticipantUseService.endFinish(player);
+                WizardryWandBridge.finishContinuousCast(player, spell, hand);
+            } finally {
+                if (capture == FinishContinuation.Capture.CAPTURED)
+                    JustAnotherWizardryManaSystemMod.proxy.endParticipantFinish(completed);
+            }
         }
+    }
+
+    @ModifyVariable(method = STOPPED_USING, at = @At("STORE"), index = 7, require = 2, expect = 2, remap = true)
+    private SpellModifiers jawms$copyReleaseModifiers(SpellModifiers modifiers) {
+        return JustAnotherWizardryManaSystemMod.proxy.isParticipantFinishCaptureActive() ? modifiers.copy() : modifiers;
+    }
+
+    @WrapOperation(method = STOPPED_USING, at = @At(value = "INVOKE",
+            target = "Lnet/minecraftforge/fml/common/eventhandler/EventBus;post(Lnet/minecraftforge/fml/common/eventhandler/Event;)Z", remap = false),
+            require = 1, expect = 1, remap = true)
+    private boolean jawms$deferFinishEvent(net.minecraftforge.fml.common.eventhandler.EventBus bus,
+            net.minecraftforge.fml.common.eventhandler.Event event, Operation<Boolean> original) {
+        if (JustAnotherWizardryManaSystemMod.proxy.deferParticipantFinishAction(() -> original.call(bus, event))) return false;
+        return original.call(bus, event);
+    }
+
+    @WrapOperation(method = STOPPED_USING, at = @At(value = "INVOKE",
+            target = "Lelectroblob/wizardry/spell/Spell;finishCasting(Lnet/minecraft/world/World;Lnet/minecraft/entity/EntityLivingBase;DDDLnet/minecraft/util/EnumFacing;ILelectroblob/wizardry/util/SpellModifiers;)V", remap = false),
+            require = 1, expect = 1, remap = true)
+    private void jawms$deferFinishBody(Spell spell, World world, EntityLivingBase user, double x, double y, double z,
+            net.minecraft.util.EnumFacing facing, int tick, SpellModifiers modifiers, Operation<Void> original,
+            @Local(argsOnly = true) ItemStack stack) {
+        Runnable action = () -> original.call(spell, world, user, x, y, z, facing, tick, modifiers);
+        if (world.isRemote && JustAnotherWizardryManaSystemMod.proxy.deferParticipantFinishAction(action)) return;
+        action.run();
+        if (!world.isRemote && user instanceof EntityPlayer) ParticipantUseService.finishedBody((EntityPlayer) user, stack, spell);
+    }
+
+    @WrapOperation(method = STOPPED_USING, at = @At(value = "INVOKE", target = "Lelectroblob/wizardry/spell/Spell;getCooldown()I", remap = false),
+            require = 1, expect = 1, remap = true)
+    private int jawms$captureBaseCooldown(Spell spell, Operation<Integer> original) {
+        int value = original.call(spell);
+        JustAnotherWizardryManaSystemMod.proxy.captureParticipantBaseCooldown(value);
+        return value;
+    }
+
+    @WrapOperation(method = STOPPED_USING, at = @At(value = "INVOKE", target = "Lelectroblob/wizardry/util/WandHelper;setCurrentCooldown(Lnet/minecraft/item/ItemStack;I)V", remap = false),
+            require = 1, expect = 1, remap = true)
+    private void jawms$deferFinishCooldown(ItemStack stack, int value, Operation<Void> original,
+            @Local SpellModifiers modifiers) {
+        if (!JustAnotherWizardryManaSystemMod.proxy.deferParticipantCooldown(value, modifiers,
+                (representative, cooldown) -> original.call(representative, cooldown))) original.call(stack, value);
     }
 }

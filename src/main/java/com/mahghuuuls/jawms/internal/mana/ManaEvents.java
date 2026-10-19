@@ -2,6 +2,7 @@ package com.mahghuuuls.jawms.internal.mana;
 
 import com.mahghuuuls.jawms.Tags;
 import com.mahghuuuls.jawms.internal.casting.WizardryWandBridge;
+import com.mahghuuuls.jawms.internal.casting.ParticipantUseService;
 import com.mahghuuuls.jawms.internal.casting.CastCostContextManager;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentContextManager;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentService;
@@ -39,6 +40,7 @@ public final class ManaEvents {
         if (event.getEntityPlayer().world.isRemote) {
             return;
         }
+        ParticipantUseService.cancelUse(event.getOriginal());
         ManaProviderRegistry.instance().remove(event.getOriginal());
         ManaProviderRegistry.instance().remove(event.getEntityPlayer());
         ManaState original = event.getOriginal().getCapability(ManaCapability.INSTANCE, null);
@@ -58,12 +60,14 @@ public final class ManaEvents {
         if (state != null) {
             ManaProviderRegistry.instance().consumeDeferredRefresh(event.player);
             WizardryWandBridge.reconcileContinuousCast(event.player);
+            ParticipantUseService.tick(event.player);
             ManaService.tickPlayer(event.player, rules);
         }
     }
 
     @SubscribeEvent
     public void playerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        ParticipantUseService.login(event.player);
         ManaNetwork.synchronizeRules(event.player, GameplayRulesManager.current());
         ManaNetwork.synchronizeLifecycle(event.player, "login");
     }
@@ -80,6 +84,7 @@ public final class ManaEvents {
 
     @SubscribeEvent
     public void playerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        ParticipantUseService.cancelUse(event.player);
         ManaProviderRegistry.instance().remove(event.player);
         ManaService.clearTransientLifecycleState(event.player);
         ManaNetwork.synchronizeRules(event.player, GameplayRulesManager.current());
@@ -88,6 +93,7 @@ public final class ManaEvents {
 
     @SubscribeEvent
     public void playerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
+        ParticipantUseService.remove(event.player);
         ManaService.clearTransientLifecycleState(event.player);
         ManaProviderRegistry.instance().remove(event.player);
     }

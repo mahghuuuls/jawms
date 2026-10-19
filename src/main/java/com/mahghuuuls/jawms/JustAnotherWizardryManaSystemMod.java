@@ -108,6 +108,7 @@ public final class JustAnotherWizardryManaSystemMod {
 
     @Mod.EventHandler
     public void serverStopped(FMLServerStoppedEvent event) {
+        com.mahghuuuls.jawms.internal.casting.ParticipantUseService.clear();
         GameplayRulesManager.serverStopped();
         ManaProviderRegistry.instance().clearRuntimeState();
     }

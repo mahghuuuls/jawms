@@ -16,6 +16,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ItemWandBytecodeContractTest {
 
+    @Test void terminalFinalizationRemainsAfterTheWholeSuccessfulVanillaCast() throws IOException {
+        java.util.List<String> calls = new java.util.ArrayList<>();
+        try (InputStream input = ItemWandBytecodeContractTest.class.getResourceAsStream("/com/mahghuuuls/jawms/mixin/ItemWandMixin.class")) {
+            assertNotNull(input);
+            new ClassReader(input).accept(new ClassVisitor(Opcodes.ASM5) {
+                @Override public MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] exceptions) {
+                    if (!name.equals("jawms$cleanupReservation")) return null;
+                    return new MethodVisitor(Opcodes.ASM5) {
+                        @Override public void visitMethodInsn(int opcode, String owner, String method, String descriptor, boolean iface) {
+                            calls.add(owner + "." + method);
+                        }
+                    };
+                }
+            }, 0);
+        }
+        int original = calls.indexOf("com/llamalad7/mixinextras/injector/wrapoperation/Operation.call");
+        // javac duplicates finally for the pre-original depth-rejection return as well as success/throw.
+        int close = calls.lastIndexOf("com/mahghuuuls/jawms/internal/casting/ParticipantUseService.exitCast");
+        assertTrue(original >= 0 && close > original,
+                "Terminal reset must follow the whole original cast, including vanilla reactivation; runtime must still prove transforms");
+    }
+
     private static final String CAN_CAST_DESCRIPTOR =
             "(Lnet/minecraft/item/ItemStack;"
                     + "Lelectroblob/wizardry/spell/Spell;"
@@ -65,6 +87,13 @@ class ItemWandBytecodeContractTest {
         assertEquals(4, visitor.rightClickReturns);
         assertEquals(1, visitor.usingTickStopActiveHandCalls);
         assertEquals(1, visitor.stoppedUsingGetManaCalls);
+        assertEquals(2, visitor.stoppedModifiersStores);
+        assertEquals(1, visitor.finishEvents);
+        assertEquals(1, visitor.finishBodies);
+        assertEquals(1, visitor.finishCooldownReads);
+        assertEquals(1, visitor.finishCooldownWrites);
+        assertTrue(visitor.finishEventPosition < visitor.finishBodyPosition);
+        assertTrue(visitor.finishBodyPosition < visitor.finishCooldownPosition);
         assertTrue(visitor.addInformationFound);
         assertEquals(1, visitor.tooltipGetManaCalls);
         assertEquals(1, visitor.tooltipGetManaCapacityCalls);
@@ -94,6 +123,8 @@ class ItemWandBytecodeContractTest {
         private int rightClickReturns;
         private int usingTickStopActiveHandCalls;
         private int stoppedUsingGetManaCalls;
+        private int stoppedModifiersStores, finishEvents, finishBodies, finishCooldownReads, finishCooldownWrites;
+        private int finishPosition, finishEventPosition, finishBodyPosition, finishCooldownPosition;
         private boolean addInformationFound;
         private int tooltipGetManaCalls;
         private int tooltipGetManaCapacityCalls;
@@ -225,6 +256,9 @@ class ItemWandBytecodeContractTest {
             if ("onPlayerStoppedUsing".equals(name)
                     && STOPPED_USING_DESCRIPTOR.equals(descriptor)) {
                 return new MethodVisitor(Opcodes.ASM5) {
+                    @Override public void visitVarInsn(int opcode, int variable) {
+                        if (opcode == Opcodes.ASTORE && variable == 7) stoppedModifiersStores++;
+                    }
                     @Override
                     public void visitMethodInsn(
                             int opcode,
@@ -233,6 +267,15 @@ class ItemWandBytecodeContractTest {
                             String invokedDescriptor,
                             boolean isInterface
                     ) {
+                        finishPosition++;
+                        if ("net/minecraftforge/fml/common/eventhandler/EventBus".equals(owner)
+                                && "post".equals(invokedName)) { finishEvents++; finishEventPosition = finishPosition; }
+                        if ("electroblob/wizardry/spell/Spell".equals(owner)
+                                && "finishCasting".equals(invokedName)) { finishBodies++; finishBodyPosition = finishPosition; }
+                        if ("electroblob/wizardry/spell/Spell".equals(owner)
+                                && "getCooldown".equals(invokedName)) finishCooldownReads++;
+                        if ("electroblob/wizardry/util/WandHelper".equals(owner)
+                                && "setCurrentCooldown".equals(invokedName)) { finishCooldownWrites++; finishCooldownPosition = finishPosition; }
                         if ("electroblob/wizardry/item/ItemWand".equals(owner)
                                 && "getMana".equals(invokedName)
                                 && "(Lnet/minecraft/item/ItemStack;)I".equals(invokedDescriptor)) {

@@ -45,21 +45,26 @@ public final class CastCostFixture implements ICastCostParticipant {
 
     @Mod.EventHandler public void preInit(FMLPreInitializationEvent event) {
         MinecraftForge.EVENT_BUS.register(this);
-        ManaApi.registerCastCostParticipant(new ResourceLocation(ID, "resource"), this);
+        ContinuousCastFixture.initialize();
+        if (!Boolean.getBoolean("jawms.castFixtureRegistrationOff"))
+            ManaApi.registerCastCostParticipant(new ResourceLocation(ID, "resource"), this);
     }
     @SubscribeEvent public void spells(RegistryEvent.Register<Spell> event) {
         probeSpell = new ProbeSpell();
         event.getRegistry().register(probeSpell);
+        ContinuousCastFixture.registerSpells(event);
     }
     @Mod.EventHandler public void starting(FMLServerStartingEvent event) {
         STATES.clear();
         event.registerServerCommand(new CastFixtureCommand());
+        ContinuousCastFixture.starting(event);
     }
-    @Mod.EventHandler public void stopped(FMLServerStoppedEvent event) { STATES.clear(); }
+    @Mod.EventHandler public void stopped(FMLServerStoppedEvent event) { STATES.clear(); ContinuousCastFixture.clear(); }
 
     @Override public CastCostPreparation prepare(CastAttemptContext context) {
         State state = STATES.get(context.getPlayer().getUniqueID());
-        if (state == null || context.isContinuous()) return CastCostPreparation.notApplicable();
+        if (context.isContinuous()) return ContinuousCastFixture.prepare(context);
+        if (state == null) return CastCostPreparation.notApplicable();
         state.preparations++;
         state.trace.add("prepare");
         state.context = "spell=" + context.getSpellId() + ",hand=" + context.getHand()
@@ -101,6 +106,7 @@ public final class CastCostFixture implements ICastCostParticipant {
     }
 
     @Override public void onAttemptResolved(CastAttemptOutcome outcome) {
+        ContinuousCastFixture.resolved(outcome);
         State state = STATES.get(outcome.getPlayerId());
         if (state == null) return;
         state.notifications++;

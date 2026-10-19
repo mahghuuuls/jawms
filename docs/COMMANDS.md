@@ -91,6 +91,18 @@ Authoritative usage:
 
 `rotations` lists available models; `setup` prepares one; `start` begins a numbered repetition; `note` records outcomes/downtime; `boost` toggles the fixture percentage profile; `profile` and `status` inspect it; and `stop` closes a repetition with its disposition. Failures include invalid player context, rotation, repetition, note, number, boolean, or lifecycle order. Cleanup: `stop aborted` for an active run, set `boost false`, restore the inventory/world state, and discard the generated balance evidence if the session was invalid.
 
+### `/jawms-use-transport`
+
+Command contract: Permission level: 4. Side: logical server controlling only the executing player's separately sided development observer. Audience: JAWMS contributors. Purpose/result: observe real channel frames, hold a real close until a rejected physical press, duplicate/replay previously emitted frames, or withhold the next connection's capability. Failure conditions: invalid syntax, non-player sender, or missing channel observer fails; asynchronous arm/queue failures are explicit log errors and invalidate readiness. Cleanup/reset: release input, run `reset` to deliver any actual held frame and discard history, then inspect empty queues. It never clears a production guard, manufactures permission or performs payment.
+
+Authoritative usage:
+
+```text
+/jawms-use-transport <mode>|capability-off|inspect|reset
+```
+
+Unreleased development helper; no runtime validation or launch approval. Modes: `normal`, `gate`, `stale`, `stall`, `pub-first`, `pair-first`, `bulk`, `direct`, `replace`, `wheel`, `spell`, `upgrade`, `source-reentry`, `callback`, `pair-fault`, `late`, `stale-pair`, `change`. The first four retain the close/input tests. New publication modes additionally require `-Djawms.enablePublicationObserver=true` and program arguments `--mixin mixins.jawms-publication-observer.json` on both named development endpoints. They are not packaged-instance recipes. `direct` fills other hotbar slots with sticks in the disposable world so the real MC|PickItem handler can correct the same wand without changing selection; restore inventory afterward. Explicit modes may mutate the operator's inventory/spell/upgrade context at the reached pending/copy/Finish boundary. They never invoke a validity guard or create provenance/normal permission. `gate` requires an observed rejected press before delivery; `stall` requires explicit teardown/reconnect. Timeout cannot be recovered by this command. One bounded local-operator byte history may survive disconnect to test old-epoch rejection; no player/world/callback references survive disconnect. Observer identity space is bounded to256 objects and2048 lines per explicit reset; overflow marks evidence UNREACHED, not a pass. Pair/application queues are bounded to256 each. Neither helper, observer Mixin configuration nor command ships in JAWMS or Developer Tools.
+
 ## API Compatibility Fixtures
 
 Availability: separately compiled compatibility fixtures used by the JAWMS project; not shipped in primary JAWMS or Developer Tools. Audience: JAWMS API maintainers and compatibility reviewers. Fixture behavior is not a public compatibility promise.
@@ -108,6 +120,18 @@ Authoritative usage:
 `base` equips the registered Wizardry Light spell instead of the fixture spell. Every setup starts the fixture balance at 40, mana at 50 and hunger at 20. A paid fixture effect costs four fixture units. Absent/refuse/free cases are explicit and log the distinction. The ordinary synthetic effect shows "Cast fixture: effect reached" without damaging entities or changing blocks. Probe false/throw uses the real wand canCast/cast path with intentional exceptions caught outside the effect, not an ordinary uncaught world tick. Build with `castCostFixtureJar`/`reobfCastCostFixtureJar`; add `-PjawmsIncludeCastCostFixture=true` to development launches. Logs use `CAST_FIXTURE`. Never install the frozen API-1.6 consumer and rebuilt API compatibility fixture together; their mod IDs match.
 
 Development launches load the deobfuscated fixture JAR as one mod origin containing both classes and spell properties. Separate class/resource directories are insufficient because Wizardry scans the mod's own origin for spell JSON. `verifyCastCostFixtureDevelopmentLaunch` checks both development launch classpaths without starting Minecraft; run it with `-PjawmsIncludeCastCostFixture=true` to check the enabled fixture cohort.
+
+### `/jawms-continuous-fixture`
+
+Command contract: Permission level: 2. Side: logical server/integrated server, separate public-only cast-cost fixture. Audience: JAWMS casting/API maintainers. Purpose/result: select harmless continuous cohorts, independent side-keyed effect/finish counters and permitted partial synthetic resource payments. Failure conditions: invalid syntax/mode, non-server-player sender, active item use, undiscovered spell properties or a maximum other than the required 100 fails setup. Cleanup/reset: release use first; `setup` replaces the fixture state and wand, `teardown` removes resource state; neither resets production protocol state. Restore inventory/config and remove the fixture after testing.
+
+Authoritative usage:
+
+```text
+/jawms-continuous-fixture setup <mode> [main|off] | inspect | teardown
+```
+
+Unreleased development candidate; implementation and automated review are in progress, with no runtime acceptance. Modes are normal, terminal, creative, zero, zero-portion, prediction, inapplicable, refused, invalidated, chargeup, synthetic, nofinish, tick-interrupt and creative-interrupt. The last two return not-applicable and cancel a real server SpellCastEvent.Tick after two successful effects; ordinary Finish remains eligible, unlike a cancelled stop callback. Fixed spell rates are 4/1/0 and charge-up 200. Three fixture units per applicable effect, with permitted terminal partial payment; terminal/Creative/zero start at 2 and zero-portion at 5. Other cohorts start at 1,000,000. `prediction` records a provider-local terminal estimate but its actual receipt continues; no prediction API exists. Public fixture cooldown counters observe positive transitions, not setter invocation counts. The separate development observer records actual setter targets. Disable registration only at startup with `-Djawms.castFixtureRegistrationOff=true` for the separate empty-registry cohort. Do not change this flag during a connection. Bundles are retained in `docs/verification/continuous-bundles.json`, not installed or live-verified.
 
 ### `/jawms-api-fixture`
 

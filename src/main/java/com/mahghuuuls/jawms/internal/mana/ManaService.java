@@ -365,7 +365,7 @@ public final class ManaService implements IManaService {
     public static void completeParticipatingCast(EntityPlayer player, boolean continuous,
             EnumHand hand, ResourceLocation spellId) {
         ManaState state = requireMutableState(player);
-        if (continuous) state.markContinuousCastSuccessful(hand, spellId);
+        if (continuous && !player.isCreative()) state.markContinuousCastSuccessful(hand, spellId);
         else if (!player.isCreative()) startRegenerationLockout(player, state);
     }
 
