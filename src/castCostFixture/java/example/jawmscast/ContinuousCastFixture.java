@@ -49,7 +49,6 @@ public final class ContinuousCastFixture {
 
     static void initialize() {
         MinecraftForge.EVENT_BUS.register(new ContinuousCastFixture());
-        FMLCommonHandler.instance().bus().register(new ContinuousCastFixture());
         channel = NetworkRegistry.INSTANCE.newSimpleChannel("jawms_cast_counts");
         channel.registerMessage(CounterHandler.class, CounterMessage.class, 0, Side.CLIENT);
     }

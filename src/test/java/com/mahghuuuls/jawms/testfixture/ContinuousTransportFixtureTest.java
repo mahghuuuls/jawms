@@ -26,6 +26,71 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ContinuousTransportFixtureTest {
     @BeforeAll static void bootstrap() { net.minecraft.init.Bootstrap.register(); }
+    @Test void duplicateConnectionNotificationsKeepTheAttachedObserverOnBothSides() throws Exception {
+        for (Side side : Side.values()) {
+            EmbeddedChannel wire = new EmbeddedChannel();
+            wire.pipeline().addLast("packet_handler", new ChannelInboundHandlerAdapter());
+            net.minecraft.network.NetworkManager manager = org.mockito.Mockito.mock(net.minecraft.network.NetworkManager.class);
+            org.mockito.Mockito.when(manager.channel()).thenReturn(wire);
+            try {
+                install(manager, side); install(manager, side); wire.runPendingTasks();
+                ContinuousTransportFixture.Hook hook = ContinuousTransportFixture.clientHook(manager);
+                assertNotNull(hook);
+                assertSame(wire.pipeline().get("jawms_c007_observer"), hook, "Lookup must own the installed observer, not a second unattached instance");
+                assertSame(wire.pipeline().context(hook), hook.context);
+                assertEquals(side, hook.side);
+                assertDoesNotThrow(() -> hook.configure(ContinuousTransportFixture.Mode.NORMAL, UUID.randomUUID()));
+                wire.runPendingTasks(); wire.checkException();
+                assertNotNull(hook.owner);
+                install(manager, side); wire.runPendingTasks();
+                assertSame(hook, ContinuousTransportFixture.clientHook(manager));
+            } finally { wire.finishAndReleaseAll(); }
+            assertNull(ContinuousTransportFixture.clientHook(manager), "Disconnect must retire the published lookup");
+        }
+    }
+    @Test void queuedInstallDoesNotExposeAnObserverBeforeAttachmentAndClosedChannelsStayRetired() throws Exception {
+        EmbeddedChannel wire = new EmbeddedChannel();
+        wire.pipeline().addLast("packet_handler", new ChannelInboundHandlerAdapter());
+        net.minecraft.network.NetworkManager manager = org.mockito.Mockito.mock(net.minecraft.network.NetworkManager.class);
+        org.mockito.Mockito.when(manager.channel()).thenReturn(wire);
+        try {
+            install(manager, Side.SERVER);
+            assertNull(ContinuousTransportFixture.clientHook(manager), "Queued installation is not readiness");
+            wire.runPendingTasks();
+            assertNotNull(ContinuousTransportFixture.clientHook(manager));
+            wire.close(); wire.runPendingTasks();
+            install(manager, Side.SERVER); wire.runPendingTasks();
+            assertNull(ContinuousTransportFixture.clientHook(manager));
+        } finally { wire.finishAndReleaseAll(); }
+    }
+    private static void install(net.minecraft.network.NetworkManager manager, Side side) throws Exception {
+        java.lang.reflect.Constructor<ContinuousTransportFixture> constructor = ContinuousTransportFixture.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        ContinuousTransportFixture listener = constructor.newInstance();
+        if (side == Side.CLIENT) listener.client(new net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientConnectedToServerEvent(manager, "MODDED"));
+        else listener.server(new net.minecraftforge.fml.common.network.FMLNetworkEvent.ServerConnectionFromClientEvent(manager));
+    }
+    @Test void removingAnObserverRetiresItsLookupAndReconnectUsesANewAttachedObserver() throws Exception {
+        net.minecraft.network.NetworkManager manager = org.mockito.Mockito.mock(net.minecraft.network.NetworkManager.class);
+        EmbeddedChannel first = new EmbeddedChannel(), second = new EmbeddedChannel();
+        first.pipeline().addLast("packet_handler", new ChannelInboundHandlerAdapter());
+        second.pipeline().addLast("packet_handler", new ChannelInboundHandlerAdapter());
+        org.mockito.Mockito.when(manager.channel()).thenReturn(first);
+        try {
+            install(manager, Side.CLIENT); first.runPendingTasks();
+            ContinuousTransportFixture.Hook old = ContinuousTransportFixture.clientHook(manager);
+            first.pipeline().remove(old);
+            assertNull(ContinuousTransportFixture.clientHook(manager));
+            org.mockito.Mockito.when(manager.channel()).thenReturn(second);
+            install(manager, Side.CLIENT); second.runPendingTasks();
+            ContinuousTransportFixture.Hook current = ContinuousTransportFixture.clientHook(manager);
+            assertNotNull(current); assertNotSame(old, current);
+            assertSame(second.pipeline().get("jawms_c007_observer"), current);
+            first.finishAndReleaseAll();
+            assertSame(current, ContinuousTransportFixture.clientHook(manager));
+        } finally { first.finishAndReleaseAll(); second.finishAndReleaseAll(); }
+        assertNull(ContinuousTransportFixture.clientHook(manager));
+    }
     @Test @SuppressWarnings("unchecked") void withheldCapabilityConsumesTheNeverEncodedOriginalPayload() throws Exception {
         UUID owner = UUID.randomUUID();
         net.minecraft.entity.player.EntityPlayerMP player = org.mockito.Mockito.mock(net.minecraft.entity.player.EntityPlayerMP.class);

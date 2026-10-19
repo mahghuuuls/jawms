@@ -60,7 +60,7 @@ public final class ContinuousTransportFixture {
     static void initialize() {
         if (initialized) return;
         initialized = true;
-        FMLCommonHandler.instance().bus().register(new ContinuousTransportFixture());
+        // FML's bus is an alias of the Forge event bus in 1.12.2.
         MinecraftForge.EVENT_BUS.register(new ContinuousTransportFixture());
         controls = NetworkRegistry.INSTANCE.newSimpleChannel("jawms_c007_control");
         controls.registerMessage(ControlHandler.class, Control.class, 0, Side.CLIENT);
@@ -84,10 +84,21 @@ public final class ContinuousTransportFixture {
     @SubscribeEvent public void client(FMLNetworkEvent.ClientConnectedToServerEvent event) { install(event.getManager(), Side.CLIENT); }
     @SubscribeEvent public void server(FMLNetworkEvent.ServerConnectionFromClientEvent event) { install(event.getManager(), Side.SERVER); }
     private static void install(NetworkManager manager, Side side) {
-        Hook hook = new Hook(manager, side); HOOKS.put(manager, hook);
-        manager.channel().eventLoop().execute(() -> {
-            if (manager.channel().pipeline().get(NAME) == null) manager.channel().pipeline().addBefore("packet_handler", NAME, hook);
-            LOG.info("USE_TRANSPORT install side={} pipeline={}", side, manager.channel().pipeline().names());
+        Channel channel = manager.channel();
+        channel.eventLoop().execute(() -> {
+            if (!channel.isActive()) return;
+            ChannelHandler installed = channel.pipeline().get(NAME);
+            if (installed == null) {
+                installed = new Hook(manager, side);
+                channel.pipeline().addBefore("packet_handler", NAME, installed);
+            }
+            if (!(installed instanceof Hook)) throw new IllegalStateException("Fixture observer name already owned by another handler; stop validation");
+            Hook hook = (Hook) installed;
+            if (hook.manager != manager || hook.side != side || hook.context == null || hook.context != channel.pipeline().context(hook))
+                throw new IllegalStateException("Fixture observer attachment identity mismatch; stop validation");
+            // Publish only the actual attached handler; duplicate notifications reuse it.
+            HOOKS.put(manager, hook);
+            LOG.info("USE_TRANSPORT install side={} pipeline={}", side, channel.pipeline().names());
         });
     }
     public static Hook clientHook(NetworkManager manager) { return HOOKS.get(manager); }
@@ -380,12 +391,16 @@ public final class ContinuousTransportFixture {
             });
         }
         @Override public void channelInactive(ChannelHandlerContext context) throws Exception {
+            retire();
+            context.fireChannelInactive();
+        }
+        @Override public void handlerRemoved(ChannelHandlerContext context) { retire(); }
+        private void retire() {
             if (manager != null) HOOKS.remove(manager, this);
             held = priorClose = lastClose = lastRelease = previousRelease = null; queued = 0;
             for (PublicationHold pair : publications) PublicationFixture.payload(pair.marker).release(); publications.clear(); applying.clear();
             if (marker != null) PublicationFixture.payload(marker).release(); marker = null; metadata = null;
             if (owner != null) PublicationFixture.reset(owner, side == Side.CLIENT);
-            context.fireChannelInactive();
         }
         private static int kind(FMLProxyPacket packet) {
             if (!"jawms".equals(packet.channel()) || !packet.payload().isReadable() || packet.payload().readableBytes() > 512) return -1;

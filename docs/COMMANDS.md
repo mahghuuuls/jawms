@@ -103,6 +103,10 @@ Authoritative usage:
 
 Unreleased development helper; no runtime validation or launch approval. Modes: `normal`, `gate`, `stale`, `stall`, `pub-first`, `pair-first`, `bulk`, `direct`, `replace`, `wheel`, `spell`, `upgrade`, `source-reentry`, `callback`, `pair-fault`, `late`, `stale-pair`, `change`. The first four retain the close/input tests. New publication modes additionally require `-Djawms.enablePublicationObserver=true` and program arguments `--mixin mixins.jawms-publication-observer.json` on both named development endpoints. They are not packaged-instance recipes. `direct` fills other hotbar slots with sticks in the disposable world so the real MC|PickItem handler can correct the same wand without changing selection; restore inventory afterward. Explicit modes may mutate the operator's inventory/spell/upgrade context at the reached pending/copy/Finish boundary. They never invoke a validity guard or create provenance/normal permission. `gate` requires an observed rejected press before delivery; `stall` requires explicit teardown/reconnect. Timeout cannot be recovered by this command. One bounded local-operator byte history may survive disconnect to test old-epoch rejection; no player/world/callback references survive disconnect. Observer identity space is bounded to256 objects and2048 lines per explicit reset; overflow marks evidence UNREACHED, not a pass. Pair/application queues are bounded to256 each. Neither helper, observer Mixin configuration nor command ships in JAWMS or Developer Tools.
 
+Each fixture subscribes only once to Forge's event bus (the FML accessor aliases it in 1.12.2).
+Connection notifications are idempotent: the observer lookup is published only after the named
+pipeline handler is attached, and removal/disconnect retires it. A missing observer is not readiness.
+
 Contributor observer support lives outside the Mixin-definition package: ordinary callable
 classes must not be placed under `com.mahghuuuls.jawms.testfixture.publication` or its
 subpackages. The packet observers separately target the named SetSlot and WindowItems
