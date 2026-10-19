@@ -1,5 +1,7 @@
 package com.mahghuuuls.jawms.testfixture.publication;
 
+import com.mahghuuuls.jawms.testfixture.observation.PublicationFixture;
+
 import electroblob.wizardry.event.SpellCastEvent;
 import electroblob.wizardry.spell.Spell;
 import electroblob.wizardry.util.SpellModifiers;

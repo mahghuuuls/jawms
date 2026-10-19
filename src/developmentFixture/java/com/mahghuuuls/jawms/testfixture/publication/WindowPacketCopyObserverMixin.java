@@ -1,0 +1,23 @@
+package com.mahghuuuls.jawms.testfixture.publication;
+
+import com.mahghuuuls.jawms.testfixture.observation.PublicationFixture;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import net.minecraft.item.ItemStack;
+import net.minecraft.network.play.server.SPacketWindowItems;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+
+@Mixin(value = SPacketWindowItems.class, remap = false)
+public abstract class WindowPacketCopyObserverMixin {
+    // This overload owns the bulk snapshot loop, unlike the empty decoding constructor.
+    @WrapOperation(method = "<init>(ILnet/minecraft/util/NonNullList;)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/item/ItemStack;copy()Lnet/minecraft/item/ItemStack;"),
+            require = 1, expect = 1, allow = 1)
+    private ItemStack observedCopy(ItemStack original, Operation<ItemStack> copy) {
+        boolean tracked = PublicationFixture.beforePacketCopy(original);
+        ItemStack snapshot = copy.call(original);
+        if (tracked) PublicationFixture.afterPacketCopy(original, snapshot);
+        return snapshot;
+    }
+}

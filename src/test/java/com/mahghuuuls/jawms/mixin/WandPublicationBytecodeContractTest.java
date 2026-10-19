@@ -49,7 +49,7 @@ class WandPublicationBytecodeContractTest {
                 "com/mahghuuuls/jawms/internal/casting/WandPublicationPair",
                 "com/mahghuuuls/jawms/testfixture/ContinuousTransportFixture$Hook",
                 "com/mahghuuuls/jawms/testfixture/ContinuousTransportFixture$SignalHandler",
-                "com/mahghuuuls/jawms/testfixture/publication/PublicationFixture" }) {
+                "com/mahghuuuls/jawms/testfixture/observation/PublicationFixture" }) {
             read(type, new ClassVisitor(Opcodes.ASM5) {
                 @Override public MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] exceptions) {
                     return new MethodVisitor(Opcodes.ASM5) {

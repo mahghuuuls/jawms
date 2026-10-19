@@ -1,5 +1,7 @@
 package com.mahghuuuls.jawms.testfixture.publication;
 
+import com.mahghuuuls.jawms.testfixture.observation.PublicationFixture;
+
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.item.ItemStack;

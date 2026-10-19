@@ -1,5 +1,7 @@
 package com.mahghuuuls.jawms.testfixture.publication;
 
+import com.mahghuuuls.jawms.testfixture.observation.PublicationFixture;
+
 import electroblob.wizardry.util.WandHelper;
 import net.minecraft.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;

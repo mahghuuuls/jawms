@@ -1,5 +1,7 @@
 package com.mahghuuuls.jawms.testfixture.publication;
 
+import com.mahghuuuls.jawms.testfixture.observation.PublicationFixture;
+
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.inventory.Container;
 import net.minecraft.item.ItemStack;

@@ -11,7 +11,7 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.common.MinecraftForge;
 import electroblob.wizardry.event.SpellCastEvent;
-import com.mahghuuuls.jawms.testfixture.publication.PublicationFixture;
+import com.mahghuuuls.jawms.testfixture.observation.PublicationFixture;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import java.lang.reflect.Field;

@@ -1,5 +1,7 @@
 package com.mahghuuuls.jawms.testfixture.publication;
 
+import com.mahghuuuls.jawms.testfixture.observation.PublicationFixture;
+
 import com.mahghuuuls.jawms.internal.casting.WandBinding;
 import electroblob.wizardry.spell.Spell;
 import net.minecraft.entity.player.EntityPlayer;

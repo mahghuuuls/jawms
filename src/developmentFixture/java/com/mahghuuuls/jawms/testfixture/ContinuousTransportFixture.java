@@ -25,7 +25,7 @@ import electroblob.wizardry.util.WandHelper;
 import electroblob.wizardry.registry.WizardryItems;
 import com.mahghuuuls.jawms.internal.casting.WandPublicationRecord;
 import com.mahghuuuls.jawms.internal.casting.WandPublicationPair;
-import com.mahghuuuls.jawms.testfixture.publication.PublicationFixture;
+import com.mahghuuuls.jawms.testfixture.observation.PublicationFixture;
 import net.minecraft.server.MinecraftServer;
 import electroblob.wizardry.event.SpellCastEvent;
 import net.minecraftforge.common.MinecraftForge;

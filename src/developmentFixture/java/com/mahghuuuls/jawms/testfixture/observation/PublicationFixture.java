@@ -1,4 +1,4 @@
-package com.mahghuuuls.jawms.testfixture.publication;
+package com.mahghuuuls.jawms.testfixture.observation;
 
 import com.mahghuuuls.jawms.testfixture.ContinuousTransportFixture;
 import electroblob.wizardry.util.WandHelper;
@@ -17,7 +17,10 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** Opt-in source-checkout observer. Never grants provenance, validity, permission, or payment. */
+/**
+ * Callable observer support, deliberately outside the reserved Mixin-definition package.
+ * Never grants provenance, validity, permission, or payment.
+ */
 public final class PublicationFixture {
     private static final Logger LOG = LogManager.getLogger("jawms_c007_publication");
     private static final Map<Object, InventoryPlayer> INVENTORIES = new IdentityHashMap<>();

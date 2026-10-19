@@ -1,5 +1,7 @@
 package com.mahghuuuls.jawms.testfixture.publication;
 
+import com.mahghuuuls.jawms.testfixture.observation.PublicationFixture;
+
 import com.mahghuuuls.jawms.internal.casting.ServerWandBindings;
 import net.minecraft.inventory.Slot;
 import net.minecraft.entity.player.InventoryPlayer;

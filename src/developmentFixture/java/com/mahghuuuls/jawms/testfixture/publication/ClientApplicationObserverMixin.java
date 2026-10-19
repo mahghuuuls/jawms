@@ -1,5 +1,7 @@
 package com.mahghuuuls.jawms.testfixture.publication;
 
+import com.mahghuuuls.jawms.testfixture.observation.PublicationFixture;
+
 import com.mahghuuuls.jawms.client.ClientWandPublications;
 import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.network.Packet;

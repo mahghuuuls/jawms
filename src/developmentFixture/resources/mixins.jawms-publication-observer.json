@@ -4,7 +4,7 @@
   "package": "com.mahghuuuls.jawms.testfixture.publication",
   "target": "@env(DEFAULT)",
   "compatibilityLevel": "JAVA_8",
-  "mixins": ["SourceObserverMixin", "CopyToSendObserverMixin", "PacketCopyObserverMixin", "InventoryWriteObserverMixin", "CooldownObserverMixin", "OriginalReleaseObserverMixin", "FinishConstructionObserverMixin"],
+  "mixins": ["SourceObserverMixin", "CopyToSendObserverMixin", "PacketCopyObserverMixin", "WindowPacketCopyObserverMixin", "InventoryWriteObserverMixin", "CooldownObserverMixin", "OriginalReleaseObserverMixin", "FinishConstructionObserverMixin"],
   "client": ["ClientCaptureObserverMixin", "ClientApplicationObserverMixin"],
   "injectors": {"defaultRequire": 1}
 }
