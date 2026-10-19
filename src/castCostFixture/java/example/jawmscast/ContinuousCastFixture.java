@@ -42,8 +42,7 @@ public final class ContinuousCastFixture {
     private static final Logger LOG = LogManager.getLogger(CastCostFixture.ID);
     private static final Map<UUID, State> SERVER = new HashMap<>();
     private static final Map<UUID, Counts> CLIENT = new HashMap<>();
-    private static final List<Spell> SPELLS = Arrays.asList(new Stream("stream"), new Stream("slow_stream"),
-            new Stream("free_stream"), new Stream("charging_stream"));
+    private static final List<Spell> SPELLS = new ArrayList<>();
     private static final ResourceLocation SETUP = new ResourceLocation(CastCostFixture.ID, "continuous_setup");
     private static SimpleNetworkWrapper channel;
     private ContinuousCastFixture() {}
@@ -54,7 +53,14 @@ public final class ContinuousCastFixture {
         channel = NetworkRegistry.INSTANCE.newSimpleChannel("jawms_cast_counts");
         channel.registerMessage(CounterHandler.class, CounterMessage.class, 0, Side.CLIENT);
     }
-    static void registerSpells(RegistryEvent.Register<Spell> event) { SPELLS.forEach(event.getRegistry()::register); }
+    static void registerSpells(RegistryEvent.Register<Spell> event) {
+        // Construction consumes Wizardry network IDs; preInit support must not run it before built-in registration.
+        for (String name : Arrays.asList("stream", "slow_stream", "free_stream", "charging_stream")) {
+            Spell spell = new Stream(name);
+            event.getRegistry().register(spell);
+            SPELLS.add(spell);
+        }
+    }
     static void starting(FMLServerStartingEvent event) { SERVER.clear(); event.registerServerCommand(new ContinuousFixtureCommand()); }
     static void clear() { SERVER.clear(); }
 
