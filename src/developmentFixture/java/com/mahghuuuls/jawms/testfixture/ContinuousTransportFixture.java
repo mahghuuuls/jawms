@@ -65,12 +65,16 @@ public final class ContinuousTransportFixture {
         controls = NetworkRegistry.INSTANCE.newSimpleChannel("jawms_c007_control");
         controls.registerMessage(ControlHandler.class, Control.class, 0, Side.CLIENT);
         controls.registerMessage(SignalHandler.class, Signal.class, 1, Side.SERVER);
+        com.mahghuuuls.jawms.testfixture.automation.InputPilotHarness.initialize();
         if (FMLCommonHandler.instance().getSide().isClient()) {
             try { Class.forName("com.mahghuuuls.jawms.testfixture.client.ContinuousTransportObserver").getMethod("install").invoke(null); }
             catch (ReflectiveOperationException failure) { throw new IllegalStateException("Client fixture observer unavailable", failure); }
         }
     }
-    static void register(FMLServerStartingEvent event) { event.registerServerCommand(new TransportCommand()); }
+    static void register(FMLServerStartingEvent event) {
+        event.registerServerCommand(new TransportCommand());
+        com.mahghuuuls.jawms.testfixture.automation.InputPilotHarness.register(event);
+    }
     @SubscribeEvent public void effect(SpellCastEvent.Post event) {
         if (event.getCaster().world.isRemote || !(event.getCaster() instanceof EntityPlayerMP)) return;
         EntityPlayerMP player = (EntityPlayerMP) event.getCaster();

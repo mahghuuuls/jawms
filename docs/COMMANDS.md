@@ -115,6 +115,18 @@ parameterized constructors; their empty decoding constructors do not copy stacks
 selector parser against those exact bytecode copy sites. It does not bootstrap transformed
 Minecraft; an approved development startup and live observation are still required.
 
+### `/jawms-mv02-pilot`
+
+Command contract: Permission level: 4. Side: logical server with an explicitly opted-in connected development client. Audience: JAWMS contributors performing controlled input qualification. Purpose/result: establish a bounded run/world/player/connection preflight, execute existing fixture setup only after client-idle proof, and collect automatic use-key pilot observations. Failure conditions: missing development opt-in/observers/fixture, wrong disposable level, unauthorized or non-player sender, unresolved input, stale live acknowledgement, missing evidence or scope loss stops the pilot; action completion never qualifies input. Cleanup/reset: abort and release only the pilot-owned key, preserve logs, then restore fixture/configuration through the separately approved normal cleanup. Never clears product guards, claims, latches or faults.
+
+Authoritative usage:
+
+```text
+/jawms-mv02-pilot start <normal|terminal|delayed-normal|delayed-terminal> <main|off> <exact-disposable-level> | abort
+```
+
+Disabled by default through `-Djawms.enableInputPilot=true` on both development endpoints; the client additionally needs the separately loaded `mixins.jawms-input-pilot.json`. See [the qualification-harness guide](verification/mv02-automation.md) for preflight, fixed whole-run/freshness bounds, no-bypass limits and offline assertions. Four pilot kinds only; no launch approval, automatic qualification, broad-case runner, reconnect or registration-off restart. Physical anchors and every required matrix variant remain. Neither command, driver, helper nor input Mixin ships in primary JAWMS or Developer Tools.
+
 ## API Compatibility Fixtures
 
 Availability: separately compiled compatibility fixtures used by the JAWMS project; not shipped in primary JAWMS or Developer Tools. Audience: JAWMS API maintainers and compatibility reviewers. Fixture behavior is not a public compatibility promise.

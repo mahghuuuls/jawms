@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "com.mahghuuuls.jawms.testfixture.publication",
+  "target": "@env(DEFAULT)",
+  "compatibilityLevel": "JAVA_8",
+  "client": ["PilotKeyProcessingMixin", "PilotControllerObserverMixin"],
+  "injectors": {"defaultRequire": 1}
+}

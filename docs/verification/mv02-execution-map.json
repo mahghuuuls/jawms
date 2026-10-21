@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "results": "NONE: routing inventory, not executed coverage",
+  "topologies": ["integrated", "dedicated-real-connected-client"],
+  "inputQualification": "UNPROVEN_PER_PRIMITIVE_HAND_TOPOLOGY",
+  "pilotKinds": ["normal", "terminal", "delayed-normal", "delayed-terminal"],
+  "retainedEvidence": "Applicability audit required; no automatic blanket reuse or rerun",
+  "groups": {
+    "P0": {"route": "agent-readiness", "variants": ["source-artifact-classpath", "transforms", "registry-capability", "fixture-discovery", "bounded-empty-state"]},
+    "P1": {"route": "human-anchor-and-qualified-repeat", "variants": ["normal-main", "normal-off"]},
+    "P2": {"route": "human-anchor-and-qualified-repeat", "variants": ["terminal-main", "terminal-off", "held-retry-release-fresh-funded-input"]},
+    "P3": {"route": "qualified-runtime-or-manual", "variants": ["creative", "zero"]},
+    "P4": {"route": "qualified-runtime-or-manual", "variants": ["integer-zero-portion"]},
+    "P5": {"route": "qualified-runtime-or-manual", "variants": ["actual-continue-over-prediction"]},
+    "P6": {"route": "hybrid-delay-anchor", "variants": ["terminal-release-before-close", "blocked-next-input", "fresh-input-after-resolution"]},
+    "P7": {"route": "hybrid-delay-anchor-and-qualified-orders", "variants": ["P7A-normal-main", "P7A-inapplicable", "P7A-normal-off", "P7B-close-before-pair", "P7C-bulk-main", "P7C-bulk-off", "P7D-direct-slot"]},
+    "P8": {"route": "qualified-runtime-or-manual", "variants": ["old-close-release-active-new-use", "old-close-release-terminal-new-use", "offhand", "same-generation-old-publication-before-new-serial", "old-pair-after-new-applied-serial", "retired-generation-old-epoch"]},
+    "P9": {"route": "qualified-runtime-or-manual", "variants": ["chargeup-waiting", "synthetic-child-physical-parent", "stop-cancel-no-finish", "pre-effect-refused", "after-effect-invalidated", "tick-interrupt-survival", "tick-interrupt-creative"]},
+    "P10": {"route": "human-context-anchor-and-real-lifecycle", "variants": ["P10A-hotbar", "P10A-hand-swap", "P10A-drop-or-move", "P10B-equal-replacement", "P10C-same-tick-away-back", "P10D-selected-spell-slot-or-bound-spell", "P10D-upgrade", "P10E-pending-teardown-reconnect", "real-deadline-same-connection-rejection-reconnect"]},
+    "P11": {"route": "real-pair-fault-and-reconnect", "variants": ["missing-or-interposed-partner", "unrelated-vanilla-delivery", "same-connection-rejection", "new-epoch-normal-recovery"]},
+    "P12": {"route": "actual-callback-hooks", "variants": ["copy-to-send-reentry", "original-finish-callback-mutation"]},
+    "negativeCapability": {"route": "real-connection", "variants": ["withheld-capability-before-effect-payment", "restored-real-reconnect"]},
+    "L0": {"route": "startup-off-and-human-legacy-anchor", "variants": ["actual-empty-registry", "immediate-normal-finish", "no-new-close-traffic"]},
+    "L1": {"route": "startup-off-and-human-legacy-anchor", "variants": ["legacy-mana-stop-release-retry"]}
+  },
+  "stopPolicy": "First FAIL or UNREACHED stops; retain raw evidence before correction/reset",
+  "unimplementedBoundaries": ["full variant batch runner", "automatic reconnect", "automatic registration-off restart", "physical fresh funded-input recovery", "input qualification itself"]
+}

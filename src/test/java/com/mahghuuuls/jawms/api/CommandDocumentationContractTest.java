@@ -24,6 +24,10 @@ class CommandDocumentationContractTest {
 
     private static final List<Contract> CONTRACTS = Arrays.asList(
             new Contract(
+                    "Contributor Development Fixtures", "jawms-mv02-pilot",
+                    "PilotCommand", "src/developmentFixture/java/com/mahghuuuls/jawms/testfixture/automation/InputPilotHarness.java"
+            ),
+            new Contract(
                     "API Compatibility Fixtures", "jawms-continuous-fixture",
                     "ContinuousFixtureCommand", "src/castCostFixture/java/example/jawmscast/ContinuousCastFixture.java"
             ),

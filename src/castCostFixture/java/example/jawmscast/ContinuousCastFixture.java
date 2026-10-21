@@ -105,6 +105,10 @@ public final class ContinuousCastFixture {
         State state = SERVER.get(outcome.getPlayerId());
         if (state == null || !SPELLS.stream().anyMatch(s -> s.getRegistryName().equals(outcome.getSpellId()))) return;
         state.resolutions++;
+        state.lastUse = outcome.getUseId(); state.lastAttempt = outcome.getAttemptId();
+        state.outcomeMana += outcome.getPaidMana(); state.outcomeHunger += outcome.getPaidHunger();
+        state.lastStatus = outcome.getStatus().name();
+        state.hand = outcome.getHand();
         LOG.info("CONTINUOUS_FIXTURE resolved status={} stop={} mana={} hunger={} use={} attempt={} participants={}",
                 outcome.getStatus(), outcome.mustStopAfterSuccess(), outcome.getPaidMana(), outcome.getPaidHunger(),
                 outcome.getUseId(), outcome.getAttemptId(), outcome.getParticipants().size());
@@ -157,12 +161,40 @@ public final class ContinuousCastFixture {
                 player.world.isRemote ? "CLIENT" : "SERVER", player.getUniqueID(), c.effects, c.childEffects,
                 c.finishEvents, c.finishBodies, c.cooldownIncreases, Math.max(WandHelper.getCurrentCooldown(player.getHeldItemMainhand()), WandHelper.getCurrentCooldown(player.getHeldItemOffhand())));
     }
+    /** Immutable independent readback for optional development orchestration; never resets a counter. */
+    public static Map<String, String> snapshot(EntityPlayer player) {
+        Counts c = player.world.isRemote ? CLIENT.get(player.getUniqueID())
+                : SERVER.containsKey(player.getUniqueID()) ? SERVER.get(player.getUniqueID()).counts : null;
+        if (c == null) throw new IllegalStateException("Continuous fixture has no established counter baseline");
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("player", player.getUniqueID().toString());
+        result.put("effects", Integer.toString(c.effects)); result.put("childEffects", Integer.toString(c.childEffects));
+        result.put("finishEvents", Integer.toString(c.finishEvents)); result.put("finishBodies", Integer.toString(c.finishBodies));
+        result.put("cooldownIncreases", Integer.toString(c.cooldownIncreases));
+        if (!player.world.isRemote) {
+            State s = SERVER.get(player.getUniqueID());
+            result.put("mode", s.mode.name()); result.put("units", Integer.toString(s.balance));
+            result.put("claimed", Integer.toString(s.claimed)); result.put("paid", Integer.toString(s.paid));
+            result.put("prepare", Integer.toString(s.prepares)); result.put("settle", Integer.toString(s.settles));
+            result.put("resolved", Integer.toString(s.resolutions)); result.put("release", Integer.toString(s.releases));
+            result.put("mana", Integer.toString(ManaApi.getManaService().getCurrentMana(player)));
+            result.put("use", s.lastUse); result.put("attempt", s.lastAttempt);
+            result.put("outcomeMana", Integer.toString(s.outcomeMana)); result.put("outcomeHunger", Integer.toString(s.outcomeHunger));
+            result.put("status", s.lastStatus);
+            result.put("hand", s.hand == EnumHand.OFF_HAND ? "off" : "main");
+        }
+        return Collections.unmodifiableMap(result);
+    }
     private enum Mode { NORMAL, TERMINAL, CREATIVE, ZERO, ZERO_PORTION, PREDICTION, INAPPLICABLE, REFUSED, INVALIDATED, CHARGEUP, SYNTHETIC, NOFINISH, TICK_INTERRUPT, CREATIVE_INTERRUPT }
     private static final class Counts { int effects, childEffects, finishEvents, finishBodies, previousCooldown, cooldownIncreases; }
     private static final class State {
         Mode mode; int balance, claimed, paid, prepares, settles, releases, resolutions, depth, invalidations;
         boolean childInvoked;
         String lastContext = "none";
+        String lastUse = "0", lastAttempt = "0";
+        int outcomeMana, outcomeHunger;
+        String lastStatus = "NONE";
+        EnumHand hand;
         final Counts counts = new Counts();
     }
     private static final class Stream extends Spell {
@@ -211,6 +243,7 @@ public final class ContinuousCastFixture {
                 try { state.mode = Mode.valueOf(args[1].toUpperCase(Locale.ROOT).replace('-', '_')); }
                 catch (IllegalArgumentException invalid) { throw new CommandException(getUsage(sender)); }
                 EnumHand hand = args.length == 3 && "off".equals(args[2]) ? EnumHand.OFF_HAND : EnumHand.MAIN_HAND;
+                state.hand = hand;
                 if (args.length == 3 && !"off".equals(args[2]) && !"main".equals(args[2])) throw new CommandException(getUsage(sender));
                 state.balance = state.mode == Mode.ZERO_PORTION ? 5
                         : EnumSet.of(Mode.TERMINAL, Mode.CREATIVE, Mode.ZERO).contains(state.mode) ? 2 : 1_000_000;

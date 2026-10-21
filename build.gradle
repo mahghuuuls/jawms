@@ -1641,6 +1641,21 @@ tasks.named('check').configure {
             tasks.named('verifyStableReleaseMetadata')
 }
 
+tasks.register('verifyMv02PilotEvidence', JavaExec) {
+    group = 'verification'
+    description = 'Offline pilot log assertions only; never launches Minecraft or qualifies physical input.'
+    dependsOn sourceSets.developmentFixture.classesTaskName
+    mainClass.set('com.mahghuuuls.jawms.testfixture.automation.PilotEvidence')
+    classpath = tasks.named('test', Test).get().classpath
+    javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(8)) })
+    doFirst {
+        def required = ['pilotRun', 'pilotTopology', 'pilotClientLog']
+        required.each { if (!providers.gradleProperty(it).isPresent()) throw new GradleException("Missing -P${it}") }
+        args = required.collect { providers.gradleProperty(it).get() }
+        if (providers.gradleProperty('pilotServerLog').isPresent()) args += providers.gradleProperty('pilotServerLog').get()
+    }
+}
+
 def includeDeveloperToolsInRuns = providers.gradleProperty('jawmsIncludeDeveloperTools')
         .getOrElse('false').toBoolean()
 

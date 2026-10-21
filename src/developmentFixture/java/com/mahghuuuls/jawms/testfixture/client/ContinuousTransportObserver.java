@@ -50,6 +50,17 @@ public final class ContinuousTransportObserver {
         instance.captureSeen = instance.wheelDone = instance.callbackDone = instance.deliveredForPress = false;
         instance.previous = "";
     }
+    /** Read-only access to the actual owner, not a second model of client authority. */
+    public static ClientUseState observedState() {
+        try {
+            if (stateField == null) throw new IllegalStateException("Client observer not installed");
+            return (ClientUseState) stateField.get(null);
+        } catch (IllegalAccessException failure) { throw new IllegalStateException(failure); }
+    }
+    public static boolean discardedInput() {
+        try { return discardedField.getBoolean(observedState()); }
+        catch (IllegalAccessException failure) { throw new IllegalStateException(failure); }
+    }
     private void restoreModifiers(net.minecraft.entity.player.EntityPlayer player) {
         if (changedLive == null) return;
         if (player != null && modifierPlayer.get() == player) {
