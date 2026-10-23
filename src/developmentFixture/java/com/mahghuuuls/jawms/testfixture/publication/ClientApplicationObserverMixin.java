@@ -16,9 +16,22 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import com.mahghuuuls.jawms.testfixture.client.GapClientObservation;
 
 @Mixin(value = ClientWandPublications.class, remap = false)
 public abstract class ClientApplicationObserverMixin {
+    @Inject(method = "receive", at = @At("RETURN"))
+    private static void gapReceive(net.minecraft.network.INetHandler handler, Packet<?> packet,
+            CallbackInfoReturnable<Boolean> callback) {
+        if (!ContinuousTransportFixture.gapObserving()) return;
+        PublicationFixture.log("gap_receiver_disposition", "packet", PublicationFixture.token(packet), "type", packet.getClass().getSimpleName(),
+                "forward", callback.getReturnValue(), "watermark", GapClientObservation.watermark());
+    }
+    @Inject(method = "retired", at = @At("HEAD"))
+    private static void gapRetiring(WandPublicationRecord record, CallbackInfo callback) { GapClientObservation.retiring(record); }
+    @Inject(method = "retired", at = @At("RETURN"))
+    private static void gapRetired(WandPublicationRecord record, CallbackInfo callback) { GapClientObservation.retired(record); }
     @Inject(method = "apply", at = @At("HEAD"))
     private static void observedApply(Packet<?> packet, NetHandlerPlayClient handler, Runnable vanilla, CallbackInfo callback) {
         PublicationFixture.packet("main_apply_scope", packet);

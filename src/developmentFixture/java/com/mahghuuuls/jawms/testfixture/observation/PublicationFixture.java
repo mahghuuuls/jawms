@@ -125,6 +125,7 @@ public final class PublicationFixture {
                 "intent", field(frame, "intent"), "use", field(frame, "use"));
     }
     public static void packet(String event, Object packet) { if (enabled()) log(event, "packet", id(packet)); }
+    public static int token(Object object) { return enabled() ? id(object) : 0; }
     public static boolean beforePacketCopy(ItemStack stack) {
         if (!enabled()) return false;
         synchronized (PublicationFixture.class) {

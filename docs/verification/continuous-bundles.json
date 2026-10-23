@@ -159,6 +159,18 @@
     "description": "Agent reads independent fixture counters, resources, transport queue and original player state",
     "commands": ["jawms-continuous-fixture inspect", "jawms-use-transport inspect", "devtool inspect player", "devtool inspect inventory", "devtool mark C007_TERMINAL_INSPECTED"]
   },
+  "cycle007_terminal_gap_epoch_seed_setup": {
+    "description": "First cast after negotiated startup: retain one real byte-only old-session capsule",
+    "commands": ["jawms-use-transport gap-epoch-seed", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_GAP_EPOCH_SEED_READY"]
+  },
+  "cycle007_terminal_gap_epoch_target_setup": {
+    "description": "Only after verified real reconnect: replay saved old-epoch traffic at first actual new effect",
+    "commands": ["jawms-use-transport gap-epoch-target", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_GAP_EPOCH_TARGET_READY"]
+  },
+  "cycle007_terminal_gap_retired_setup": {
+    "description": "Hold real publication until actual equal-replacement retirement, then release unchanged frames",
+    "commands": ["jawms-use-transport gap-retired", "jawms-continuous-fixture setup normal main", "devtool inspect player", "devtool mark C007_GAP_RETIRED_READY"]
+  },
   "cycle007_terminal_reset": {
     "description": "Readback only: release input first; agent must verify no pending use before the next setup",
     "commands": ["jawms-use-transport inspect", "jawms-continuous-fixture inspect", "devtool inspect player", "devtool mark C007_TERMINAL_RESET_READBACK"]

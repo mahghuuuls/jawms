@@ -51,10 +51,12 @@ public final class ContinuousTransportFixture {
     private static final Set<UUID> WITHOUT_CAPABILITY = ConcurrentHashMap.newKeySet();
     private static final AtomicLong ORDER = new AtomicLong();
     private static final Map<UUID, Saved[]> HISTORY = new ConcurrentHashMap<>();
+    private static final GapReplayCapsule CAPSULE = new GapReplayCapsule();
     private static SimpleNetworkWrapper controls;
     private static boolean initialized;
     public enum Mode { NORMAL, GATE, STALE, STALL, PUB_FIRST, PAIR_FIRST, BULK, DIRECT,
-        REPLACE, WHEEL, SPELL, UPGRADE, SOURCE_REENTRY, CALLBACK, PAIR_FAULT, LATE, STALE_PAIR, CHANGE }
+        REPLACE, WHEEL, SPELL, UPGRADE, SOURCE_REENTRY, CALLBACK, PAIR_FAULT, LATE, STALE_PAIR, CHANGE,
+        GAP_RETIRED, GAP_EPOCH_SEED, GAP_EPOCH_TARGET }
     private ContinuousTransportFixture() {}
 
     static void initialize() {
@@ -79,11 +81,29 @@ public final class ContinuousTransportFixture {
         if (event.getCaster().world.isRemote || !(event.getCaster() instanceof EntityPlayerMP)) return;
         EntityPlayerMP player = (EntityPlayerMP) event.getCaster();
         Hook hook = HOOKS.get(player.connection.netManager);
-        if (hook != null && hook.mode == Mode.STALE && hook.latestIntent > hook.armAfter && !hook.effectObserved) {
+        if (hook != null && hook.mode == Mode.GAP_EPOCH_SEED && !hook.effectObserved) {
+            hook.effectObserved = true;
+            seedPublications(player.getHeldItemMainhand(), () -> player.inventoryContainer.detectAndSendChanges());
+            PublicationFixture.log("gap_seed_publications_requested", "count", 8, "intent", hook.latestIntent);
+        }
+        if (hook != null && (hook.mode == Mode.STALE || hook.mode == Mode.GAP_EPOCH_TARGET)
+                && hook.latestIntent > hook.armAfter && !hook.effectObserved) {
             hook.effectObserved = true;
             controls.sendTo(new Control(7, player.getUniqueID()), player);
             LOG.info("USE_TRANSPORT newer_use_effect intent={} thread={}", hook.latestIntent, Thread.currentThread().getName());
         }
+    }
+    static void seedPublications(ItemStack wand, Runnable publish) {
+        // Only the display maximum changes: positive current cooldown would stop the next effect.
+        int[] original = WandHelper.getMaxCooldowns(wand).clone();
+        if (original.length == 0 || original[0] > Integer.MAX_VALUE - 7)
+            throw new IllegalStateException("Seed max-cooldown baseline missing; UNREACHED");
+        try {
+            for (int i = 1; i <= 7; i++) {
+                int[] pulse = original.clone(); pulse[0] += i;
+                WandHelper.setMaxCooldowns(wand, pulse); publish.run();
+            }
+        } finally { WandHelper.setMaxCooldowns(wand, original); publish.run(); }
     }
     @SubscribeEvent public void client(FMLNetworkEvent.ClientConnectedToServerEvent event) { install(event.getManager(), Side.CLIENT); }
     @SubscribeEvent public void server(FMLNetworkEvent.ServerConnectionFromClientEvent event) { install(event.getManager(), Side.SERVER); }
@@ -106,6 +126,11 @@ public final class ContinuousTransportFixture {
         });
     }
     public static Hook clientHook(NetworkManager manager) { return HOOKS.get(manager); }
+    public static boolean gapObserving() {
+        for (Hook hook : HOOKS.values()) if (hook.mode == Mode.GAP_EPOCH_TARGET || hook.mode == Mode.GAP_RETIRED
+                || hook.mode == Mode.PAIR_FAULT) return PublicationFixture.enabled();
+        return false;
+    }
     public static void sourceCallback(EntityPlayerMP player, Container container, int slot, ItemStack live, ItemStack snapshot) {
         Hook hook = HOOKS.get(player.connection.netManager);
         if (hook == null || hook.mode != Mode.SOURCE_REENTRY || !hook.pendingAction || hook.mutated
@@ -131,6 +156,7 @@ public final class ContinuousTransportFixture {
             if (hook.manager != null) result.setDispatcher(NetworkDispatcher.get(hook.manager));
             return result;
         }
+        Saved(byte[] bytes) { this.bytes = bytes.clone(); }
     }
     public static final class Hook extends ChannelDuplexHandler {
         final NetworkManager manager;
@@ -151,6 +177,7 @@ public final class ContinuousTransportFixture {
         volatile boolean pendingAction, mutated;
         volatile long signalledIntent;
         long heldIntent, heldSerial;
+        boolean gapDisconnected;
         Hook(NetworkManager manager, Side side) { this.manager = manager; this.side = side; }
         @Override public void handlerAdded(ChannelHandlerContext context) { this.context = context; }
         void configure(Mode mode, UUID owner) {
@@ -158,6 +185,15 @@ public final class ContinuousTransportFixture {
                 if (held != null || marker != null || !publications.isEmpty()) throw new IllegalStateException("Cannot reconfigure with held frames; drain/reset explicitly");
                 this.mode = mode; this.owner = owner; staleDelivered = false; effectObserved = false; armAfter = latestIntent;
                 pendingAction = mutated = false; signalledIntent = heldIntent = heldSerial = 0;
+                if (side == Side.CLIENT && CAPSULE.armed() && mode != Mode.GAP_EPOCH_SEED && mode != Mode.GAP_EPOCH_TARGET) {
+                    CAPSULE.clear(); PublicationFixture.log("gap_capsule_cancelled_by_case_change", "mode", mode);
+                }
+                if (side == Side.CLIENT && mode == Mode.GAP_EPOCH_SEED) CAPSULE.arm(owner, System.nanoTime());
+                if (side == Side.CLIENT && mode == Mode.GAP_EPOCH_TARGET) {
+                    GapReplayCapsule.Snapshot capsule = CAPSULE.inspect(owner, System.nanoTime());
+                    if (!capsule.disconnected) throw new IllegalStateException("Epoch target requires real reconnect; UNREACHED");
+                    PublicationFixture.log("gap_capsule_ready", "digest", capsule.digest(), "epoch", capsule.record.epoch, "serial", capsule.record.serial);
+                }
                 readiness = readiness(mode);
                 Saved[] saved = side == Side.CLIENT ? HISTORY.get(owner) : null;
                 if (saved != null && lastClose == null) { lastClose = saved[0]; lastRelease = saved[1]; }
@@ -165,6 +201,7 @@ public final class ContinuousTransportFixture {
             });
         }
         @Override public void channelRead(ChannelHandlerContext context, Object message) throws Exception {
+            if (gapObserving() && message instanceof SPacketHeldItemChange) PublicationFixture.packet("gap_held_receive", message);
             if (side == Side.CLIENT && PublicationFixture.enabled() && owner != null) {
                 if (message instanceof SPacketCustomPayload && WandPublicationPair.CHANNEL.equals(PublicationFixture.channel((SPacketCustomPayload) message))) {
                     SPacketCustomPayload incoming = (SPacketCustomPayload) message;
@@ -190,7 +227,17 @@ public final class ContinuousTransportFixture {
                     }
                     Packet<?> packet = (Packet<?>) message;
                     PublicationFixture.packet("paired_decode", packet);
+                    if (mode == Mode.GAP_EPOCH_SEED && packet instanceof SPacketSetSlot) {
+                        ItemStack stack = ((SPacketSetSlot) packet).getStack();
+                        if (stack.getCount() != 1 || stack.getItem().getRegistryName() == null
+                                || !"ebwizardry:magic_wand".equals(stack.getItem().getRegistryName().toString()))
+                            throw new IllegalStateException("Epoch capsule requires named fixture wand; UNREACHED");
+                        ByteBuf data = PublicationFixture.payload(savedMarker);
+                        byte[] bytes = new byte[data.readableBytes()]; data.getBytes(data.readerIndex(), bytes);
+                        CAPSULE.pair(owner, bytes, GapReplayCapsule.encode((SPacketSetSlot) packet), System.nanoTime());
+                    }
                     boolean hold = mode == Mode.PAIR_FIRST || mode == Mode.LATE
+                            || mode == Mode.GAP_RETIRED && pendingAction
                             || mode == Mode.STALE_PAIR && (publications.isEmpty() || latestIntent <= heldIntent);
                     if (hold) {
                         if (publications.size() == 256) throw new IllegalStateException("Observer pair queue full; card unreached");
@@ -218,6 +265,7 @@ public final class ContinuousTransportFixture {
                     latestIntent = packet.payload().getLong(packet.payload().readerIndex() + 18);
                 if (kind == 7 && side == Side.CLIENT) {
                     priorClose = lastClose; lastClose = new Saved(packet);
+                    if (mode == Mode.GAP_EPOCH_SEED) CAPSULE.frame(owner, lastClose.bytes, true, System.nanoTime());
                     remember();
                     if (holdsClose()) {
                         if (held != null) throw new IllegalStateException("Unexpected second close while fixture holds first");
@@ -238,6 +286,7 @@ public final class ContinuousTransportFixture {
             context.fireChannelRead(message);
         }
         @Override public void write(ChannelHandlerContext context, Object message, ChannelPromise promise) throws Exception {
+            if (gapObserving() && message instanceof SPacketHeldItemChange) PublicationFixture.packet("gap_held_send", message);
             if (owner != null && message instanceof SPacketCustomPayload && WandPublicationPair.CHANNEL.equals(PublicationFixture.channel((SPacketCustomPayload) message))) {
                 WandPublicationRecord record = WandPublicationRecord.read(PublicationFixture.payload((SPacketCustomPayload) message).duplicate());
                 PublicationFixture.log("marker_send", "epoch", record.epoch, "serial", record.serial, "kind", record.kind,
@@ -248,7 +297,10 @@ public final class ContinuousTransportFixture {
                 FMLProxyPacket packet = (FMLProxyPacket) message;
                 int kind = kind(packet);
                 if (kind >= 4) log("frame_send", kind);
-                if (kind == 6 && side == Side.CLIENT) { previousRelease = lastRelease; lastRelease = new Saved(packet); remember(); }
+                if (kind == 6 && side == Side.CLIENT) {
+                    previousRelease = lastRelease; lastRelease = new Saved(packet); remember();
+                    if (mode == Mode.GAP_EPOCH_SEED) CAPSULE.frame(owner, lastRelease.bytes, false, System.nanoTime());
+                }
                 if (kind == 5 && packet.payload().readableBytes() >= 26)
                     latestIntent = packet.payload().getLong(packet.payload().readerIndex() + 18);
                 if (kind == 4 && side == Side.SERVER && manager != null && manager.getNetHandler() instanceof NetHandlerPlayServer
@@ -273,6 +325,9 @@ public final class ContinuousTransportFixture {
             log("old_close_and_release_replayed_after_new_close", 7);
         }
         void replayAfterEffect() {
+            if (mode == Mode.GAP_EPOCH_TARGET) {
+                com.mahghuuuls.jawms.testfixture.client.GapClientObservation.replay(this); return;
+            }
             context.executor().execute(() -> {
                 if (mode != Mode.STALE || lastClose == null) return;
                 deliver(lastClose, true);
@@ -282,6 +337,34 @@ public final class ContinuousTransportFixture {
         }
         private static long sequence(Saved saved) {
             return saved == null || saved.bytes.length < 26 ? 0 : java.nio.ByteBuffer.wrap(saved.bytes, 18, 8).getLong();
+        }
+        public void replayEpoch(UUID epoch, long intent, long use, Object handler) {
+            context.executor().execute(() -> {
+                if (mode != Mode.GAP_EPOCH_TARGET || !context.channel().isActive() || manager.getNetHandler() != handler)
+                    throw new IllegalStateException("Epoch replay connection changed; UNREACHED");
+                long watermark = com.mahghuuuls.jawms.testfixture.client.GapClientObservation.watermark();
+                GapReplayCapsule.Snapshot saved = CAPSULE.consume(owner, epoch, intent, use, watermark, System.nanoTime());
+                PublicationFixture.log("gap_epoch_replay", "digest", saved.digest(), "oldEpoch", saved.record.epoch,
+                        "currentEpoch", epoch, "serial", saved.record.serial, "watermark", watermark,
+                        "intent", intent, "use", use);
+                SPacketCustomPayload marker = new SPacketCustomPayload(WandPublicationPair.CHANNEL, saved.marker());
+                Packet<?> packet = saved.vanilla(); PublicationFixture.packet("gap_epoch_packet", packet);
+                context.fireChannelRead(marker); context.fireChannelRead(packet);
+                deliver(new Saved(saved.close()), true); deliver(new Saved(saved.release()), false);
+                PublicationFixture.log("gap_epoch_replay_complete", "capsuleEmpty", !CAPSULE.armed());
+            });
+        }
+        public void retiredObserved(WandPublicationRecord record, boolean actuallyRetired) {
+            context.executor().execute(() -> {
+                if (mode != Mode.GAP_RETIRED || !pendingAction || !actuallyRetired) return;
+                boolean matches = !publications.isEmpty() && record.epoch.equals(publications.get(0).record.epoch)
+                        && record.entries()[0].generation == publications.get(0).record.entries()[0].generation;
+                if (!matches || held == null) throw new IllegalStateException("Missing retired publication/close; UNREACHED");
+                PublicationFixture.log("gap_retired_replay", "generation", record.entries()[0].generation,
+                        "serial", publications.get(0).record.serial);
+                drainPublications(); Saved close = held; held = null; queued = 0;
+                deliver(close, true); mode = Mode.NORMAL;
+            });
         }
         private void remember() {
             if (side == Side.CLIENT && owner != null) {
@@ -293,7 +376,8 @@ public final class ContinuousTransportFixture {
         public Mode mode() { return mode; }
         private boolean holdsClose() {
             return mode != Mode.NORMAL && mode != Mode.STALE && mode != Mode.PAIR_FIRST
-                    && mode != Mode.LATE && mode != Mode.STALE_PAIR;
+                    && mode != Mode.LATE && mode != Mode.STALE_PAIR
+                    && mode != Mode.GAP_EPOCH_SEED && mode != Mode.GAP_EPOCH_TARGET;
         }
         private void afterMain(Runnable action) {
             FMLCommonHandler.instance().getWorldThread(manager.getNetHandler()).addScheduledTask(action);
@@ -303,6 +387,7 @@ public final class ContinuousTransportFixture {
             signalledIntent = intent;
             context.executor().execute(() -> {
                 readiness.pending(epoch, intent, hand, slot);
+                if (mode == Mode.GAP_RETIRED) pendingAction = true;
                 controls.sendToServer(new Signal(owner, intent));
                 PublicationFixture.log("real_pending_capture", "epoch", epoch, "intent", intent, "slot", slot, "mode", mode);
             });
@@ -335,7 +420,8 @@ public final class ContinuousTransportFixture {
             Mode deliveryMode = mode;
             List<PublicationHold> heldPairs = new ArrayList<>(publications); publications.clear();
             for (PublicationHold pair : heldPairs) {
-                if (deliveryMode != Mode.STALE_PAIR) associate(pair.packet, pair.record);
+                if (deliveryMode != Mode.STALE_PAIR && deliveryMode != Mode.GAP_RETIRED) associate(pair.packet, pair.record);
+                if (deliveryMode == Mode.GAP_RETIRED) PublicationFixture.packet("gap_retired_packet", pair.packet);
                 context.fireChannelRead(pair.marker); context.fireChannelRead(pair.packet);
                 PublicationFixture.log("real_pair_released", "serial", pair.record.serial);
             }
@@ -377,12 +463,17 @@ public final class ContinuousTransportFixture {
                 });
             }
         }
-        public void inspect() {
+        public void inspect() { inspect(owner); }
+        public void inspect(UUID operator) {
             LOG.info("USE_TRANSPORT inspect side={} mode={} queued={} priorClose={} lastClose={} lastRelease={} latestIntent={} order={}",
                     side, mode, queued, priorClose != null, lastClose != null, lastRelease != null, latestIntent, ORDER.incrementAndGet());
+            if (side == Side.CLIENT && CAPSULE.armed()) {
+                PublicationFixture.log("gap_capsule_inspect", "status", CAPSULE.status(operator, System.nanoTime()));
+            }
         }
         public void reset() {
             context.executor().execute(() -> {
+                if (side == Side.CLIENT) CAPSULE.clear();
                 // Deliver an actual held close before disarming; reset never calls a guard or invents permission.
                 Saved frame = held; held = null; queued = 0; mode = Mode.NORMAL;
                 if (frame != null) deliver(frame, true);
@@ -405,6 +496,9 @@ public final class ContinuousTransportFixture {
             for (PublicationHold pair : publications) PublicationFixture.payload(pair.marker).release(); publications.clear(); applying.clear();
             if (marker != null) PublicationFixture.payload(marker).release(); marker = null; metadata = null;
             if (owner != null) PublicationFixture.reset(owner, side == Side.CLIENT);
+            if (side == Side.CLIENT && !gapDisconnected && CAPSULE.armed()) {
+                gapDisconnected = true; CAPSULE.disconnect(owner, System.nanoTime());
+            }
         }
         private static int kind(FMLProxyPacket packet) {
             if (!"jawms".equals(packet.channel()) || !packet.payload().isReadable() || packet.payload().readableBytes() > 512) return -1;
@@ -464,13 +558,15 @@ public final class ContinuousTransportFixture {
             FMLCommonHandler.instance().getWorldThread(context.netHandler).addScheduledTask(() -> {
                 for (Hook hook : HOOKS.values()) if (hook.side == Side.CLIENT && hook.manager.getNetHandler() == context.netHandler) {
                     if (mode(message.code) != null) {
+                        if (mode(message.code) == Mode.GAP_EPOCH_SEED)
+                            com.mahghuuuls.jawms.testfixture.client.GapClientObservation.freshSeed();
                         com.mahghuuuls.jawms.testfixture.client.ContinuousTransportObserver.rearm();
                         hook.configure(mode(message.code), message.owner);
                     }
                     else if (message.code == 7) hook.replayAfterEffect();
                     else if (message.code == 6) {
                         com.mahghuuuls.jawms.testfixture.client.ContinuousTransportObserver.rearm(); hook.reset();
-                    } else hook.inspect();
+                    } else hook.inspect(message.owner);
                 }
             });
             return null;
@@ -502,7 +598,11 @@ public final class ContinuousTransportFixture {
                         packet.readPacketData(data); packet.processPacket(player.connection);
                     } catch (java.io.IOException malformed) { throw new IllegalStateException("Fixture direct-origin packet failed common decoder", malformed); }
                     finally { data.release(); }
-                } else if (hook.mode == Mode.REPLACE) {
+                } else if (hook.mode == Mode.REPLACE || hook.mode == Mode.GAP_RETIRED) {
+                    if (hook.mode == Mode.GAP_RETIRED) {
+                        WandHelper.setCurrentCooldown(original, WandHelper.getCurrentCooldown(original) + 1);
+                        player.inventoryContainer.detectAndSendChanges();
+                    }
                     player.inventoryContainer.detectAndSendChanges();
                     ItemStack copy = original.copy();
                     PublicationFixture.log("equal_replacement", "distinct", copy != original, "equal", ItemStack.areItemStacksEqual(copy, original));
