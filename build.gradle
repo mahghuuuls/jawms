@@ -298,6 +298,11 @@ tasks.named('compileTestJava', JavaCompile).configure {
 }
 
 tasks.named('test', Test).configure {
+    // Headless client-boundary tests load Minecraft signatures but never initialize a display.
+    // Reuse the template's compile libraries; no shipping dependency or native launch is added.
+    classpath += tasks.named('compileJava', JavaCompile).get().classpath.filter {
+        it.name.startsWith('lwjgl-') || it.name.startsWith('lwjgl_util-')
+    }
     classpath += sourceSets.castCostFixture.output
     classpath += sourceSets.developmentFixture.output
     classpath += sourceSets.apiCompatibilityFixture.output

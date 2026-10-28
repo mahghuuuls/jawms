@@ -30,7 +30,9 @@ public final class ClientParticipantUseGuard {
     private static NetHandlerPlayClient connection;
     private static Frame pending;
     private static Origin origin;
-    private static boolean capturing;
+    // The physical client proxy also serves the integrated server. Only the thread opening
+    // the client finish may intercept operations; pending can outlive this capture scope.
+    private static volatile Thread captureOwner;
     private static long lastNanos;
     private static long announced;
     private static EnumHand announcedHand;
@@ -100,12 +102,12 @@ public final class ClientParticipantUseGuard {
             return FinishContinuation.Capture.SUPPRESSED;
         }
         pending = new Frame(player, stack, hand, spell, origin.binding);
-        capturing = true;
+        captureOwner = Thread.currentThread();
         trace("finish_captured");
         return FinishContinuation.Capture.CAPTURED;
     }
-    public static boolean capturing() { return capturing; }
-    private static Frame capture() { return capturing ? pending : null; }
+    public static boolean capturing() { return captureOwner == Thread.currentThread(); }
+    private static Frame capture() { return capturing() ? pending : null; }
     public static boolean defer(Runnable action) {
         if (!capturing()) return false;
         Frame frame = capture();
@@ -121,7 +123,8 @@ public final class ClientParticipantUseGuard {
         return true;
     }
     public static void end(boolean completed) {
-        capturing = false;
+        if (!capturing()) return;
+        captureOwner = null;
         if (!completed && pending != null) {
             pending.continuation.resolve(false); pending = null; origin = null;
             fault("original release failed during finish capture; captured operations discarded");
@@ -225,7 +228,7 @@ public final class ClientParticipantUseGuard {
     }
     private static void clear() {
         if (pending != null) pending.continuation.resolve(false);
-        state = new ClientUseState(); connection = null; pending = null; origin = null; capturing = false;
+        state = new ClientUseState(); connection = null; pending = null; origin = null; captureOwner = null;
         lastNanos = 0; announced = 0; announcedHand = null; announcedSpell = null;
         traces = 0;
         ClientWandPublications.clear();
