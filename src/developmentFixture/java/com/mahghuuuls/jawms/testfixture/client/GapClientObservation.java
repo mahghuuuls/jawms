@@ -5,14 +5,21 @@ import com.mahghuuuls.jawms.client.ClientWandPublications;
 import com.mahghuuuls.jawms.internal.casting.ClientUseState;
 import com.mahghuuuls.jawms.internal.casting.WandBinding;
 import com.mahghuuuls.jawms.internal.casting.WandPublicationRecord;
+import com.mahghuuuls.jawms.internal.casting.WandPublicationPair;
 import com.mahghuuuls.jawms.testfixture.ContinuousTransportFixture;
 import com.mahghuuuls.jawms.testfixture.observation.PublicationFixture;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.entity.player.InventoryPlayer;
+import net.minecraft.network.INetHandler;
+import net.minecraft.network.Packet;
+import net.minecraft.network.play.server.SPacketCustomPayload;
 import net.minecraft.network.play.server.SPacketHeldItemChange;
+import net.minecraft.network.play.server.SPacketSetSlot;
+import net.minecraft.network.play.server.SPacketWindowItems;
 import java.lang.reflect.Field;
 
-/** Read-only, client-thread snapshots; replay submission never asks a guard to validate itself. */
+/** Read-only client observations; replay submission never asks a guard to validate itself. */
 public final class GapClientObservation {
     private static final ThreadLocal<SPacketHeldItemChange> SELECTION = new ThreadLocal<>();
     private static final ThreadLocal<WandBinding> RETIRING = new ThreadLocal<>();
@@ -30,8 +37,29 @@ public final class GapClientObservation {
     public static long watermark() {
         Object session = staticField(ClientWandPublications.class, "session");
         if (session == null) throw new IllegalStateException("Missing real publication session; UNREACHED");
+        return watermark(session);
+    }
+    private static long watermark(Object session) {
         Object receiver = PublicationFixture.field(session, "receiver");
         synchronized (receiver) { return (long) PublicationFixture.field(receiver, "latest"); }
+    }
+    /** Network-thread RETURN probe: budget only the current client's relevant packets, including rejections. */
+    public static void received(INetHandler handler, Packet<?> packet, boolean forward) {
+        if (!PublicationFixture.enabled() || !(handler instanceof NetHandlerPlayClient)) return;
+        boolean relevant = packet instanceof SPacketSetSlot || packet instanceof SPacketWindowItems
+                || packet instanceof SPacketHeldItemChange || packet instanceof SPacketCustomPayload
+                && WandPublicationPair.CHANNEL.equals(((SPacketCustomPayload) packet).getChannelName());
+        if (!relevant) return;
+        Object session = staticField(ClientWandPublications.class, "session");
+        if (session == null || PublicationFixture.field(session, "handler") != handler) return;
+        ContinuousTransportFixture.Hook hook = ContinuousTransportFixture.clientHook(((NetHandlerPlayClient) handler).getNetworkManager());
+        if (hook == null || hook.mode() != ContinuousTransportFixture.Mode.GAP_EPOCH_TARGET
+                && hook.mode() != ContinuousTransportFixture.Mode.GAP_RETIRED
+                && hook.mode() != ContinuousTransportFixture.Mode.PAIR_FAULT) return;
+        // Read the receiver from this captured session; disconnect must not turn a second lookup into a failure.
+        long watermark = watermark(session);
+        PublicationFixture.log("gap_receiver_disposition", "packet", PublicationFixture.token(packet),
+                "type", packet.getClass().getSimpleName(), "forward", forward, "watermark", watermark);
     }
     public static void replay(ContinuousTransportFixture.Hook hook) {
         Minecraft mc = Minecraft.getMinecraft();

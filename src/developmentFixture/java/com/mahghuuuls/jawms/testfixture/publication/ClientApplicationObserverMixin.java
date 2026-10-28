@@ -24,9 +24,7 @@ public abstract class ClientApplicationObserverMixin {
     @Inject(method = "receive", at = @At("RETURN"))
     private static void gapReceive(net.minecraft.network.INetHandler handler, Packet<?> packet,
             CallbackInfoReturnable<Boolean> callback) {
-        if (!ContinuousTransportFixture.gapObserving()) return;
-        PublicationFixture.log("gap_receiver_disposition", "packet", PublicationFixture.token(packet), "type", packet.getClass().getSimpleName(),
-                "forward", callback.getReturnValue(), "watermark", GapClientObservation.watermark());
+        GapClientObservation.received(handler, packet, callback.getReturnValue());
     }
     @Inject(method = "retired", at = @At("HEAD"))
     private static void gapRetiring(WandPublicationRecord record, CallbackInfo callback) { GapClientObservation.retiring(record); }
