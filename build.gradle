@@ -19,6 +19,7 @@ plugins {
 }
 
 apply from: 'gradle/scripts/helpers.gradle'
+apply from: 'gradle/scripts/mixin-bootstrap.gradle'
 
 // Early Assertions
 assertProperty 'mod_version'
@@ -112,8 +113,7 @@ minecraft {
         args << '-Dmixin.checks.interfaces=true'
         args << '-Dmixin.debug.export=true'
     }
-    extraRunJvmArguments.addAll(args)
-    extraRunJvmArguments.addAll(propertyStringList('extra_jvm_args'))
+    extraRunJvmArguments.addAll(withPrimaryCoremod(args + propertyStringList('extra_jvm_args')))
 
     if (propertyBool('use_tags')) {
         if (file('tags.properties').exists()) {
@@ -185,6 +185,18 @@ dependencies {
 }
 
 apply from: 'gradle/scripts/dependencies.gradle'
+
+// This isolated input exercises old loading interfaces; it never participates
+// in production compilation, annotation processing or Minecraft run classpaths.
+configurations {
+    legacyMixinBootstrap {
+        canBeConsumed = false
+        transitive = false
+    }
+}
+dependencies {
+    legacyMixinBootstrap 'zone.rong:mixinbooter:10.7'
+}
 
 sourceSets {
     developerTools {
@@ -569,10 +581,12 @@ tasks.register('verifyDeveloperToolsArtifact') {
             def expectedToolVersion = propertyString('developer_tools_version')
             def expectedPrimaryVersion = propertyString('mod_version')
             def expectedJawmsMinimum = propertyString('developer_tools_jawms_min_version')
+            // The companion is versioned with the artifact, while its unchanged
+            // API 1.6 usage still works with the released 1.1.0 minimum.
             if (expectedToolVersion != expectedPrimaryVersion
-                    || expectedJawmsMinimum != expectedPrimaryVersion) {
+                    || expectedJawmsMinimum != '1.1.0') {
                 throw new GradleException(
-                        'Developer Tools version and minimum JAWMS version must match the primary candidate.')
+                        'Developer Tools must match the primary version and retain its API-1.6 JAWMS minimum 1.1.0.')
             }
             def expectedJawmsRange = openRuntimeRange(
                     'jawms', 'developer_tools_jawms_min_version')
@@ -1346,7 +1360,8 @@ tasks.register('verifyApiCompatibilityFixture') {
             def requiredEntries = [
                     'META-INF/MANIFEST.MF',
                     'mcmod.info',
-                    'mixins.jawms.json',
+                    'mixins.jawms.early.json',
+                    'mixins.jawms.late.json',
                     'mixins.jawms.refmap.json',
                     'assets/jawms/lang/en_us.lang',
                     'LICENSE',
@@ -1494,21 +1509,23 @@ tasks.register('verifyStableReleaseMetadata') {
     inputs.file 'README.md'
     inputs.file 'MOD-PAGE.md'
     doLast {
-        def expectedVersion = '1.1.0'
+        def expectedVersion = '1.1.1'
         if (propertyString('mod_version') != expectedVersion
                 || propertyString('developer_tools_version') != expectedVersion
                 || propertyString('release_type') != 'release') {
             throw new GradleException(
-                    'Stable candidate must use primary/tool version 1.1.0 and release_type=release.')
+                    'Stable candidate must use primary/tool version 1.1.1 and release_type=release.')
         }
         def changelog = file('CHANGELOG.md').getText('UTF-8')
         def readme = file('README.md').getText('UTF-8')
         def modPage = file('MOD-PAGE.md').getText('UTF-8')
+        // Preserve the released changelog baseline. Current release-copy acceptance
+        // is separate from the candidate metadata checked above.
         if (!changelog.contains('## [1.1.0]')
                 || readme.contains('public beta')
                 || modPage.contains('Beta release:')) {
             throw new GradleException(
-                    'Stable 1.1.0 changelog or public release labeling is inconsistent.')
+                    'Retained stable changelog or public release labeling is inconsistent.')
         }
     }
 }
@@ -1612,19 +1629,10 @@ jar {
 
     manifest {
         def attribute_map = [:]
-        if (propertyBool('use_mixins')) {
-            attribute_map['MixinConfigs'] = propertyStringList('mixin_configs')
-                    .collect(config -> "mixins.${config}.json" as String)
-                    .join(',')
-        }
         if (propertyBool('is_coremod')) {
             attribute_map['FMLCorePlugin'] = propertyString('coremod_plugin_class_name')
             if (propertyBool('coremod_includes_mod')) {
                 attribute_map['FMLCorePluginContainsFMLMod'] = true
-                def currentTasks = gradle.startParameter.taskNames
-                if (currentTasks[0] == 'build' || currentTasks[0] == 'prepareObfModsFolder' || currentTasks[0] == 'runObfClient') {
-                    attribute_map['ForceLoadAsMod'] = true
-                }
             }
         }
         if (propertyBool('use_access_transformer')) {
@@ -1675,6 +1683,10 @@ compileTestJava {
 
 test {
     useJUnitPlatform()
+    inputs.files(configurations.legacyMixinBootstrap)
+    doFirst {
+        systemProperty 'jawms.test.legacyMixinBooter', configurations.legacyMixinBootstrap.singleFile.absolutePath
+    }
     javaLauncher.set(javaToolchains.launcherFor {
         languageVersion = JavaLanguageVersion.of(8)
     })

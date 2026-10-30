@@ -1,0 +1,25 @@
+{
+  "package": "com.mahghuuuls.jawms.mixin",
+  "required": true,
+  "refmap": "${mixin_refmap}",
+  "target": "@env(DEFAULT)",
+  "minVersion": "0.8.5",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "EntityForceArrowMixin",
+    "ForceArrowMixin",
+    "ItemWandMixin",
+    "ItemWizardArmourMixin",
+    "ItemArtefactMixin",
+    "ItemManaFlaskMixin"
+  ],
+  "server": [],
+  "client": [
+    "GuiSpellInfoMixin",
+    "ItemWandClientMixin",
+    "ItemManaFlaskClientMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -39,7 +39,7 @@ class AddonDocumentationContractTest {
         );
 
         assertTrue(guide.contains(
-                "JAWMS `1.1.0` provides API `1.6`"
+                "JAWMS `" + property("mod_version") + "` preserves API `1.6`"
         ));
         assertTrue(guide.contains("[API History](API-HISTORY.md)"));
         assertTrue(guide.contains("jawms_curseforge_file=REPLACE_WITH_NUMERIC_FILE_ID"));
@@ -68,6 +68,7 @@ class AddonDocumentationContractTest {
         assertTrue(history.contains("`0.4.0` | `8651841` | `1.4`"));
         assertTrue(history.contains("`1.0.0` | See the CurseForge Files page | `1.5`"));
         assertTrue(history.contains("`1.1.0` | See the CurseForge Files page | `1.6`"));
+        assertTrue(history.contains("`1.1.1` candidate | Not published; runtime qualification pending | `1.6`"));
         assertTrue(history.contains("jawms@[0.4.0,0.5.0)"));
         assertTrue(history.contains("MixinBooter `[11.11,12.0)`"));
         assertFalse(guide.contains("Ã"));
@@ -184,7 +185,7 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("plain JVM test"));
         assertTrue(guide.contains("launched Forge test"));
         assertTrue(guide.contains("docs/COMMANDS.md"));
-        assertTrue(guide.contains("jawms-devtools-1.1.0.jar"));
+        assertTrue(guide.contains("jawms-devtools-" + property("developer_tools_version") + ".jar"));
         assertTrue(guide.contains("JAWMS `[1.1.0,)`"));
     }
 
@@ -225,7 +226,7 @@ class AddonDocumentationContractTest {
         assertTrue(modPage.contains("(" + GUIDE_URL + ")"));
         assertTrue(rootPackage.contains(GUIDE_URL));
         assertTrue(clientPackage.contains(GUIDE_URL));
-        assertTrue(readme.contains("JAWMS `1.1.0` uses additive addon API `1.6`"));
+        assertTrue(readme.contains("JAWMS `" + property("mod_version") + "` preserves addon API `1.6`"));
         assertTrue(readme.contains("Use the guide for current dependency setup and API usage"));
         assertTrue(readme.contains("[API History](docs/API-HISTORY.md)"));
         assertTrue(readme.contains(
