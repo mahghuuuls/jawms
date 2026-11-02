@@ -1,6 +1,6 @@
 # JAWMS API History
 
-This reference records older JAWMS releases and the public API additions they introduced. Use the current [Addon Development Guide](ADDON-DEVELOPMENT.md) for API `1.6`; the `1.1.1` compatibility candidate preserves that API without adding a new contract.
+This reference records older JAWMS releases and the public API additions they introduced. Use the current [Addon Development Guide](ADDON-DEVELOPMENT.md) for API `1.6`; the `1.1.1` compatibility patch preserves that API without adding a new contract.
 
 ## Release Matrix
 
@@ -12,7 +12,7 @@ This reference records older JAWMS releases and the public API additions they in
 | `0.4.0` | `8651841` | `1.4` | Typed mutation failures, provider observation, cache refresh, profile explanations, and Developer Tools |
 | `1.0.0` | See the CurseForge Files page | `1.5` | Configured-flask snapshots, directional lockout helpers, invariant provider previews, and final JAWMS tooltip placement |
 | `1.1.0` | See the CurseForge Files page | `1.6` | Explicit attributed regeneration-lockout requests and open minimum-or-newer runtime dependency ranges |
-| `1.1.1` candidate | Not published; runtime qualification pending | `1.6` | Loading compatibility correction only; no API additions |
+| `1.1.1` | Not yet published | `1.6` | Cleanroom loading compatibility; no API additions |
 
 CurseForge file IDs identify immutable uploaded files. They are not mod versions or API versions.
 

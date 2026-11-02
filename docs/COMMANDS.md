@@ -24,7 +24,7 @@ Authoritative usage:
 
 ## Optional JAWMS Developer Tools
 
-Availability: install the separate matching `jawms-devtools-1.1.1.jar` alongside JAWMS `[1.1.0,)`, which provides API 1.6. The runtime range admits newer JAWMS versions without claiming they have all been tested; use matching tool and primary versions for the validated setup. The 1.1.1 candidate's runtime checks are pending. Installing it is the enablement mechanism; JAWMS has no gameplay configuration toggle for it. Audience: addon developers and controlled test servers. Side: logical server; explicit player targets work from dedicated-server console. Permission level: 4. Output is sent to the command sender and logged with the `[jawms-dev]` prefix.
+Availability: install the separate matching `jawms-devtools-1.1.1.jar` alongside JAWMS `[1.1.0,)`, which provides API 1.6. The runtime range admits newer JAWMS versions without claiming they have all been tested; use matching tool and primary versions for the validated setup. Installing it is the enablement mechanism; JAWMS has no gameplay configuration toggle for it. Audience: addon developers and controlled test servers. Side: logical server; explicit player targets work from dedicated-server console. Permission level: 4. Output is sent to the command sender and logged with the `[jawms-dev]` prefix.
 
 ### `/jawms-dev`
 

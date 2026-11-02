@@ -26,14 +26,14 @@ Server operators can apply valid gameplay and integration changes with `/jawms r
 
 ## Requirements
 
-JAWMS targets Minecraft 1.12.2 with Forge-compatible loading on Cleanroom. The `1.1.1` compatibility candidate requires:
+JAWMS targets Minecraft 1.12.2 with Forge-compatible loading on Cleanroom. JAWMS `1.1.1` requires:
 
 - Electroblob's Wizardry `4.3.19` or newer
 - MixinBooter `10.7` or newer (provided by Cleanroom; a separate mod on standard Forge)
 
 Install JAWMS on both the client and server for multiplayer. Baubles `1.5.2` or newer is optional.
 
-JAWMS uses minimum-or-newer runtime requirements so dependency updates are not rejected solely for being newer. The build and annotation processor remain pinned to MixinBooter `11.8`, independently of the shipping minimum. Candidate qualification on real standalone `10.7`/`11.8` and Cleanroom `0.6.13-alpha`/`0.7.14-alpha` is pending. Earlier release results are not validation of this candidate; an open range does not claim every later version has been tested. Cleanroom resolves this dependency against its built-in reported version; installing a newer standalone JAR does not establish that identity, and no version-alias change is required by this candidate.
+JAWMS `1.1.1` supports Cleanroom `0.6.13-alpha` and `0.7.14-alpha` with their built-in MixinBooter support, without changing the MixinBooter version setting. Runtime requirements accept newer dependency versions; they do not guarantee compatibility with every future release. See the addon guide for independently pinned development dependencies.
 
 ## Companion Addons
 

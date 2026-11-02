@@ -68,7 +68,7 @@ class AddonDocumentationContractTest {
         assertTrue(history.contains("`0.4.0` | `8651841` | `1.4`"));
         assertTrue(history.contains("`1.0.0` | See the CurseForge Files page | `1.5`"));
         assertTrue(history.contains("`1.1.0` | See the CurseForge Files page | `1.6`"));
-        assertTrue(history.contains("`1.1.1` candidate | Not published; runtime qualification pending | `1.6`"));
+        assertTrue(history.contains("`1.1.1` | Not yet published | `1.6`"));
         assertTrue(history.contains("jawms@[0.4.0,0.5.0)"));
         assertTrue(history.contains("MixinBooter `[11.11,12.0)`"));
         assertFalse(guide.contains("Ã"));

@@ -9,7 +9,7 @@ Types under `com.mahghuuuls.jawms.internal` are implementation details and carry
 
 ## Setup
 
-JAWMS `1.1.1` preserves API `1.6` from `1.1.0`. This compatibility candidate has no new public API and is not yet published or runtime-qualified. Depend on the full JAWMS mod; there is no separate API artifact. Older releases and API changes are recorded in [API History](API-HISTORY.md), not in this current-version guide.
+JAWMS `1.1.1` preserves API `1.6` from `1.1.0`. This compatibility patch has no new public API and is not yet published. Depend on the full JAWMS mod; there is no separate API artifact. Older releases and API changes are recorded in [API History](API-HISTORY.md), not in this current-version guide.
 
 CurseForge assigns a numeric file ID independently from the version. Once `jawms-1.1.1.jar` is published, find it on the JAWMS Files page and place its assigned number in your addon's `gradle.properties`; no `1.1.1` file ID is assumed here:
 
@@ -78,7 +78,7 @@ Also list the three ranges in `mcmod.info` if that file is part of the project:
 ]
 ```
 
-Do not rely on CurseMaven transitive metadata to install Wizardry or MixinBooter. They are explicit runtime dependencies on standard Forge; Cleanroom provides its own MixinBooter identity. For the `1.1.1` candidate, the target MixinBooter shipping minimum is `10.7`; the build/processor and development example stay pinned to `11.8`. JAWMS `[1.1.0,)` remains the minimum for API `1.6`, and Wizardry remains `[4.3.19,)`. An older JAWMS release can impose its own higher MixinBooter requirement. Open ranges do not establish runtime qualification or claim every later version tested; `1.1.1` qualification is still pending. Keep development artifacts pinned to exact coordinates.
+Do not rely on CurseMaven transitive metadata to install Wizardry or MixinBooter. They are explicit runtime dependencies on standard Forge; Cleanroom provides its own MixinBooter identity. JAWMS `1.1.1` requires MixinBooter `10.7` or newer; the build/processor and development example stay pinned to `11.8`. JAWMS `[1.1.0,)` remains the minimum for API `1.6`, and Wizardry remains `[4.3.19,)`. An older JAWMS release can impose its own higher MixinBooter requirement. Open ranges do not claim compatibility with every future version. Keep development artifacts pinned to exact coordinates.
 
 If addon source directly uses Wizardry types exposed by the server API, such as `Spell` or `Element`, change the Wizardry declaration from `runtimeOnly` to `implementation` while keeping the same deobfuscated coordinate. The replacement-HUD-only example does not directly use those types, so `runtimeOnly` is sufficient there.
 

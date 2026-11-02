@@ -36,8 +36,6 @@ Required:
 - Electroblob's Wizardry `4.3.19` or newer
 - MixinBooter `10.7` or newer (provided by Cleanroom; install separately on standard Forge)
 
-The `1.1.1` compatibility candidate is built against MixinBooter `11.8`. Runtime qualification of its lower shipping minimum and the two selected Cleanroom versions is pending; these requirements do not assert a completed compatibility test. Do not raise Cleanroom's reported-version alias to work around the candidate's dependency check.
-
 Optional:
 
 - Baubles `1.5.2` or newer for equipped Baubles-slot effects
