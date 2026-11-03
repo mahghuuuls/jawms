@@ -62,7 +62,7 @@ Declare the runtime requirements in the addon's Forge metadata. The `@Mod` decla
         version = "1.0.0",
         dependencies = "required-after:jawms@[1.2.0,);"
                 + "required-after:ebwizardry@[4.3.19,);"
-                + "required-after:mixinbooter@[11.8,)"
+                + "required-after:mixinbooter@[10.7,)"
 )
 public final class ExampleAddon {
 }
@@ -74,11 +74,11 @@ Also list the three ranges in `mcmod.info` if that file is part of the project:
 "requiredMods": [
   "jawms@[1.2.0,)",
   "ebwizardry@[4.3.19,)",
-  "mixinbooter@[11.8,)"
+  "mixinbooter@[10.7,)"
 ]
 ```
 
-Do not rely on CurseMaven transitive metadata to install Wizardry or MixinBooter. They are explicit runtime dependencies of JAWMS on standard Forge and must be present in development and in the installed modpack. JAWMS uses minimum-or-newer runtime ranges: JAWMS `1.2.0`, Wizardry `4.3.19`, and MixinBooter `11.8` are the minimums in this example. These open ranges prevent newer versions from being rejected solely by metadata; they do not claim that every later version has been tested. Keep development artifacts pinned to exact coordinates for reproducible builds.
+Do not rely on CurseMaven transitive metadata to install Wizardry or MixinBooter. They are explicit runtime dependencies of JAWMS on standard Forge and must be present in development and in the installed modpack. JAWMS uses minimum-or-newer runtime ranges: JAWMS `1.2.0`, Wizardry `4.3.19`, and MixinBooter `10.7` are the minimums in this example. These open ranges prevent newer versions from being rejected solely by metadata; they do not claim that every later version has been tested. Keep development artifacts pinned to exact coordinates for reproducible builds. JAWMS builds against MixinBooter 11.8. Cleanroom supplies its own MixinBooter compatibility identity.
 
 If addon source directly uses Wizardry types exposed by the server API, such as `Spell` or `Element`, change the Wizardry declaration from `runtimeOnly` to `implementation` while keeping the same deobfuscated coordinate. The replacement-HUD-only example does not directly use those types, so `runtimeOnly` is sufficient there.
 
@@ -368,7 +368,7 @@ Also test:
 
 Register an `ICastCostParticipant` with `ManaApi.registerCastCostParticipant` during pre-initialization or initialization. Registration freezes at load-complete; duplicate, null, malformed or late calls fail without replacing a registration. Full namespaced IDs are sorted lexicographically for preparation and settlement. Return `CastCostPreparation.notApplicable()` for disabled/unrelated attempts, `refused("reason_category")` to prevent the effect, or `accepted(freshReservation)` for an applicable protected claim.
 
-The discrete path is implemented first; continuous participation is not yet enabled in this intermediate source. Do not distribute it as a complete casting integration. The context copies the owning wand argument and reads accepted mana-cost/allocation inputs without reevaluating providers. Player and spell references are borrowed only for the synchronous callback; the stack getter returns a defensive copy. Accepted formula components can be unavailable (NaN with `isFormulaAvailable()` false). Opaque use/attempt identities are not permission tokens and must not be persisted.
+The development candidate includes discrete and continuous participation. Release qualification is still in progress. The context copies the owning wand argument and reads accepted mana-cost/allocation inputs without reevaluating providers. Player and spell references are borrowed only for the synchronous callback; the stack getter returns a defensive copy. Accepted formula components can be unavailable (NaN with `isFormulaAvailable()` false). Opaque use/attempt identities are not permission tokens and must not be persisted.
 
 Preparation cannot pay, execute an effect or start payment-related delay. `isValid()` is pure and protects the provider's existing claim; `settle()` returns the actual paid/free/invalidation result, not a prediction. Paid amounts use provider-documented units. Free is explicit zero; invalidation has no known payment amount. `release(reason)` closes without payment and is idempotent, never a refund. Never return another attempt's active handle.
 

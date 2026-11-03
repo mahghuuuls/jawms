@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.1]
+
+### Fixed
+
+- Fixed JAWMS startup on Cleanroom with its built-in MixinBooter support, without changing the MixinBooter version setting.
+
+### Compatibility
+
+- Lowered the runtime MixinBooter minimum to `10.7` with no upper bound. Build and annotation-processor dependencies remain pinned to `11.8`.
+- Preserved API `1.6` and existing spell costs, equipment behavior, and configuration.
+
 ## [1.1.0] - 2026-08-21
 
 ### Added

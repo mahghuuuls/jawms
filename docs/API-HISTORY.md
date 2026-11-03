@@ -1,6 +1,6 @@
 # JAWMS API History
 
-This reference records older JAWMS releases and the public API additions they introduced. New addons should use the current [Addon Development Guide](ADDON-DEVELOPMENT.md) and target JAWMS `1.1.0` / API `1.6` unless they intentionally support an older release.
+This reference records older JAWMS releases and the public API additions they introduced. Use the current [Addon Development Guide](ADDON-DEVELOPMENT.md) for the API `1.7` development candidate. JAWMS `1.1.1` preserves API `1.6`.
 
 ## Release Matrix
 
@@ -12,6 +12,7 @@ This reference records older JAWMS releases and the public API additions they in
 | `0.4.0` | `8651841` | `1.4` | Typed mutation failures, provider observation, cache refresh, profile explanations, and Developer Tools |
 | `1.0.0` | See the CurseForge Files page | `1.5` | Configured-flask snapshots, directional lockout helpers, invariant provider previews, and final JAWMS tooltip placement |
 | `1.1.0` | See the CurseForge Files page | `1.6` | Explicit attributed regeneration-lockout requests and open minimum-or-newer runtime dependency ranges |
+| `1.1.1` | See the CurseForge Files page | `1.6` | Cleanroom loading compatibility; no API additions |
 
 CurseForge file IDs identify immutable uploaded files. They are not mod versions or API versions.
 
@@ -19,7 +20,7 @@ CurseForge file IDs identify immutable uploaded files. They are not mod versions
 
 API major `1` is additive. A later `1.x` API retains the documented public descriptors from supported earlier minor versions and does not add required methods to an already-published interface. Breaking changes require another API major or a parallel opt-in contract.
 
-JAWMS `1.1.0` retains the published API `1.2`, `1.3`, `1.4`, and `1.5` binary surfaces. New source should use API `1.6`; the older descriptions below exist for maintaining already-published addons.
+JAWMS `1.1.0` retains the published API `1.2`, `1.3`, `1.4`, and `1.5` binary surfaces. The older descriptions below exist for maintaining already-published addons.
 
 ## Historical Dependency Coordinates
 

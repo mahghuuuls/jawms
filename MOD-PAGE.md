@@ -34,7 +34,7 @@ Players can customize or extend JAWMS with companion addons:
 Required:
 
 - Electroblob's Wizardry `4.3.19` or newer
-- MixinBooter `11.8` or newer
+- MixinBooter `10.7` or newer (provided by Cleanroom; install separately on standard Forge)
 
 Optional:
 

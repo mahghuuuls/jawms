@@ -1,0 +1,148 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.util.jar.JarFile
+
+// This is the only JVM argument composer for the primary mod's early entry.
+// GradleStart subsequently merges dependency-discovered coremods, including MixinBooter.
+ext.withPrimaryCoremod = { Collection<String> arguments ->
+    def prefix = '-Dfml.coreMods.load='
+    def coremods = new LinkedHashSet<String>()
+    def remaining = []
+    arguments.each { argument ->
+        if (argument.startsWith(prefix)) {
+            coremods.addAll(argument.substring(prefix.length()).split(',').collect { it.trim() }.findAll { it })
+        } else {
+            remaining.add(argument)
+        }
+    }
+    coremods.add(propertyString('coremod_plugin_class_name'))
+    remaining.add(prefix + coremods.join(','))
+    remaining
+}
+
+tasks.register('verifyMixinBootstrap') {
+    group = 'verification'
+    description = 'Checks packaged Mixin registration, candidate hook coverage and development entry wiring.'
+    dependsOn tasks.named('reobfJar')
+    doLast {
+        def require = { boolean condition, String message ->
+            if (!condition) throw new GradleException(message)
+        }
+        def early = 'mixins.jawms.early.json'
+        def late = 'mixins.jawms.late.json'
+        def expected = [
+                (early): [mixins: ['EntityLivingBaseMixin', 'EntityPlayerMixin', 'ContainerWandPublicationMixin', 'EntityPlayerMPWandPublicationMixin', 'InventoryPlayerWandPublicationMixin', 'NetHandlerWandPublicationServerMixin', 'NetworkManagerWandPublicationMixin', 'NonNullListWandMutationMixin'],
+                          client: ['ItemStackTooltipClientMixin', 'MinecraftWandSelectionClientMixin', 'NetHandlerWandPublicationClientMixin', 'PlayerControllerParticipantUseMixin']],
+                (late): [mixins: ['WandHelperBindingMutationMixin', 'EntityForceArrowMixin', 'ForceArrowMixin', 'ItemWandMixin',
+                                 'ItemWizardArmourMixin', 'ItemArtefactMixin', 'ItemManaFlaskMixin'],
+                         client: ['GuiSpellInfoMixin', 'ItemWandClientMixin', 'ItemManaFlaskClientMixin']]
+        ]
+        def validate = { Map configs, Map attributes, Map runArguments ->
+            require(configs.keySet() == expected.keySet(), 'Missing or unexpected required Mixin configuration')
+            def membership = []
+            expected.each { name, sides ->
+                def config = configs[name]
+                require(config.required == true && config.target == '@env(DEFAULT)'
+                        && config.minVersion == '0.8.5' && config.compatibilityLevel == 'JAVA_8'
+                        && config.package == 'com.mahghuuuls.jawms.mixin'
+                        && config.refmap == propertyString('mixin_refmap')
+                        && config.injectors?.defaultRequire == 1 && config.server == [],
+                        "Required configuration contract changed: ${name}")
+                sides.each { side, names ->
+                    require(config[side] instanceof List && config[side].toSet() == names.toSet()
+                            && config[side].size() == names.size(), "Candidate hook membership/side changed: ${name}/${side}")
+                    membership.addAll(config[side])
+                }
+            }
+            require(membership.size() == 22 && membership.toSet().size() == 22, 'Required hooks must be unique and complete')
+            require(attributes.FMLCorePlugin == propertyString('coremod_plugin_class_name')
+                    && attributes.FMLCorePluginContainsFMLMod == 'true', 'Primary coremod/normal mod discovery metadata missing')
+            require(!['MixinConfigs', 'MixinConnector', 'TweakClass'].any { attributes.containsKey(it) },
+                    'Competing Mixin registration route in primary manifest')
+            runArguments.each { taskName, arguments ->
+                def entries = arguments.findAll { it.startsWith('-Dfml.coreMods.load=') }
+                require(entries.size() == 1, "${taskName} needs one composed coremod argument")
+                def plugins = entries[0].substring('-Dfml.coreMods.load='.length()).split(',').toList()
+                require(plugins.count(propertyString('coremod_plugin_class_name')) == 1,
+                        "${taskName} must expose the same early entry exactly once")
+            }
+        }
+        def jar = new JarFile(tasks.named('reobfJar').get().archiveFile.get().asFile)
+        def configs = [:]
+        def attributes = [:]
+        try {
+            jar.manifest.mainAttributes.each { key, value -> attributes[key.toString()] = value.toString() }
+            [early, late].each { name ->
+                require(jar.getEntry(name) != null, "Packaged config missing: ${name}")
+                configs[name] = new JsonSlurper().parseText(jar.getInputStream(jar.getEntry(name)).getText('UTF-8'))
+            }
+            require(jar.getEntry('mixins.jawms.json') == null, 'Former unsplit config remains in the primary artifact')
+            ['JawmsEarlyMixinLoader', 'JawmsLateMixinLoader'].each { name ->
+                require(jar.getEntry("com/mahghuuuls/jawms/bootstrap/${name}.class") != null,
+                        "Bootstrap entry missing: ${name}")
+            }
+        } finally {
+            jar.close()
+        }
+        def runArguments = ['runClient', 'runServer'].collectEntries { name ->
+            def runTask = tasks.named(name).get()
+            require(!runTask.systemProperties.containsKey('fml.coreMods.load'),
+                    "${name} must compose its coremods through extra_jvm_args, not a second system property")
+            [(name): runTask.calculateJvmArgs() + (runTask.jvmArgs ?: [])]
+        }
+        validate(configs, attributes, runArguments)
+        ['compileClasspath', 'annotationProcessor'].each { configuration ->
+            def loader = configurations[configuration].resolvedConfiguration.resolvedArtifacts.findAll {
+                it.moduleVersion.id.group == 'zone.rong' && it.moduleVersion.id.name == 'mixinbooter'
+            }
+            require(loader.size() == 1 && loader[0].moduleVersion.id.version == '11.8',
+                    "${configuration} must keep the exact MixinBooter 11.8 build pin")
+        }
+        def reject = { String label, Closure check ->
+            try {
+                check()
+            } catch (GradleException expectedFailure) {
+                return
+            }
+            throw new GradleException("Bootstrap verifier missed sensitivity case: ${label}")
+        }
+        def copyConfigs = { new JsonSlurper().parseText(JsonOutput.toJson(configs)) }
+        reject('missing native config') { validate([(late): configs[late]], attributes, runArguments) }
+        reject('missing single hook') {
+            def changed = copyConfigs()
+            changed[early].mixins.remove('NetworkManagerWandPublicationMixin')
+            validate(changed, attributes, runArguments)
+        }
+        reject('wrong target phase') {
+            def changed = copyConfigs()
+            changed[late].mixins.remove('WandHelperBindingMutationMixin')
+            changed[early].mixins.add('WandHelperBindingMutationMixin')
+            validate(changed, attributes, runArguments)
+        }
+        reject('duplicate hook') {
+            def changed = copyConfigs(); changed[late].mixins.add('ItemWandMixin')
+            validate(changed, attributes, runArguments)
+        }
+        reject('client hook moved to common') {
+            def changed = copyConfigs(); changed[early].mixins.add('ItemStackTooltipClientMixin'); changed[early].client.clear()
+            validate(changed, attributes, runArguments)
+        }
+        reject('manifest registration restored') { validate(configs, attributes + [MixinConfigs: early], runArguments) }
+        reject('exploded entry removed') { validate(configs, attributes, runArguments + [runServer: []]) }
+        def prefix = '-Dfml.coreMods.load='
+        def composed = withPrimaryCoremod(['-Xmx1G', prefix + 'example.First,example.Second',
+                                           prefix + 'example.Second,' + propertyString('coremod_plugin_class_name')])
+        require(composed == ['-Xmx1G', prefix + 'example.First,example.Second,' + propertyString('coremod_plugin_class_name')],
+                'Coremod composition must preserve other entries and remove duplicate properties/entries')
+        def report = layout.buildDirectory.file('reports/mixin-bootstrap.json').get().asFile
+        report.parentFile.mkdirs()
+        report.text = JsonOutput.prettyPrint(JsonOutput.toJson([
+                type: 'Static artifact and development run-model inspection; no runtime application proof',
+                configNames: configs.keySet(), hookCount: 22, buildPin: '11.8',
+                primaryCoremod: attributes.FMLCorePlugin, runArguments: runArguments,
+                sensitivityCases: ['missing native config', 'missing single hook', 'wrong target phase', 'duplicate hook', 'wrong side', 'manifest route', 'missing dev entry', 'coremod composition']
+        ]))
+    }
+}
+
+tasks.named('check').configure { dependsOn tasks.named('verifyMixinBootstrap') }

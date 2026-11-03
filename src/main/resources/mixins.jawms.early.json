@@ -1,0 +1,28 @@
+{
+  "package": "com.mahghuuuls.jawms.mixin",
+  "required": true,
+  "refmap": "${mixin_refmap}",
+  "target": "@env(DEFAULT)",
+  "minVersion": "0.8.5",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+        "EntityLivingBaseMixin",
+        "EntityPlayerMixin",
+        "ContainerWandPublicationMixin",
+        "EntityPlayerMPWandPublicationMixin",
+        "InventoryPlayerWandPublicationMixin",
+        "NetHandlerWandPublicationServerMixin",
+        "NetworkManagerWandPublicationMixin",
+        "NonNullListWandMutationMixin"
+    ],
+  "server": [],
+  "client": [
+        "ItemStackTooltipClientMixin",
+        "MinecraftWandSelectionClientMixin",
+        "NetHandlerWandPublicationClientMixin",
+        "PlayerControllerParticipantUseMixin"
+    ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

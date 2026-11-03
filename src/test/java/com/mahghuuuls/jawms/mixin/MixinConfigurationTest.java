@@ -18,7 +18,8 @@ class MixinConfigurationTest {
 
     @Test
     void commonMixinIsRequiredAndDeclaresGeneratedProductionRefmap() throws IOException {
-        String json = readResource("/mixins.jawms.json");
+        String json = readResource("/mixins.jawms.early.json")
+                + readResource("/mixins.jawms.late.json");
 
         assertTrue(json.contains("\"required\": true"));
         assertTrue(json.contains("\"ItemWandMixin\""));

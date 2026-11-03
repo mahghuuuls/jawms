@@ -68,6 +68,7 @@ class AddonDocumentationContractTest {
         assertTrue(history.contains("`0.4.0` | `8651841` | `1.4`"));
         assertTrue(history.contains("`1.0.0` | See the CurseForge Files page | `1.5`"));
         assertTrue(history.contains("`1.1.0` | See the CurseForge Files page | `1.6`"));
+        assertTrue(history.contains("`1.1.1` | See the CurseForge Files page | `1.6`"));
         assertTrue(history.contains("jawms@[0.4.0,0.5.0)"));
         assertTrue(history.contains("MixinBooter `[11.11,12.0)`"));
         assertFalse(guide.contains("Ã"));
@@ -225,11 +226,11 @@ class AddonDocumentationContractTest {
         assertTrue(modPage.contains("(" + GUIDE_URL + ")"));
         assertTrue(rootPackage.contains(GUIDE_URL));
         assertTrue(clientPackage.contains(GUIDE_URL));
-        assertTrue(readme.contains("JAWMS `1.1.0` uses additive addon API `1.6`"));
+        assertTrue(readme.contains("JAWMS `" + property("mod_version") + "` development candidate provides addon API `1.7`"));
         assertTrue(readme.contains("Use the guide for current dependency setup and API usage"));
         assertTrue(readme.contains("[API History](docs/API-HISTORY.md)"));
         assertTrue(readme.contains(
-                "published API `1.2`, `1.3`, `1.4`, and `1.5` binary surfaces"
+                "earlier API `1.2` through `1.6` binary surfaces"
         ));
         assertFalse(readme.contains("public beta"));
         assertFalse(modPage.contains("Beta release:"));
