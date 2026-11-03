@@ -116,6 +116,7 @@ public final class ManaTestFixture {
 
     public static void register(FMLServerStartingEvent event) {
         ContinuousTransportFixture.register(event);
+        ManaLifecycleFixture.initialize();
         CAST_CANCELLATION.clear();
         REGENERATION_DISABLED.clear();
         BALANCE_PERCENT_BOOST.clear();
@@ -215,6 +216,7 @@ public final class ManaTestFixture {
         @Override
         public String getUsage(ICommandSender sender) {
             return "/jawms-test mana set <amount> | mana inspect | rules inspect"
+                    + " | lifecycle <inspect|profile|clone|dimension|transfer|logout|clear>"
                     + " | integration inspect | integration last-effect"
                     + " | integration clear-last-effect | integration last-melee"
                     + " | integration clear-last-melee | regen pause <true|false>"
@@ -249,6 +251,10 @@ public final class ManaTestFixture {
         @Override
         public void execute(MinecraftServer server, ICommandSender sender, String[] arguments)
                 throws CommandException {
+            if (arguments.length == 2 && "lifecycle".equalsIgnoreCase(arguments[0])) {
+                ManaLifecycleFixture.execute(sender, arguments[1]);
+                return;
+            }
             if (arguments.length == 2
                     && "rules".equalsIgnoreCase(arguments[0])
                     && "inspect".equalsIgnoreCase(arguments[1])) {

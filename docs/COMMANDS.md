@@ -63,7 +63,7 @@ Player-only operations use the sender's server-player entity, including when a c
 Authoritative usage:
 
 ```text
-/jawms-test mana set <amount> | mana inspect | rules inspect | integration inspect | integration last-effect | integration clear-last-effect | integration last-melee | integration clear-last-melee | regen pause <true|false> | mana restore <amount> | mana consume <amount> | mana drain <amount> | mana regen <true|false> | mana events <true|false> | mana event-inspect | cost get <namespace:spell> | casting debug [<true|false>] | casting cancel [<true|false>] | casting cancel-tick [<true|false>] | casting factor <positive-number> | casting factor-delay <positive-number> <ticks> | casting payment <inspect|clear> | hunger set <0..20> | rules reload-after-cast <ticks> | flask inspect | armor mana <head|chest|legs|feet> <amount> | wand set <main|off> <namespace:spell> | wand siphon <main|off> <0..3> | wand melee <main|off> <0..3> | melee event <normal|cancel|zero> | melee target <health> | melee target-inspect | projectile <inspect|clear-last> | projectile activation <normal|active|inactive> | projectile activation-after-cast <active|inactive> <ticks> | projectile mana-after-cast <amount> <ticks> | wand mana <main|off> <amount> | wand inspect <main|off>
+/jawms-test mana set <amount> | mana inspect | rules inspect | lifecycle <inspect|profile|clone|dimension|transfer|logout|clear> | integration inspect | integration last-effect | integration clear-last-effect | integration last-melee | integration clear-last-melee | regen pause <true|false> | mana restore <amount> | mana consume <amount> | mana drain <amount> | mana regen <true|false> | mana events <true|false> | mana event-inspect | cost get <namespace:spell> | casting debug [<true|false>] | casting cancel [<true|false>] | casting cancel-tick [<true|false>] | casting factor <positive-number> | casting factor-delay <positive-number> <ticks> | casting payment <inspect|clear> | hunger set <0..20> | rules reload-after-cast <ticks> | flask inspect | armor mana <head|chest|legs|feet> <amount> | wand set <main|off> <namespace:spell> | wand siphon <main|off> <0..3> | wand melee <main|off> <0..3> | melee event <normal|cancel|zero> | melee target <health> | melee target-inspect | projectile <inspect|clear-last> | projectile activation <normal|active|inactive> | projectile activation-after-cast <active|inactive> <ticks> | projectile mana-after-cast <amount> <ticks> | wand mana <main|off> <amount> | wand inspect <main|off>
 ```
 
 Subcommands and purpose:
@@ -78,6 +78,8 @@ Subcommands and purpose:
 - `projectile inspect`, `projectile clear-last`, `projectile activation`, `projectile activation-after-cast`, and `projectile mana-after-cast` control and inspect contributor projectile regression probes.
 
 Failures include invalid syntax/value, missing player context, missing item/spell/target, or unmet fixture preconditions. Cleanup: return boolean probes to `false`/`normal`, use the matching `clear` operations, restore mana/hunger/items, remove spawned targets, and restart the disposable world when complete isolation is needed.
+
+The contributor lifecycle probes require the named MV-03 disposable world. The profile probe restores the original rules and balance after inspection. Clone, dimension and logout arm one event witness. Transfer performs the armed Overworld-to-Nether transition in Creative. Clear disarms a pending witness.
 
 ### `/jawms-balance`
 
