@@ -85,6 +85,18 @@ public final class CastPaymentContextManager {
         return policy == null ? DemonicSealPolicy.inactive() : policy;
     }
 
+    /** Keeps the enclosing payment policy private while its effect invokes child casts. */
+    public static synchronized Runnable suspend(EntityPlayer player, EnumHand hand) {
+        Key key = key(player, hand);
+        DemonicSealPolicy previous = CONTEXTS.remove(key);
+        return () -> {
+            synchronized (CastPaymentContextManager.class) {
+                if (previous == null) CONTEXTS.remove(key);
+                else CONTEXTS.put(key, previous);
+            }
+        };
+    }
+
     public static synchronized void clear(EntityPlayer player, EnumHand hand) {
         CONTEXTS.remove(key(player, hand));
     }

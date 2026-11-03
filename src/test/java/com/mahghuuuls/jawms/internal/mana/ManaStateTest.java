@@ -17,6 +17,42 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ManaStateTest {
 
     @Test
+    void staleGenerationCannotConsumeReplacementClaim() {
+        ManaState state = new ManaState();
+        ManaReservation stale = state.reserve(30);
+        state.clearTransientLifecycleState();
+        ManaReservation current = state.reserve(40);
+
+        ManaService.releaseReservation(stale);
+
+        assertFalse(state.hasPayableReservation(stale));
+        assertThrows(IllegalStateException.class, () -> state.commit(stale));
+        assertTrue(state.hasPayableReservation(current));
+        assertEquals(20, state.getAvailableMana());
+        state.commit(current);
+        assertEquals(20, state.getCurrentMana());
+    }
+
+    @Test
+    void unsafeProfileShrinkPreservesNestedReservationsUntilNormalRefresh() {
+        ManaState state = new ManaState();
+        ManaReservation outer = state.reserve(30);
+        ManaReservation inner = state.reserve(20);
+
+        assertFalse(state.applyEffectiveStats(25, 0.5D));
+        assertEquals(60, state.getMaximumMana());
+        assertEquals(10, state.drainUpTo(60));
+        assertTrue(state.hasPayableReservation(inner));
+        state.commit(inner);
+        assertTrue(state.hasPayableReservation(outer));
+        state.release(outer);
+
+        assertTrue(state.applyEffectiveStats(25, 0.5D));
+        assertEquals(25, state.getMaximumMana());
+        assertEquals(25, state.getCurrentMana());
+    }
+
+    @Test
     void newStateStartsFull() {
         ManaState state = new ManaState();
 

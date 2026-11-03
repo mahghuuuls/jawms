@@ -14,7 +14,6 @@ import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentCon
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentService;
 import com.mahghuuuls.jawms.internal.modifier.ManaProfileEvaluation;
 import com.mahghuuuls.jawms.internal.modifier.ManaProfileEvaluator;
-import com.mahghuuuls.jawms.internal.modifier.ResolvedManaProfile;
 import electroblob.wizardry.spell.Spell;
 import com.mahghuuuls.jawms.internal.casting.CastCostContextManager;
 import net.minecraft.entity.player.EntityPlayer;
@@ -348,7 +347,7 @@ public final class ManaService implements IManaService {
                 || (hunger > 0 && player.getFoodStats().getFoodLevel() - hunger < minimumHunger)) {
             throw new IllegalStateException("Participating payment is no longer valid.");
         }
-        transition(player, state, ManaCauses.SPELL_COST, false, () -> {
+        transition(player, state, ManaCauses.SPELL_COST, false, true, () -> {
             state.commit(reservation);
             if (hunger > 0) player.getFoodStats().addStats(-hunger, 0.0F);
             finalizeReceipt.run();
@@ -366,7 +365,7 @@ public final class ManaService implements IManaService {
             EnumHand hand, ResourceLocation spellId) {
         ManaState state = requireMutableState(player);
         if (continuous && !player.isCreative()) state.markContinuousCastSuccessful(hand, spellId);
-        else if (!player.isCreative()) startRegenerationLockout(player, state);
+        else if (!player.isCreative()) startRegenerationLockout(player, state, true);
     }
 
     public static void beginContinuousCast(
@@ -439,12 +438,15 @@ public final class ManaService implements IManaService {
     public static void clearTransientLifecycleState(EntityPlayer player) {
         ManaState state = requireMutableState(player);
         boolean force = state.isContinuousCastActive() || state.getRemainingLockoutTicks() > 0L;
-        transition(player, state, ManaCauses.LIFECYCLE, force,
-                state::clearTransientLifecycleState);
-        ManaMutationCoordinator.clear(player.getUniqueID());
-        CastCostContextManager.clearAll(player);
-        CastPaymentContextManager.clearAll(player);
-        CastPaymentService.clear(player);
+        try {
+            transition(player, state, ManaCauses.LIFECYCLE, force,
+                    state::clearTransientLifecycleState);
+        } finally {
+            ManaMutationCoordinator.clear(player.getUniqueID());
+            CastCostContextManager.clearAll(player);
+            CastPaymentContextManager.clearAll(player);
+            CastPaymentService.clear(player);
+        }
     }
 
     public static void copyForClone(EntityPlayer replacementPlayer, ManaState original) {
@@ -470,6 +472,18 @@ public final class ManaService implements IManaService {
                 );
             }
         }
+    }
+
+    /** Accept a profile deferred by a protected cast at its cleanup boundary. */
+    public static void flushPendingProfileEvaluation(EntityPlayer player, ManaReservation reservation) {
+        ManaState state;
+        try {
+            state = requireServerState(player);
+        } catch (IllegalStateException invalidLifecycle) {
+            return;
+        }
+        if (!reservation.matchesGeneration(state) || !state.hasPendingProfileEvaluation()) return;
+        transition(player, state, ManaCauses.STAT_CLAMP, false, state::applyPendingProfileEvaluation);
     }
 
     public static void tickPlayer(EntityPlayer player, GameplayRules rules) {
@@ -512,9 +526,7 @@ public final class ManaService implements IManaService {
             ManaProfileEvaluation replacementEvaluation = evaluateProfile(
                     player, replacement
             );
-            ResolvedManaProfile replacementProfile = replacementEvaluation.getProfile();
-            state.clampLockoutAfterReload(replacementProfile.getLockoutTicks());
-            boolean profileChanged = state.applyProfileEvaluation(replacementEvaluation);
+            boolean profileChanged = state.applyReloadProfileEvaluation(replacementEvaluation);
             ManaPublicState newState = snapshot(state);
             boolean lockoutEnded = hadLockout && newState.getRemainingLockoutTicks() == 0L;
             if (!oldState.equals(newState)) {
@@ -560,13 +572,17 @@ public final class ManaService implements IManaService {
     }
 
     private static void startRegenerationLockout(EntityPlayer player, ManaState state) {
+        startRegenerationLockout(player, state, false);
+    }
+
+    private static void startRegenerationLockout(EntityPlayer player, ManaState state, boolean propagateObserverFault) {
         long duration = state.getEffectiveLockoutTicks();
         boolean restart = state.getRemainingLockoutTicks() > 0L;
         transition(
                 player,
                 state,
                 restart ? ManaCauses.LOCKOUT_RESTART : ManaCauses.LOCKOUT_START,
-                duration > 0L,
+                duration > 0L, propagateObserverFault,
                 () -> state.startRegenerationLockout(duration)
         );
     }
@@ -578,6 +594,11 @@ public final class ManaService implements IManaService {
             boolean forceEvent,
             Runnable mutation
     ) {
+        transition(player, state, cause, forceEvent, false, mutation);
+    }
+
+    private static void transition(EntityPlayer player, ManaState state, ResourceLocation cause,
+            boolean forceEvent, boolean propagateObserverFault, Runnable mutation) {
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
             ManaPublicState oldState = snapshot(state);
@@ -585,7 +606,7 @@ public final class ManaService implements IManaService {
             ManaPublicState newState = snapshot(state);
             if (!oldState.equals(newState) || forceEvent) {
                 synchronizeDisplayChange(player, oldState, newState, state);
-                publishTransition(player, oldState, newState, cause, forceEvent);
+                publishTransition(player, oldState, newState, cause, forceEvent, propagateObserverFault);
             }
         }
     }
@@ -597,6 +618,11 @@ public final class ManaService implements IManaService {
             ResourceLocation cause,
             boolean forceEvent
     ) {
+        publishTransition(player, oldState, newState, cause, forceEvent, false);
+    }
+
+    private static void publishTransition(EntityPlayer player, ManaPublicState oldState,
+            ManaPublicState newState, ResourceLocation cause, boolean forceEvent, boolean propagateObserverFault) {
         if (!forceEvent && !hasMeaningfulChange(oldState, newState)) {
             return;
         }
@@ -614,6 +640,7 @@ public final class ManaService implements IManaService {
                     newState,
                     exception
             );
+            if (propagateObserverFault) throw exception;
         }
     }
 

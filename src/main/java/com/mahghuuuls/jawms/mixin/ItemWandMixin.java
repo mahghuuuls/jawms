@@ -381,21 +381,23 @@ public abstract class ItemWandMixin {
         if (!caster.world.isRemote && !WizardryWandBridge.isCastAllowed()) return false;
         ParticipantUseService.Scope scope = caster.world.isRemote || CastCostRegistry.instance().isEmpty()
                 ? null : ParticipantUseService.enterCast(caster, stack, spell, hand);
+        Throwable primary = null;
         try {
             if (scope != null && !ParticipantUseService.supportedDepth()) return false;
-            return original.call(
-                    stack,
-                    spell,
-                    caster,
-                    hand,
-                    castingTick,
-                    modifiers
-            );
+            return original.call(stack, spell, caster, hand, castingTick, modifiers);
+        } catch (RuntimeException | Error fault) {
+            primary = fault;
+            throw fault;
         } finally {
-            try { if (scope != null) ParticipantUseService.exitCast(scope); }
-            finally {
-                WizardryWandBridge.cleanupToDepth(caster, initialDepth);
-                WizardryWandBridge.endDiscreteCast(caster, hand, spell);
+            try {
+                try { if (scope != null) ParticipantUseService.exitCast(scope); }
+                finally {
+                    try { WizardryWandBridge.cleanupToDepth(caster, initialDepth); }
+                    finally { WizardryWandBridge.endDiscreteCast(caster, hand, spell); }
+                }
+            } catch (RuntimeException | Error fault) {
+                if (primary == null) throw fault;
+                if (primary != fault) primary.addSuppressed(fault);
             }
         }
     }

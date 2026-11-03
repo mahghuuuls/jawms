@@ -7,13 +7,14 @@ import net.minecraft.util.EnumHand;
 import net.minecraft.util.ResourceLocation;
 
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.UUID;
 
 /** Server-thread authority for complete mana-plus-hunger cast payments. */
 public final class CastPaymentService {
 
-    private static final Map<UUID, Integer> RESERVED_HUNGER = new HashMap<>();
+    private static final Map<EntityPlayer, HungerClaim> RESERVED_HUNGER = new IdentityHashMap<>();
     private static final Map<UUID, PaymentRecord> LAST_PAYMENT = new HashMap<>();
 
     private CastPaymentService() {
@@ -58,10 +59,8 @@ public final class CastPaymentService {
             return null;
         }
         if (plan.getHunger() > 0) {
-            RESERVED_HUNGER.put(
-                    player.getUniqueID(),
-                    saturatedAdd(reservedHunger(player), plan.getHunger())
-            );
+            RESERVED_HUNGER.put(player, new HungerClaim(mana,
+                    saturatedAdd(reservedHunger(player), plan.getHunger())));
         }
         CastPaymentReservation reservation = new CastPaymentReservation(
                 mana, plan, policy, hand, spellId, continuous
@@ -103,7 +102,7 @@ public final class CastPaymentService {
                 hand,
                 spellId
         );
-        releaseHungerClaim(player, reservation.getPaidHunger());
+        releaseHungerClaim(player, reservation);
         reservation.resolve();
         record(player, reservation.getPolicy(), reservation.getPlan(),
                 hand, spellId, "committed");
@@ -125,13 +124,18 @@ public final class CastPaymentService {
         if (!isValid(player, reservation)) {
             throw new IllegalStateException("Participating payment claim was invalidated.");
         }
-        ManaService.commitParticipatingCastPayment(player, reservation.getManaReservation(),
-                reservation.getPaidHunger(), reservation.getPolicy().getMinimumHunger(), () -> {
-                    releaseHungerClaim(player, reservation.getPaidHunger());
-                    reservation.resolveCommitted();
-                    record(player, reservation.getPolicy(), reservation.getPlan(),
-                            reservation.getHand(), reservation.getSpellId(), "committed");
-                });
+        try {
+            ManaService.commitParticipatingCastPayment(player, reservation.getManaReservation(),
+                    reservation.getPaidHunger(), reservation.getPolicy().getMinimumHunger(), () -> {
+                        releaseHungerClaim(player, reservation);
+                        reservation.resolveCommitted();
+                        record(player, reservation.getPolicy(), reservation.getPlan(),
+                                reservation.getHand(), reservation.getSpellId(), "committed");
+                    });
+        } catch (RuntimeException | Error fault) {
+            reservation.recordInterruptedCommit();
+            throw fault;
+        }
     }
 
     public static synchronized void release(
@@ -140,11 +144,19 @@ public final class CastPaymentService {
         if (reservation == null || !reservation.isActive()) {
             return;
         }
+        if (!reservation.getManaReservation().isCurrentGeneration()) {
+            reservation.resolve();
+            return;
+        }
         ManaService.releaseReservation(reservation.getManaReservation());
-        releaseHungerClaim(player, reservation.getPaidHunger());
+        releaseHungerClaim(player, reservation);
         reservation.resolve();
         record(player, reservation.getPolicy(), reservation.getPlan(),
                 reservation.getHand(), reservation.getSpellId(), "released");
+    }
+
+    public static void flushPendingProfileEvaluation(EntityPlayer player, CastPaymentReservation reservation) {
+        ManaService.flushPendingProfileEvaluation(player, reservation.getManaReservation());
     }
 
     public static synchronized int getReservedHunger(EntityPlayer player) {
@@ -154,7 +166,7 @@ public final class CastPaymentService {
 
     public static synchronized void clear(EntityPlayer player) {
         if (player != null) {
-            RESERVED_HUNGER.remove(player.getUniqueID());
+            RESERVED_HUNGER.remove(player);
             LAST_PAYMENT.remove(player.getUniqueID());
         }
     }
@@ -205,22 +217,33 @@ public final class CastPaymentService {
     }
 
     private static int reservedHunger(EntityPlayer player) {
-        Integer reserved = RESERVED_HUNGER.get(player.getUniqueID());
-        return reserved == null ? 0 : reserved;
+        HungerClaim claim = RESERVED_HUNGER.get(player);
+        if (claim == null) return 0;
+        if (!claim.generation.matchesGeneration(ManaService.requireState(player))) {
+            RESERVED_HUNGER.remove(player);
+            return 0;
+        }
+        return claim.amount;
     }
 
-    private static void releaseHungerClaim(EntityPlayer player, int amount) {
-        if (amount == 0) {
-            return;
-        }
-        int remaining = reservedHunger(player) - amount;
-        if (remaining < 0) {
-            throw new IllegalStateException("Reserved hunger accounting was corrupted.");
-        }
-        if (remaining == 0) {
-            RESERVED_HUNGER.remove(player.getUniqueID());
-        } else {
-            RESERVED_HUNGER.put(player.getUniqueID(), remaining);
+    private static void releaseHungerClaim(EntityPlayer player, CastPaymentReservation reservation) {
+        int amount = reservation.getPaidHunger();
+        if (amount == 0) return;
+        HungerClaim claim = RESERVED_HUNGER.get(player);
+        if (claim == null || !claim.generation.sharesGeneration(reservation.getManaReservation())) return;
+        int remaining = claim.amount - amount;
+        if (remaining < 0) throw new IllegalStateException("Reserved hunger accounting was corrupted.");
+        if (remaining == 0) RESERVED_HUNGER.remove(player);
+        else claim.amount = remaining;
+    }
+
+    private static final class HungerClaim {
+        private final ManaReservation generation;
+        private int amount;
+
+        private HungerClaim(ManaReservation generation, int amount) {
+            this.generation = generation;
+            this.amount = amount;
         }
     }
 

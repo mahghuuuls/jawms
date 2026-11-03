@@ -46,7 +46,7 @@ class CastCostCoordinatorTest {
         assertEquals(2, registry.snapshot().size());
     }
 
-    @Test void trueEffectSettlesLocalThenIdOrderBeforeAcceptedCompletionAndFinalNotification() {
+    @Test void trueEffectSettlesLocalThenIdOrderBeforeFinalNotificationAndAcceptedCompletion() {
         List<String> trace = new ArrayList<>();
         Local local = new Local(trace);
         CastCostRegistry registry = new CastCostRegistry();
@@ -59,10 +59,44 @@ class CastCostCoordinatorTest {
         });
         assertTrue(result.isAccepted());
         assertEquals(Arrays.asList("prepare:a", "prepare:b", "effect", "local", "settle:a",
-                "settle:b", "accepted", "notify:a:ACCEPTED", "notify:b:ACCEPTED"), trace);
+                "settle:b", "notify:a:ACCEPTED", "notify:b:ACCEPTED", "accepted"), trace);
         assertEquals(12, result.getPaidMana());
         assertEquals(4.0D, result.getParticipants().get(0).getAmount());
         assertEquals(0, a.releases + b.releases);
+        assertFalse(CastCostCoordinator.isCallbackActive());
+    }
+
+    @Test void finalObserverInvalidationPreservesPaymentButSuppressesSuccess() {
+        assertFinalObserverFailure(false, CastAttemptOutcome.Status.INVALID_AFTER_EFFECT);
+    }
+
+    @Test void finalObserverThrowPreservesPaymentButSuppressesSuccess() {
+        assertFinalObserverFailure(true, CastAttemptOutcome.Status.SETTLEMENT_FAULT);
+    }
+
+    private void assertFinalObserverFailure(boolean throwsFault, CastAttemptOutcome.Status status) {
+        List<String> trace = new ArrayList<>();
+        Local local = new Local(trace);
+        CastCostRegistry registry = new CastCostRegistry();
+        Handle handle = new Handle("a", trace);
+        registry.register(new ResourceLocation("test:a"), new ICastCostParticipant() {
+            public CastCostPreparation prepare(CastAttemptContext context) {
+                return CastCostPreparation.accepted(handle);
+            }
+
+            public void onAttemptResolved(CastAttemptOutcome outcome) {
+                assertEquals(12, outcome.getPaidMana());
+                assertTrue(CastCostCoordinator.isCallbackActive());
+                if (throwsFault) throw new IllegalStateException("Observer failed");
+                local.valid = false;
+            }
+        });
+        CastAttemptOutcome result = CastCostCoordinator.execute(registry, context(), local, () -> true);
+        assertEquals(status, result.getStatus());
+        assertEquals(12, result.getPaidMana());
+        assertEquals(4.0D, result.getParticipants().get(0).getAmount());
+        assertFalse(local.accepted);
+        assertEquals(0, handle.releases);
         assertFalse(CastCostCoordinator.isCallbackActive());
     }
 
@@ -185,7 +219,7 @@ class CastCostCoordinatorTest {
             public void onAttemptResolved(CastAttemptOutcome result) { throw new IllegalStateException("observer"); }
         });
         CastAttemptOutcome result = CastCostCoordinator.execute(registry, context(), new Local(trace), () -> true);
-        assertTrue(result.isAccepted());
+        assertEquals(CastAttemptOutcome.Status.SETTLEMENT_FAULT, result.getStatus());
         assertEquals(CastParticipantOutcome.Status.PAID, result.getParticipants().get(0).getStatus());
         assertEquals(CastParticipantOutcome.Failure.NOTIFICATION, result.getParticipants().get(0).getFailure());
     }
@@ -240,8 +274,9 @@ class CastCostCoordinatorTest {
     private static class Local implements CastCostCoordinator.LocalPayment {
         final List<String> trace;
         boolean committed, accepted, released;
+        boolean valid = true;
         Local(List<String> trace) { this.trace = trace; }
-        public boolean isValid() { return true; }
+        public boolean isValid() { return valid; }
         public void commit() { committed = true; trace.add("local"); }
         public void completeAccepted() { accepted = true; trace.add("accepted"); }
         public void release() { released = true; }

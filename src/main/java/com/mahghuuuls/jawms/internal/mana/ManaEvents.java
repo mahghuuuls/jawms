@@ -45,6 +45,7 @@ public final class ManaEvents {
         ManaProviderRegistry.instance().remove(event.getEntityPlayer());
         ManaState original = event.getOriginal().getCapability(ManaCapability.INSTANCE, null);
         ManaState replacement = event.getEntityPlayer().getCapability(ManaCapability.INSTANCE, null);
+        if (original != null) original.invalidateReservations();
         if (original != null && replacement != null) {
             ManaService.copyForClone(event.getEntityPlayer(), original);
         }

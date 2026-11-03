@@ -78,6 +78,18 @@ public final class CastCostContextManager {
                 context.profileMultiplier, context.efficiencyPoints, context.scale);
     }
 
+    /** A nested spell body must not read or overwrite its parent's accepted inputs. */
+    static synchronized Runnable suspend(EntityPlayer player, EnumHand hand) {
+        Key key = new Key(player.getUniqueID(), player.world.isRemote, hand);
+        Context previous = CONTEXTS.remove(key);
+        return () -> {
+            synchronized (CastCostContextManager.class) {
+                if (previous == null) CONTEXTS.remove(key);
+                else CONTEXTS.put(key, previous);
+            }
+        };
+    }
+
     public static synchronized void clear(EntityPlayer player, EnumHand hand) {
         clear(player.getUniqueID(), player.world.isRemote, hand);
     }

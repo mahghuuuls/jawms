@@ -15,6 +15,7 @@ public final class CastPaymentReservation {
     private final boolean continuous;
     private boolean active = true;
     private boolean committed;
+    private boolean hungerAmountKnown = true;
 
     CastPaymentReservation(
             ManaReservation manaReservation,
@@ -33,6 +34,12 @@ public final class CastPaymentReservation {
     }
 
     ManaReservation getManaReservation() { return manaReservation; }
+
+    public boolean isCurrentGeneration() { return manaReservation.isCurrentGeneration(); }
+    public boolean sharesGeneration(CastPaymentReservation other) {
+        return manaReservation.sharesGeneration(other.manaReservation);
+    }
+
     public CastPaymentPlan getPlan() { return plan; }
     public DemonicSealPolicy getPolicy() { return policy; }
     public EnumHand getHand() { return hand; }
@@ -42,6 +49,16 @@ public final class CastPaymentReservation {
     public int getPaidHunger() { return plan.getHunger(); }
     public boolean isActive() { return active; }
     public boolean isCommitted() { return committed; }
+
+    public int actualPaidMana() { return manaReservation.wasCommitted() ? getPaidMana() : 0; }
+    public int actualPaidHunger() { return committed ? getPaidHunger() : 0; }
+    public boolean isLocalAmountKnown() { return hungerAmountKnown; }
+
+    void recordInterruptedCommit() {
+        if (manaReservation.wasCommitted() && !committed && getPaidHunger() > 0) {
+            hungerAmountKnown = false;
+        }
+    }
 
     void resolveCommitted() {
         resolve();

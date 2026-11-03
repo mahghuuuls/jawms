@@ -27,6 +27,7 @@ public final class ManaState {
     private double regenerationRemainder;
     private long remainingLockoutTicks;
     private int reservedMana;
+    private Object reservationGeneration = new Object();
     private boolean continuousCastActive;
     private boolean continuousCastSuccessful;
     private boolean continuousCastInterrupted;
@@ -42,6 +43,8 @@ public final class ManaState {
     private int lastInsufficientAvailable = -1;
     private long revision;
     private ManaProfileEvaluation acceptedProfileEvaluation;
+    private ManaProfileEvaluation pendingProfileEvaluation;
+    private boolean pendingReloadLockoutClamp;
 
     public ManaState() {
         GameplayRules rules = GameplayRulesManager.current();
@@ -151,6 +154,15 @@ public final class ManaState {
         return true;
     }
 
+    Object reservationGeneration() {
+        return reservationGeneration;
+    }
+
+    void invalidateReservations() {
+        reservationGeneration = new Object();
+        reservedMana = 0;
+    }
+
     ManaReservation reserve(int amount) {
         requireNonNegative(amount);
         if (amount > getAvailableMana()) {
@@ -164,7 +176,7 @@ public final class ManaState {
         requireActiveReservation(reservation);
         reservedMana -= reservation.getAmount();
         currentMana -= reservation.getAmount();
-        reservation.resolve();
+        reservation.commit();
         if (reservation.getAmount() > 0) {
             revision++;
         }
@@ -403,6 +415,7 @@ public final class ManaState {
         if (!Double.isFinite(regenerationPerSecond) || regenerationPerSecond < 0.0D) {
             throw new IllegalArgumentException("Effective regeneration must be finite and non-negative.");
         }
+        if (maximumMana < reservedMana) return false;
         acceptedProfileEvaluation = null;
         boolean changed = pendingLoadedMana != null
                 || maximumMana != effectiveMaximum
@@ -445,11 +458,35 @@ public final class ManaState {
     }
 
     public boolean applyProfileEvaluation(ManaProfileEvaluation evaluation) {
+        return applyProfileEvaluation(evaluation, false);
+    }
+
+    boolean applyReloadProfileEvaluation(ManaProfileEvaluation evaluation) {
+        return applyProfileEvaluation(evaluation, true);
+    }
+
+    private boolean applyProfileEvaluation(ManaProfileEvaluation evaluation, boolean rulesReload) {
         if (evaluation == null) {
             throw new NullPointerException("evaluation");
         }
-        boolean changed = applyResolvedProfile(evaluation.getProfile());
-        acceptedProfileEvaluation = evaluation;
+        pendingProfileEvaluation = evaluation;
+        pendingReloadLockoutClamp |= rulesReload;
+        return applyPendingProfileEvaluation();
+    }
+
+    boolean hasPendingProfileEvaluation() {
+        return pendingProfileEvaluation != null;
+    }
+
+    boolean applyPendingProfileEvaluation() {
+        if (pendingProfileEvaluation == null) return false;
+        ResolvedManaProfile profile = pendingProfileEvaluation.getProfile();
+        if (profile.getMaximumMana() < reservedMana) return false;
+        if (pendingReloadLockoutClamp) clampLockoutAfterReload(profile.getLockoutTicks());
+        boolean changed = applyResolvedProfile(profile);
+        acceptedProfileEvaluation = pendingProfileEvaluation;
+        pendingProfileEvaluation = null;
+        pendingReloadLockoutClamp = false;
         return changed;
     }
 
@@ -537,7 +574,9 @@ public final class ManaState {
     }
 
     private void resetTransientCastingState() {
-        reservedMana = 0;
+        invalidateReservations();
+        pendingProfileEvaluation = null;
+        pendingReloadLockoutClamp = false;
         lastInsufficientNoticeTick = Long.MIN_VALUE;
         lastInsufficientRequired = -1;
         lastInsufficientAvailable = -1;

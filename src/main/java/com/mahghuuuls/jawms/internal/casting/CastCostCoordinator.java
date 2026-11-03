@@ -23,6 +23,7 @@ final class CastCostCoordinator {
         boolean isCommitted();
         int paidMana();
         int paidHunger();
+        default boolean isAmountKnown() { return true; }
     }
 
     static boolean isCallbackActive() { return CALLBACK_DEPTH.get() > 0; }
@@ -119,9 +120,7 @@ final class CastCostCoordinator {
                     attempt.status = CastAttemptOutcome.Status.INVALID_AFTER_EFFECT;
                     return attempt.finish(CastCostReleaseReason.INVALID_AFTER_EFFECT);
                 }
-                callback(() -> { local.completeAccepted(); return null; });
-                attempt.status = attempt.valid() ? CastAttemptOutcome.Status.ACCEPTED
-                        : CastAttemptOutcome.Status.INVALID_AFTER_EFFECT;
+                attempt.status = CastAttemptOutcome.Status.ACCEPTED;
             } catch (RuntimeException fault) {
                 attempt.status = CastAttemptOutcome.Status.SETTLEMENT_FAULT;
             }
@@ -135,6 +134,10 @@ final class CastCostCoordinator {
             attempt.cleanup(CastCostReleaseReason.ABANDONED_CALL);
             if (OPEN_HANDLES.get().isEmpty()) OPEN_HANDLES.remove();
         }
+    }
+
+    static void runGuarded(Runnable action) {
+        callback(() -> { action.run(); return null; });
     }
 
     private static <T> T callback(java.util.function.Supplier<T> action) {
@@ -200,24 +203,40 @@ final class CastCostCoordinator {
             List<CastParticipantOutcome> results = new ArrayList<>();
             for (Claim claim : claims) results.add(claim.receipt());
             return new CastAttemptOutcome(context, status, effectInvoked, effectSuccessful,
-                    true, local.paidMana(), local.paidHunger(), results);
+                    local.isAmountKnown(), local.paidMana(), local.paidHunger(), results);
         }
         CastAttemptOutcome finish(CastCostReleaseReason reason) {
             cleanup(reason);
-            CastAttemptOutcome result = receipt();
+
             if (!notified) {
                 notified = true;
                 for (Claim claim : claims) {
                     try {
-                        final CastAttemptOutcome notification = result;
+                        final CastAttemptOutcome notification = receipt();
                         callback(() -> {
                             claim.registration.participant.onAttemptResolved(notification);
                             return null;
                         });
                     } catch (RuntimeException fault) {
                         // The actual amount/status remains intact after a notification fault.
-                        claim.failure = CastParticipantOutcome.Failure.NOTIFICATION;
+                        if (claim.failure == CastParticipantOutcome.Failure.NONE) {
+                            claim.failure = CastParticipantOutcome.Failure.NOTIFICATION;
+                        }
+                        if (status == CastAttemptOutcome.Status.ACCEPTED) {
+                            status = CastAttemptOutcome.Status.SETTLEMENT_FAULT;
+                        }
                     }
+                    if (status == CastAttemptOutcome.Status.ACCEPTED && !local.isValid()) {
+                        status = CastAttemptOutcome.Status.INVALID_AFTER_EFFECT;
+                    }
+                }
+            }
+            if (status == CastAttemptOutcome.Status.ACCEPTED) {
+                try {
+                    callback(() -> { local.completeAccepted(); return null; });
+                    if (!local.isValid()) status = CastAttemptOutcome.Status.INVALID_AFTER_EFFECT;
+                } catch (RuntimeException fault) {
+                    status = CastAttemptOutcome.Status.SETTLEMENT_FAULT;
                 }
             }
             return receipt();

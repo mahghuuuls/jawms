@@ -491,6 +491,41 @@ class ManaServiceTest {
     }
 
     @Test
+    void deferredReloadPreservesAcceptedExplanationAndUsesLatestSafeEvaluation() {
+        PlayerFixture fixture = playerFixture();
+        GameplayRules original = GameplayRules.initialDefaults();
+        GameplayRules first = rulesWithMaximum(original, 11L, 20);
+        GameplayRules latest = rulesWithMaximum(original, 12L, 25);
+        ManaService.tickPlayer(fixture.player, original);
+        fixture.state.startRegenerationLockout(100L);
+        ManaReservation claim = ManaService.reserveMana(fixture.player, 40);
+
+        ManaService.applyRulesReload(fixture.player, original, first);
+        ManaService.applyRulesReload(fixture.player, first, latest);
+
+        assertEquals(60, fixture.state.getMaximumMana());
+        assertEquals(100L, fixture.state.getRemainingLockoutTicks());
+        assertEquals(original.getRevision(),
+                ManaService.explainAcceptedProfile(fixture.player).getGameplayRulesRevision());
+        assertTrue(ManaService.isReservationValid(fixture.player, claim));
+        ManaService.releaseReservation(claim);
+
+        ManaService.flushPendingProfileEvaluation(fixture.player, claim);
+        assertEquals(25, fixture.state.getMaximumMana());
+        assertEquals(25, fixture.state.getCurrentMana());
+        assertEquals(12L, ManaService.explainAcceptedProfile(fixture.player).getGameplayRulesRevision());
+        assertEquals(25, ManaService.explainAcceptedProfile(fixture.player).getFinalMaximumMana());
+        assertEquals(0L, fixture.state.getRemainingLockoutTicks());
+    }
+
+    private static GameplayRules rulesWithMaximum(GameplayRules source, long revision, int maximum) {
+        return new GameplayRules(revision, maximum, source.getBaseRegeneration(), 0,
+                source.getCostFormula(), source.getSmallFlask(), source.getMediumFlask(),
+                source.getLargeFlask(), Collections.emptyMap(), Collections.emptyList(),
+                WizardryArmorProfile.DEFAULT);
+    }
+
+    @Test
     void maximumOnlyChangeMakesLeavingFullObservable() {
         PlayerFixture fixture = playerFixture();
         RecordingListener listener = register(new RecordingListener(fixture.player));
@@ -579,6 +614,22 @@ class ManaServiceTest {
         assertEquals(0L, event.getNewState().getRemainingLockoutTicks());
         assertFalse(event.getOldState().isRegenerationEligible());
         assertFalse(event.getNewState().isRegenerationEligible());
+    }
+
+    @Test
+    void participatingListenerFailurePropagatesAfterFinalizedDebit() {
+        PlayerFixture fixture = playerFixture();
+        ThrowingListener listener = register(new ThrowingListener(fixture.player));
+        ManaReservation claim = ManaService.reserveMana(fixture.player, 10);
+        java.util.concurrent.atomic.AtomicBoolean finalized = new java.util.concurrent.atomic.AtomicBoolean();
+
+        assertThrows(RuntimeException.class, () -> ManaService.commitParticipatingCastPayment(
+                fixture.player, claim, 0, 0, () -> finalized.set(true)));
+
+        assertTrue(finalized.get());
+        assertEquals(50, fixture.state.getCurrentMana());
+        assertEquals(1, listener.calls);
+        assertFalse(ManaService.isReservationValid(fixture.player, claim));
     }
 
     @Test

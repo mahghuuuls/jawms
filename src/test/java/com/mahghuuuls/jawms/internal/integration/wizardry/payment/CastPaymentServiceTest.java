@@ -312,6 +312,51 @@ class CastPaymentServiceTest {
     }
 
     @Test
+    void originalCapabilityCleanupDoesNotDebitReplacementHungerClaim() {
+        Fixture fixture = fixture(7, 8);
+        CastPaymentReservation old = participatingReservation(fixture, 12);
+        ManaState replacement = new ManaState();
+        replacement.setCurrentMana(7);
+        when(fixture.player.getCapability(ManaCapability.INSTANCE, null)).thenReturn(replacement);
+        CastPaymentReservation current = participatingReservation(fixture, 12);
+
+        assertFalse(CastPaymentService.isValid(fixture.player, old));
+        assertEquals(1, CastPaymentService.getReservedHunger(fixture.player));
+        CastPaymentService.release(fixture.player, old);
+        assertTrue(CastPaymentService.isValid(fixture.player, current));
+        assertEquals(1, CastPaymentService.getReservedHunger(fixture.player));
+
+        CastPaymentService.commitParticipating(fixture.player, current);
+        assertEquals(7, fixture.state.getCurrentMana());
+        assertEquals(0, replacement.getCurrentMana());
+        assertEquals(7, fixture.food.getFoodLevel());
+        assertEquals(0, CastPaymentService.getReservedHunger(fixture.player));
+    }
+
+    @Test
+    void interruptedFoodWriteRetainsManaDebitAndMarksHungerUnknown() {
+        Fixture fixture = fixture(7, 7);
+        FoodStats food = org.mockito.Mockito.spy(fixture.food);
+        when(fixture.player.getFoodStats()).thenReturn(food);
+        CastPaymentReservation reservation = participatingReservation(fixture, 12);
+        org.mockito.Mockito.doAnswer(call -> {
+            food.setFoodLevel(6);
+            throw new IllegalStateException("Food write interrupted");
+        }).when(food).addStats(-1, 0.0F);
+
+        assertThrows(IllegalStateException.class,
+                () -> CastPaymentService.commitParticipating(fixture.player, reservation));
+        assertEquals(0, fixture.state.getCurrentMana());
+        assertEquals(7, reservation.actualPaidMana());
+        assertEquals(6, food.getFoodLevel());
+        assertFalse(reservation.isLocalAmountKnown());
+
+        CastPaymentService.release(fixture.player, reservation);
+        assertEquals(0, CastPaymentService.getReservedHunger(fixture.player));
+        assertEquals(0, fixture.state.getCurrentMana());
+    }
+
+    @Test
     void participatingMixedPaymentProtectsOtherPendingHungerClaims() {
         Fixture fixture = fixture(7, 8);
         CastPaymentReservation first = participatingReservation(fixture, 12);

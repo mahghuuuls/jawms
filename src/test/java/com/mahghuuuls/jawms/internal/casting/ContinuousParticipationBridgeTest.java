@@ -127,6 +127,99 @@ class ContinuousParticipationBridgeTest {
             });
         }
     }
+    @Test void nestedOtherPlayerOffhandSettlesOnlyItsOwnClaim() throws Exception {
+        Fixture outer = new Fixture(20, false);
+        Fixture child = new Fixture(20, false);
+        when(child.player.getHeldItem(EnumHand.OFF_HAND)).thenReturn(child.stack);
+        when(Spell.registry.getValue(outer.spell.getRegistryName())).thenReturn(outer.spell);
+        when(outer.spell.cast(eq(child.world), eq(child.player), eq(EnumHand.OFF_HAND), eq(0), any()))
+                .thenReturn(true);
+        List<CastAttemptOutcome> outcomes = new ArrayList<>();
+        ICastCostParticipant participant = new ICastCostParticipant() {
+            public CastCostPreparation prepare(CastAttemptContext context) {
+                return CastCostPreparation.accepted(new ICastCostReservation() {
+                    public boolean isValid() { return true; }
+                    public CastCostSettlement settle() { return CastCostSettlement.paid(1, false); }
+                    public void release(CastCostReleaseReason reason) { fail("Accepted claim released"); }
+                });
+            }
+            public void onAttemptResolved(CastAttemptOutcome outcome) { outcomes.add(outcome); }
+        };
+        when(outer.spell.cast(eq(outer.world), eq(outer.player), eq(EnumHand.MAIN_HAND), eq(0), any()))
+                .thenAnswer(call -> {
+                    assertEquals(outer.startingMana - 10, outer.state.getAvailableMana());
+                    int depth = WizardryWandBridge.captureAttemptDepth();
+                    try {
+                        assertTrue(WizardryWandBridge.castWithReservation(child.stack, outer.spell,
+                                child.world, child.player, EnumHand.OFF_HAND, 0, new SpellModifiers()));
+                    } finally {
+                        WizardryWandBridge.cleanupToDepth(child.player, depth);
+                    }
+                    assertEquals(outer.startingMana, outer.state.getCurrentMana());
+                    assertEquals(outer.startingMana - 10, outer.state.getAvailableMana());
+                    return true;
+                });
+        withRegistry(participant, () -> {
+            try {
+                assertTrue(WizardryWandBridge.castWithReservation(outer.stack, outer.spell,
+                        outer.world, outer.player, EnumHand.MAIN_HAND, 0, new SpellModifiers()));
+                assertEquals(2, outcomes.size());
+                assertEquals(child.player.getUniqueID(), outcomes.get(0).getPlayerId());
+                assertEquals(EnumHand.OFF_HAND, outcomes.get(0).getHand());
+                assertEquals(outer.player.getUniqueID(), outcomes.get(1).getPlayerId());
+                assertEquals(outer.startingMana - 10, outer.state.getCurrentMana());
+                assertEquals(child.startingMana - 10, child.state.getCurrentMana());
+            } finally {
+                WizardryWandBridge.cleanupToDepth(outer.player, 0);
+                child.clear();
+                outer.clear();
+                CastCostContextManager.clearAll(child.player);
+            }
+        });
+    }
+
+    @Test void seventeenthLiveBridgeAttemptIsRejectedBeforePreparationAndEffect() throws Exception {
+        Fixture f = new Fixture(0, false);
+        AtomicInteger prepares = new AtomicInteger();
+        AtomicInteger effects = new AtomicInteger();
+        AtomicInteger settlements = new AtomicInteger();
+        ICastCostParticipant participant = context -> {
+            prepares.incrementAndGet();
+            return CastCostPreparation.accepted(new ICastCostReservation() {
+                public boolean isValid() { return true; }
+                public CastCostSettlement settle() {
+                    settlements.incrementAndGet();
+                    return CastCostSettlement.free(false);
+                }
+                public void release(CastCostReleaseReason reason) { fail("Accepted claim released"); }
+            });
+        };
+        when(f.spell.cast(eq(f.world), eq(f.player), eq(EnumHand.MAIN_HAND), anyInt(), any())).thenAnswer(call -> {
+            int level = effects.incrementAndGet();
+            int depth = WizardryWandBridge.captureAttemptDepth();
+            try {
+                boolean nested = WizardryWandBridge.castWithReservation(
+                        f.stack, f.spell, f.world, f.player, EnumHand.MAIN_HAND, 0, new SpellModifiers());
+                assertEquals(level < 16, nested);
+            } finally {
+                WizardryWandBridge.cleanupToDepth(f.player, depth);
+            }
+            return true;
+        });
+        withRegistry(participant, () -> {
+            try {
+                assertTrue(WizardryWandBridge.castWithReservation(
+                        f.stack, f.spell, f.world, f.player, EnumHand.MAIN_HAND, 0, new SpellModifiers()));
+                assertEquals(16, prepares.get());
+                assertEquals(16, effects.get());
+                assertEquals(16, settlements.get());
+            } finally {
+                WizardryWandBridge.cleanupToDepth(f.player, 0);
+                f.clear();
+            }
+        });
+    }
+
     @SuppressWarnings({"unchecked", "rawtypes"}) private static void withRegistry(ICastCostParticipant participant, Runnable body) throws Exception {
         CastCostRegistry registry = CastCostRegistry.instance();
         Field entries = CastCostRegistry.class.getDeclaredField("entries"); entries.setAccessible(true);
@@ -151,6 +244,7 @@ class ContinuousParticipationBridgeTest {
             player.world = world;
             when(world.isCallingFromMinecraftThread()).thenReturn(true);
             when(world.getMinecraftServer()).thenReturn(mock(MinecraftServer.class));
+            when(player.isEntityAlive()).thenReturn(true);
             when(player.getUniqueID()).thenReturn(UUID.randomUUID());
             when(player.getHeldItem(EnumHand.MAIN_HAND)).thenReturn(stack);
             when(player.isCreative()).thenReturn(creative);

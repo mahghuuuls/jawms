@@ -53,7 +53,8 @@ public final class WizardryWandBridge {
     }
 
     public static boolean isCastAllowed() {
-        return !CastCostCoordinator.isCallbackActive();
+        return !CastCostCoordinator.isCallbackActive()
+                && (CastCostRegistry.instance().isEmpty() || ATTEMPTS.get().size() < 16);
     }
 
     private static final ThreadLocal<Deque<CastAttempt>> ATTEMPTS =
@@ -217,7 +218,7 @@ public final class WizardryWandBridge {
             return castLegacyWithReservation(spell, world, caster, hand, castingTick, modifiers);
         }
         CastAttempt attempt = new CastAttempt(reservation, spell.getRegistryName(), hand,
-                true, caster.getUniqueID(), perfectionistPolicy(caster, spell));
+                true, caster, perfectionistPolicy(caster, spell));
         attempt.coordinated = true;
         ATTEMPTS.get().push(attempt);
         if (attemptSequence == Long.MAX_VALUE) {
@@ -233,36 +234,59 @@ public final class WizardryWandBridge {
         final int tick = world.getMinecraftServer().getTickCounter();
         final boolean physicalBinding = caster.getHeldItem(hand) == owningStack;
         final ItemStack acceptedStack = owningStack.copy();
+        CastCostCoordinator.LocalPayment localPayment = new CastCostCoordinator.LocalPayment() {
+            public boolean isValid() {
+                try {
+                    if (ATTEMPTS.get().size() > 16 || (spell.isContinuous && use != null && !use.valid()) || caster.world != world || !caster.isEntityAlive()
+                        || world.getMinecraftServer().getTickCounter() != tick
+                        || !WandBinding.semanticEquals(acceptedStack, owningStack)
+                        || (!spell.isContinuous && !acceptedStack.areCapsCompatible(owningStack))
+                        || (physicalBinding && caster.getHeldItem(hand) != owningStack)) return false;
+                    return ManaService.requireState(caster) == originalState
+                            && reservation.isCurrentGeneration()
+                            && (reservation.isCommitted()
+                            || CastPaymentService.isValid(caster, reservation));
+                } catch (RuntimeException invalid) { return false; }
+            }
+            public void commit() { CastPaymentService.commitParticipating(caster, reservation); }
+            public void completeAccepted() {
+                ManaService.completeParticipatingCast(caster, spell.isContinuous, hand, spell.getRegistryName());
+            }
+            public void release() { CastPaymentService.release(caster, reservation); }
+            public boolean isCommitted() { return reservation.isCommitted(); }
+            public int paidMana() { return reservation.actualPaidMana(); }
+            public int paidHunger() { return reservation.actualPaidHunger(); }
+            public boolean isAmountKnown() { return reservation.isLocalAmountKnown(); }
+        };
         CastAttemptOutcome outcome = CastCostCoordinator.execute(CastCostRegistry.instance(), context,
-                new CastCostCoordinator.LocalPayment() {
-                    public boolean isValid() {
-                        if (ATTEMPTS.get().size() > 16 || (spell.isContinuous && use != null && !use.valid()) || caster.world != world
-                                || world.getMinecraftServer().getTickCounter() != tick
-                                || (spell.isContinuous ? !WandBinding.semanticEquals(acceptedStack, owningStack)
-                                        : !ItemStack.areItemStacksEqual(acceptedStack, owningStack))
-                                || (physicalBinding && caster.getHeldItem(hand) != owningStack)) return false;
+                localPayment, () -> {
+                    Runnable restoreCost = CastCostContextManager.suspend(caster, hand);
+                    Runnable restorePayment = CastPaymentContextManager.suspend(caster, hand);
+                    Throwable primary = null;
+                    try {
+                        return spell.cast(world, caster, hand, castingTick, modifiers);
+                    } catch (RuntimeException | Error fault) {
+                        primary = fault;
+                        throw fault;
+                    } finally {
                         try {
-                            return ManaService.requireState(caster) == originalState
-                                    && (reservation.isCommitted()
-                                    || CastPaymentService.isValid(caster, reservation));
-                        } catch (IllegalStateException invalid) { return false; }
+                            if (localPayment.isValid()) {
+                                restoreCost.run();
+                                restorePayment.run();
+                            }
+                        } catch (RuntimeException | Error fault) {
+                            if (primary == null) throw fault;
+                            if (primary != fault) primary.addSuppressed(fault);
+                        }
                     }
-                    public void commit() { CastPaymentService.commitParticipating(caster, reservation); }
-                    public void completeAccepted() {
-                        ManaService.completeParticipatingCast(caster, spell.isContinuous, hand, spell.getRegistryName());
-                        if (isValid()) promotePendingForceArrows(caster, attempt);
-                    }
-                    public void release() { CastPaymentService.release(caster, reservation); }
-                    public boolean isCommitted() { return reservation.isCommitted(); }
-                    public int paidMana() { return isCommitted() ? reservation.getPaidMana() : 0; }
-                    public int paidHunger() { return isCommitted() ? reservation.getPaidHunger() : 0; }
-                }, () -> spell.cast(world, caster, hand, castingTick, modifiers));
+                });
         if (outcome.getStatus() == CastAttemptOutcome.Status.LEGACY) {
             if (use != null) use.outcome(outcome);
             ATTEMPTS.get().pop();
             if (spell.isContinuous && use != null && !use.permitsLegacy()) return false;
             return castLegacyWithReservation(spell, world, caster, hand, castingTick, modifiers);
         }
+        if (outcome.isAccepted()) promotePendingForceArrows(caster, attempt);
         CastingDiagnostics.participation(outcome, tick);
         if (use != null) use.outcome(outcome);
         return outcome.isAccepted();
@@ -344,7 +368,7 @@ public final class WizardryWandBridge {
                 spell.getRegistryName(),
                 hand,
                 !spell.isContinuous || cost > 0,
-                caster.getUniqueID(),
+                caster,
                 perfectionistPolicy(caster, spell)
         );
         ATTEMPTS.get().push(attempt);
@@ -558,7 +582,7 @@ public final class WizardryWandBridge {
         CastAttempt attempt = ATTEMPTS.get().peek();
         EntityPlayerMP player = (EntityPlayerMP) caster;
         if (attempt == null
-                || !attempt.ownerId.equals(player.getUniqueID())
+                || attempt.owner != player
                 || !equals(attempt.spellId, Spells.force_arrow.getRegistryName())) {
             return;
         }
@@ -570,15 +594,30 @@ public final class WizardryWandBridge {
 
     public static void cleanupToDepth(EntityPlayer caster, int depth) {
         Deque<CastAttempt> attempts = ATTEMPTS.get();
-        while (attempts.size() > depth) {
-            CastAttempt attempt = attempts.pop();
-            discardPendingForceArrows(attempt);
-            CastPaymentService.release(caster, attempt.reservation);
-            traceAttempt("reservation_cleanup", caster, attempt);
+        Throwable failure = null;
+        try {
+            while (attempts.size() > depth) {
+                CastAttempt attempt = attempts.pop();
+                try {
+                    try { discardPendingForceArrows(attempt); }
+                    finally { CastPaymentService.release(attempt.owner, attempt.reservation); }
+                    if (attempt.coordinated && attempt.reservation.isCurrentGeneration()
+                            && attempts.stream().noneMatch(parent -> parent.owner == attempt.owner
+                                    && parent.reservation.sharesGeneration(attempt.reservation))) {
+                        CastCostCoordinator.runGuarded(() -> CastPaymentService.flushPendingProfileEvaluation(
+                                attempt.owner, attempt.reservation));
+                    }
+                    traceAttempt("reservation_cleanup", attempt.owner, attempt);
+                } catch (RuntimeException | Error fault) {
+                    if (failure == null) failure = fault;
+                    else if (fault != failure) failure.addSuppressed(fault);
+                }
+            }
+        } finally {
+            if (attempts.isEmpty()) ATTEMPTS.remove();
         }
-        if (attempts.isEmpty()) {
-            ATTEMPTS.remove();
-        }
+        if (failure instanceof Error) throw (Error) failure;
+        if (failure != null) throw (RuntimeException) failure;
     }
 
     private static void commitTopAttempt(EntityPlayer caster, Spell spell, boolean required) {
@@ -598,7 +637,7 @@ public final class WizardryWandBridge {
             return;
         }
         ResourceLocation spellId = spell.getRegistryName();
-        if (!equals(attempt.spellId, spellId)) {
+        if (attempt.owner != caster || !equals(attempt.spellId, spellId)) {
             throw new IllegalStateException(
                     "JAWMS reservation spell mismatch: expected "
                             + attempt.spellId + " but received " + spellId + "."
@@ -768,7 +807,7 @@ public final class WizardryWandBridge {
         private final ResourceLocation spellId;
         private final EnumHand hand;
         private final boolean trace;
-        private final UUID ownerId;
+        private final EntityPlayer owner;
         private final PerfectionistPolicy perfectionistPolicy;
         private final List<UUID> pendingForceArrows = new ArrayList<>();
         private boolean coordinated;
@@ -778,14 +817,14 @@ public final class WizardryWandBridge {
                 ResourceLocation spellId,
                 EnumHand hand,
                 boolean trace,
-                UUID ownerId,
+                EntityPlayer owner,
                 PerfectionistPolicy perfectionistPolicy
         ) {
             this.reservation = reservation;
             this.spellId = spellId;
             this.hand = hand;
             this.trace = trace;
-            this.ownerId = ownerId;
+            this.owner = owner;
             this.perfectionistPolicy = perfectionistPolicy;
         }
     }

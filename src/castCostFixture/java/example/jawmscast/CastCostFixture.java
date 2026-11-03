@@ -22,6 +22,7 @@ import net.minecraft.world.World;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegistryEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.event.*;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.apache.logging.log4j.LogManager;
@@ -78,11 +79,12 @@ public final class CastCostFixture implements ICastCostParticipant {
         }
         final int amount = state.mode == Mode.FREE ? 0 : 4;
         final UUID ownerId = context.getPlayer().getUniqueID();
+        int generation = state.generation;
         state.claimed += amount;
         return CastCostPreparation.accepted(new ICastCostReservation() {
             private boolean open = true;
             public boolean isValid() {
-                return open && STATES.get(ownerId) == state
+                return open && STATES.get(ownerId) == state && state.generation == generation
                         && state.balance >= state.claimed;
             }
             public CastCostSettlement settle() {
@@ -93,6 +95,7 @@ public final class CastCostFixture implements ICastCostParticipant {
                 state.settlements++;
                 if (amount > 0) state.delayStarts++;
                 state.trace.add("provider_settle");
+                if ("settle-throw".equals(state.probe)) throw new ProbeFailure();
                 return amount == 0 ? CastCostSettlement.free(false) : CastCostSettlement.paid(amount, false);
             }
             public void release(CastCostReleaseReason reason) {
@@ -113,6 +116,13 @@ public final class CastCostFixture implements ICastCostParticipant {
         state.trace.add("resolved:" + outcome.getStatus());
         state.last = outcome.getStatus() + ",paidMana=" + outcome.getPaidMana()
                 + ",paidHunger=" + outcome.getPaidHunger();
+        if (outcome.isAccepted() && "final-invalidate".equals(state.probe)) {
+            MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
+            EntityPlayer player = server.getPlayerList().getPlayerByUUID(outcome.getPlayerId());
+            if (player == null) throw new IllegalStateException("Fixture operator disappeared");
+            player.setHeldItem(outcome.getHand(), ItemStack.EMPTY);
+            state.trace.add("final_observer_removed_original_wand");
+        }
     }
 
     @SubscribeEvent public void post(SpellCastEvent.Post event) {
@@ -145,6 +155,8 @@ public final class CastCostFixture implements ICastCostParticipant {
     private enum Mode { ABSENT, ALLOW, REFUSE, FREE }
     private static final class State {
         Mode mode = Mode.ABSENT;
+        int generation;
+        boolean nested;
         int balance = 40, claimed, preparations, effects, settlements, releases, delayStarts, posts, notifications;
         String last = "none", context = "none", probe = "true";
         final List<String> trace = new ArrayList<>();
@@ -161,6 +173,24 @@ public final class CastCostFixture implements ICastCostParticipant {
             state.trace.add("effect:" + state.probe);
             if ("throw".equals(state.probe)) throw new ProbeFailure();
             if ("false".equals(state.probe)) return false;
+            if ("invalidate".equals(state.probe)) {
+                state.generation++;
+                state.balance = 0;
+                state.trace.add("admin_invalidated_open_claim");
+            }
+            if ("nested".equals(state.probe) && !state.nested) {
+                state.nested = true;
+                try {
+                    ItemStack stack = caster.getHeldItem(hand);
+                    int openBefore = state.claimed;
+                    boolean child = ((ItemWand) stack.getItem()).cast(
+                            stack, this, caster, hand, ticks, modifiers.copy());
+                    state.trace.add("nested:success=" + child + ":openBefore="
+                            + openBefore + ":openAfter=" + state.claimed);
+                } finally {
+                    state.nested = false;
+                }
+            }
             caster.sendStatusMessage(new TextComponentString("Cast fixture: effect reached"), true);
             return true;
         }
@@ -170,7 +200,7 @@ public final class CastCostFixture implements ICastCostParticipant {
     public static final class CastFixtureCommand extends CommandBase {
         @Override public String getName() { return "jawms-cast-fixture"; }
         @Override public String getUsage(ICommandSender sender) {
-            return "/jawms-cast-fixture setup <absent|allow|refuse|free> [base] | inspect | probe <false|throw> | teardown";
+            return "/jawms-cast-fixture setup <absent|allow|refuse|free> [base] | inspect | probe <false|throw|nested|invalidate|settle-throw|final-invalidate> | teardown";
         }
         @Override public int getRequiredPermissionLevel() { return 2; }
         @Override public void execute(MinecraftServer server, ICommandSender sender, String[] args)
@@ -203,7 +233,7 @@ public final class CastCostFixture implements ICastCostParticipant {
             } else if ("teardown".equals(args[0]) && args.length == 1) {
                 STATES.remove(player.getUniqueID());
             } else if ("probe".equals(args[0]) && args.length == 2
-                    && ("false".equals(args[1]) || "throw".equals(args[1]))) {
+                    && java.util.Arrays.asList("false", "throw", "nested", "invalidate", "settle-throw", "final-invalidate").contains(args[1])) {
                 State state = state(player);
                 ItemStack stack = player.getHeldItemMainhand();
                 if (!(stack.getItem() instanceof ItemWand) || WandHelper.getCurrentSpell(stack) != probeSpell) {
