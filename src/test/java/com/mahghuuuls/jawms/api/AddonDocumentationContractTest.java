@@ -20,6 +20,15 @@ import org.junit.jupiter.api.Test;
 
 class AddonDocumentationContractTest {
 
+    @Test
+    void documentedParticipationRegistrationMatchesTheCompiledFixture() throws IOException {
+        String registration = "ManaApi.registerCastCostParticipant(new ResourceLocation(ID, \"resource\"), this);";
+        String fixture = "src/castCostFixture/java/example/jawmscast/CastCostFixture.java";
+        assertTrue(read(GUIDE_PATH).contains(registration));
+        assertTrue(read(GUIDE_PATH).contains("../" + fixture));
+        assertTrue(read(fixture).contains(registration));
+    }
+
     private static final String GUIDE_PATH = "docs/ADDON-DEVELOPMENT.md";
     private static final String GUIDE_URL =
             "https://github.com/mahghuuuls/jawms/blob/main/" + GUIDE_PATH;

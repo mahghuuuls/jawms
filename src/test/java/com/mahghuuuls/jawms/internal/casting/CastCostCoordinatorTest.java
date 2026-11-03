@@ -132,13 +132,28 @@ class CastCostCoordinatorTest {
         Handle a = new Handle("a", trace), b = new Handle("b", trace);
         b.releaseFailure = true;
         CastCostRegistry registry = registry(a, trace);
-        registry.register(new ResourceLocation("test:b"), participant(b, trace));
+        ResourceLocation provider = new ResourceLocation("test:b");
+        registry.register(provider, new ICastCostParticipant() {
+            public CastCostPreparation prepare(CastAttemptContext c) { return CastCostPreparation.accepted(b); }
+            public void onAttemptResolved(CastAttemptOutcome result) {
+                trace.add("observer");
+                throw new IllegalStateException("observer");
+            }
+        });
+        List<ResourceLocation> additionalFaults = new ArrayList<>();
         RuntimeException original = new RuntimeException("effect");
+        List<CastAttemptOutcome> reported = new ArrayList<>();
         Local local = new Local(trace);
         assertSame(original, assertThrows(RuntimeException.class, () -> CastCostCoordinator.execute(
-                registry, context(), local, () -> { throw original; })));
+                registry, context(), local, () -> { throw original; }, reported::add,
+                (receipt, participantId) -> additionalFaults.add(participantId))));
         assertEquals(1, a.releases); assertEquals(1, b.releases);
         assertFalse(local.committed); assertTrue(local.released);
+        assertEquals(1, reported.size());
+        assertEquals(Arrays.asList(provider), additionalFaults);
+        assertEquals(1, trace.stream().filter("observer"::equals).count());
+        assertTrue(reported.get(0).getParticipants().stream().anyMatch(
+                result -> result.getFailure() == CastParticipantOutcome.Failure.CLEANUP));
     }
 
     @Test void prepareExceptionAndNullAreFaultsNotLegacyFallback() {
@@ -216,12 +231,16 @@ class CastCostCoordinatorTest {
         CastCostRegistry registry = new CastCostRegistry();
         registry.register(new ResourceLocation("test:a"), new ICastCostParticipant() {
             public CastCostPreparation prepare(CastAttemptContext c) { return CastCostPreparation.accepted(handle); }
-            public void onAttemptResolved(CastAttemptOutcome result) { throw new IllegalStateException("observer"); }
+            public void onAttemptResolved(CastAttemptOutcome result) {
+                trace.add("observer");
+                throw new IllegalStateException("observer");
+            }
         });
         CastAttemptOutcome result = CastCostCoordinator.execute(registry, context(), new Local(trace), () -> true);
         assertEquals(CastAttemptOutcome.Status.SETTLEMENT_FAULT, result.getStatus());
         assertEquals(CastParticipantOutcome.Status.PAID, result.getParticipants().get(0).getStatus());
         assertEquals(CastParticipantOutcome.Failure.NOTIFICATION, result.getParticipants().get(0).getFailure());
+        assertEquals(1, trace.stream().filter("observer"::equals).count());
     }
 
     @Test void nestedReuseCannotReleaseTheParentsActiveHandle() {

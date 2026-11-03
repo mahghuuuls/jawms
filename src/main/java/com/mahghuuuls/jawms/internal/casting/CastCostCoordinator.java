@@ -6,7 +6,10 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import net.minecraft.util.ResourceLocation;
 
 /** Owns the synchronous protocol; payment owners never receive an effect callback. */
 final class CastCostCoordinator {
@@ -30,7 +33,14 @@ final class CastCostCoordinator {
 
     static CastAttemptOutcome execute(CastCostRegistry registry, CastAttemptContext context,
             LocalPayment local, BooleanSupplier effect) {
-        Attempt attempt = new Attempt(context, local);
+        return execute(registry, context, local, effect, outcome -> {}, (outcome, participant) -> {});
+    }
+
+    static CastAttemptOutcome execute(CastCostRegistry registry, CastAttemptContext context,
+            LocalPayment local, BooleanSupplier effect,
+            Consumer<CastAttemptOutcome> reportThrownEffect,
+            BiConsumer<CastAttemptOutcome, ResourceLocation> reportAdditionalNotificationFault) {
+        Attempt attempt = new Attempt(context, local, reportAdditionalNotificationFault);
         try {
             for (CastCostRegistry.Entry registration : registry.snapshot()) {
                 Claim claim = new Claim(registration);
@@ -76,7 +86,11 @@ final class CastCostCoordinator {
             } catch (RuntimeException | Error original) {
                 attempt.status = CastAttemptOutcome.Status.EFFECT_EXCEPTION;
                 try { attempt.finish(CastCostReleaseReason.EFFECT_EXCEPTION); }
-                catch (RuntimeException | Error cleanupFault) { original.addSuppressed(cleanupFault); }
+                catch (RuntimeException | Error cleanupFault) { if (cleanupFault != original) original.addSuppressed(cleanupFault); }
+                try { reportThrownEffect.accept(attempt.receipt()); }
+                catch (RuntimeException | Error diagnosticFault) {
+                    if (diagnosticFault != original) original.addSuppressed(diagnosticFault);
+                }
                 throw original;
             }
             if (!attempt.effectSuccessful) {
@@ -155,7 +169,11 @@ final class CastCostCoordinator {
         final List<Claim> claims = new ArrayList<>();
         CastAttemptOutcome.Status status = CastAttemptOutcome.Status.REFUSED;
         boolean applicable, effectInvoked, effectSuccessful, cleaned, notified;
-        Attempt(CastAttemptContext context, LocalPayment local) {
+        private final BiConsumer<CastAttemptOutcome, ResourceLocation> reportAdditionalNotificationFault;
+
+        Attempt(CastAttemptContext context, LocalPayment local,
+                BiConsumer<CastAttemptOutcome, ResourceLocation> reportAdditionalNotificationFault) {
+            this.reportAdditionalNotificationFault = reportAdditionalNotificationFault;
             this.context = context;
             this.local = local;
         }
@@ -221,6 +239,12 @@ final class CastCostCoordinator {
                         // The actual amount/status remains intact after a notification fault.
                         if (claim.failure == CastParticipantOutcome.Failure.NONE) {
                             claim.failure = CastParticipantOutcome.Failure.NOTIFICATION;
+                        } else {
+                            try {
+                                reportAdditionalNotificationFault.accept(receipt(), claim.registration.id);
+                            } catch (RuntimeException diagnosticFault) {
+                                // Diagnostic delivery cannot prevent later notifications.
+                            }
                         }
                         if (status == CastAttemptOutcome.Status.ACCEPTED) {
                             status = CastAttemptOutcome.Status.SETTLEMENT_FAULT;

@@ -9,7 +9,12 @@ package com.mahghuuuls.jawms.api;
 public interface ICastCostParticipant {
     CastCostPreparation prepare(CastAttemptContext context);
 
-    /** Final coordination result, not merely this participant's own debit. */
+    /**
+     * Receives an immutable view of coordination through this notification boundary.
+     * Earlier debits remain recorded if a subsequent callback fails or invalidates the
+     * attempt. The notification is not replayed, and ordinary success processing can
+     * still be suppressed after this callback returns.
+     */
     default void onAttemptResolved(CastAttemptOutcome outcome) {
     }
 }

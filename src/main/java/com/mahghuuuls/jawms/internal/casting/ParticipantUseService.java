@@ -33,7 +33,11 @@ public final class ParticipantUseService {
     private ParticipantUseService() {}
 
     public static void clear() {
-        for (Connection connection : CONNECTIONS.values()) connection.wands.clear();
+        for (Connection connection : CONNECTIONS.values()) {
+            finishDiagnostics(connection.state.current(), CloseCause.CANCELLED);
+            connection.wands.clear();
+        }
+        CastingDiagnostics.clear();
         CONNECTIONS.clear(); ORIGINS.remove(); CASTS.remove();
         run = UUID.randomUUID(); uses = 0;
     }
@@ -78,7 +82,11 @@ public final class ParticipantUseService {
     public static void intent(EntityPlayerMP player, ParticipantUseMessages.Intent message, long receipt) {
         Connection c = connection(player);
         long previous = c == null ? 0 : c.state.newestIntent();
+        ParticipantUseState.Use previousUse = c == null ? null : c.state.current();
         if (c != null && c.state.intent(message.epoch(), message.intent(), message.hand(), message.spell())) {
+            if (previousUse != null && previousUse != c.state.current()) {
+                finishDiagnostics(previousUse, CloseCause.CANCELLED);
+            }
             if (message.intent() > previous) c.traces = 0;
             trace(c, "intent", receipt, c.state.current());
         }
@@ -240,6 +248,7 @@ public final class ParticipantUseService {
     private static void close(EntityPlayer player, Connection c, ParticipantUseState.Use use, CloseCause cause, boolean reset) {
         if (!c.state.close(use, cause)) return;
         trace(c, "close_" + cause.name(), 0, use);
+        finishDiagnostics(use, cause);
         if (player.world != null && !player.world.isRemote) {
             if (ManaService.requireState(player).isContinuousCastActive()) ManaService.finishContinuousCast(player);
             CastCostContextManager.clear(player, use.hand);
@@ -249,6 +258,12 @@ public final class ParticipantUseService {
             if (reset && player.isHandActive() && player.getActiveHand() == use.hand) player.resetActiveHand();
         }
     }
+    private static void finishDiagnostics(ParticipantUseState.Use use, CloseCause cause) {
+        if (use == null || use.diagnostics == null) return;
+        if (CastingDiagnostics.isEnabled()) use.diagnostics.emit(cause);
+        use.diagnostics = null;
+    }
+
     private static void trace(Connection c, String event, long receipt, ParticipantUseState.Use use) {
         if (!CastingDiagnostics.isEnabled() || c.traces++ >= 128) return;
         JustAnotherWizardryManaSystemMod.LOGGER.info("JAWMS use: event={}, epoch={}, intent={}, use={}, receipt={}, thread={}",
@@ -295,6 +310,14 @@ public final class ParticipantUseService {
             cause = CloseCause.CANCELLED;
             return false;
         }
+        CastingDiagnostics.UseSummary diagnostics() {
+            if (!CastingDiagnostics.isEnabled() || !spell.isContinuous || origin == null
+                    || origin.connection == null || !origin.connection.state.isOpen(origin.use)
+                    || !id.equals(run + "/use/" + origin.use.id)) return null;
+            if (origin.use.diagnostics == null) origin.use.diagnostics = new CastingDiagnostics.UseSummary();
+            return origin.use.diagnostics;
+        }
+
         public void outcome(CastAttemptOutcome outcome) {
             if (!spell.isContinuous) return;
             switch (outcome.getStatus()) {

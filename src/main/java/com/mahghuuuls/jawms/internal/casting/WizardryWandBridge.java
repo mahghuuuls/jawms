@@ -279,7 +279,11 @@ public final class WizardryWandBridge {
                             if (primary != fault) primary.addSuppressed(fault);
                         }
                     }
-                });
+                }, thrown -> CastingDiagnostics.thrownEffect(thrown, tick, context.getManaPortion(),
+                        use == null ? null : use.diagnostics()),
+                (receipt, participant) -> CastingDiagnostics.notificationFault(receipt, participant, tick));
+        CastingDiagnostics.participation(outcome, tick, context.getManaPortion(),
+                use == null ? null : use.diagnostics());
         if (outcome.getStatus() == CastAttemptOutcome.Status.LEGACY) {
             if (use != null) use.outcome(outcome);
             ATTEMPTS.get().pop();
@@ -287,7 +291,6 @@ public final class WizardryWandBridge {
             return castLegacyWithReservation(spell, world, caster, hand, castingTick, modifiers);
         }
         if (outcome.isAccepted()) promotePendingForceArrows(caster, attempt);
-        CastingDiagnostics.participation(outcome, tick);
         if (use != null) use.outcome(outcome);
         return outcome.isAccepted();
     }

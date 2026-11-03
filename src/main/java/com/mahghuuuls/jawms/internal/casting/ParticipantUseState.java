@@ -99,6 +99,7 @@ final class ParticipantUseState {
         private boolean blocked;
         private boolean suppressFinish;
         ParticipantUseMessages.CloseCause cause;
+        CastingDiagnostics.UseSummary diagnostics;
 
         private Use(long intent, long id, EnumHand hand, ResourceLocation spell, Object stack) {
             this.intent = intent;
