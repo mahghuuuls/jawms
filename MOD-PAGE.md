@@ -15,6 +15,7 @@ There are already good mods that add player mana to Wizardry, including [Wizardr
 - Mana flasks restore player mana, with any configured remainder going to eligible Wizard armor.
 - Wizardry upgrades, artefacts, Demonic Seal, and Font of Mana have been adapted to interact with player mana.
 - Stored wand mana is preserved for compatibility, but it is ignored for casting and its obsolete displays are hidden.
+- Spell books display continuous spell costs as `Mana/sec`.
 
 Wizardry's spell selection, tiers, cooldowns, progression, charge-up behavior, and spell effects remain in place. JAWMS replaces the mana resource rather than replacing Wizardry's complete casting system.
 
@@ -54,6 +55,10 @@ JAWMS is designed so that its default balance can be replaced without writing an
 - The player-mana behavior of Wizardry upgrades, artefacts, Demonic Seal, and Font of Mana.
 - The local appearance and visibility of the built-in mana bar.
 - Which registered addon modifier providers a server permits.
+
+### Addon-managed Cast Costs
+
+An addon using JAWMS API 1.7 can charge its own resource alongside mana. It can refuse an unaffordable cast or stop a continuous spell after its final effect and payment. This behavior requires an addon that registers a cast-cost participant.
 
 ### Configuration Files and Reloading
 

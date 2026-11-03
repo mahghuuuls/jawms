@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.2.0]
+
+### Added
+
+- API `1.7` lets addons reserve and settle their own resource as part of a Wizardry wand cast, refuse a cast before its effect, and request a continuous cast stop based on the actual payment.
+- Optional server casting diagnostics report payments, refusals, and faults. Enable detail at startup with `-Djawms.debugCasting=true`. Repeated fault warnings are rate-limited.
+
+### Changed
+
+- When a participating resource runs out during a continuous spell, the last effect runs and the permitted payment settles before casting stops. Normal release keeps Wizardry's Finish behavior.
+
+### Fixed
+
+- Shortened the English continuous spell cost label to `Mana/sec` so it fits on the spell-book page.
+
+### Compatibility
+
+- Retains the API `1.2` through `1.6` binary surfaces.
+- Carries forward the MixinBooter `10.7` runtime minimum and the separate `11.8` build pin. The packaged candidate passed testing on Cleanroom `0.7.14-alpha` with its built-in MixinBooter `10.7` identity.
+
 ## [1.1.1]
 
 ### Fixed

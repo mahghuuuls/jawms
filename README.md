@@ -26,14 +26,14 @@ Server operators can apply valid gameplay and integration changes with `/jawms r
 
 ## Requirements
 
-JAWMS targets Minecraft 1.12.2 with Forge-compatible loading on Cleanroom. The JAWMS `1.2.0` candidate requires:
+JAWMS targets Minecraft 1.12.2 with Forge-compatible loading on Cleanroom. JAWMS `1.2.0` requires:
 
 - Electroblob's Wizardry `4.3.19` or newer
 - MixinBooter `10.7` or newer (provided by Cleanroom; a separate mod on standard Forge)
 
 Install JAWMS on both the client and server for multiplayer. Baubles `1.5.2` or newer is optional.
 
-Cleanroom supplies its own MixinBooter compatibility identity. The 1.2.0 candidate targets the latest Cleanroom release, with packaged qualification pending. Runtime requirements accept newer dependency versions; they do not guarantee compatibility with every future release. See the addon guide for independently pinned development dependencies.
+The packaged 1.2.0 candidate was tested on Cleanroom `0.7.14-alpha` with its built-in MixinBooter `10.7` identity. See the addon guide for the separate development dependency pins.
 
 ## Companion Addons
 
@@ -44,9 +44,11 @@ Cleanroom supplies its own MixinBooter compatibility identity. The 1.2.0 candida
 
 ## For Addon Developers
 
-Use the canonical [Addon Development Guide](docs/ADDON-DEVELOPMENT.md) for the candidate dependency recipe, release/API matrix, server API, modifier units, client snapshot semantics, replacement-HUD lifecycle, and cache-safe rendering obligations. The separate [Command Reference](docs/COMMANDS.md) documents primary commands, optional Developer Tools, and contributor/API fixtures under their truthful availability tiers.
+Use the canonical [Addon Development Guide](docs/ADDON-DEVELOPMENT.md) for the dependency recipe, release/API matrix, server API, modifier units, client snapshot semantics, replacement-HUD lifecycle, and cache-safe rendering obligations. The separate [Command Reference](docs/COMMANDS.md) documents primary commands, optional Developer Tools, and contributor/API fixtures under their truthful availability tiers.
 
-The JAWMS `1.2.0` candidate provides API `1.7` and retains the earlier API `1.2` through `1.6` binary surfaces. The supported package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`; other JAWMS packages are implementation details. Use the guide for current dependency setup and API usage; older releases are documented separately in [API History](docs/API-HISTORY.md).
+JAWMS `1.2.0` provides API `1.7` and retains the earlier API `1.2` through `1.6` binary surfaces. The supported package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`; other JAWMS packages are implementation details. Use the guide for current dependency setup and API usage; older releases are documented separately in [API History](docs/API-HISTORY.md).
+
+API 1.7 lets addons register an additional cast-cost participant. A participant can reserve its own resource, refuse a cast before the spell takes effect, and settle after a successful effect. A continuous spell can stop after its last effect and the permitted payment. Operators can enable detailed casting diagnostics with the server JVM option `-Djawms.debugCasting=true`.
 
 ## License
 
