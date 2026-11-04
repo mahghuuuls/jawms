@@ -31,12 +31,13 @@ tasks.register('verifyMixinBootstrap') {
         def early = 'mixins.jawms.early.json'
         def late = 'mixins.jawms.late.json'
         def expected = [
-                (early): [mixins: ['EntityLivingBaseMixin', 'EntityPlayerMixin', 'ContainerWandPublicationMixin', 'EntityPlayerMPWandPublicationMixin', 'InventoryPlayerWandPublicationMixin', 'NetHandlerWandPublicationServerMixin', 'NetworkManagerWandPublicationMixin', 'NonNullListWandMutationMixin'],
+                (early): [mixins: ['EntityLivingBaseMixin', 'PlayerListManaLifecycleMixin', 'EntityPlayerMixin', 'ContainerWandPublicationMixin', 'EntityPlayerMPWandPublicationMixin', 'InventoryPlayerWandPublicationMixin', 'NetHandlerWandPublicationServerMixin', 'NetworkManagerWandPublicationMixin', 'NonNullListWandMutationMixin'],
                           client: ['ItemStackTooltipClientMixin', 'MinecraftWandSelectionClientMixin', 'NetHandlerWandPublicationClientMixin', 'PlayerControllerParticipantUseMixin']],
                 (late): [mixins: ['WandHelperBindingMutationMixin', 'EntityForceArrowMixin', 'ForceArrowMixin', 'ItemWandMixin',
                                  'ItemWizardArmourMixin', 'ItemArtefactMixin', 'ItemManaFlaskMixin'],
                          client: ['GuiSpellInfoMixin', 'ItemWandClientMixin', 'ItemManaFlaskClientMixin']]
         ]
+        def expectedHookCount = 23
         def validate = { Map configs, Map attributes, Map runArguments ->
             require(configs.keySet() == expected.keySet(), 'Missing or unexpected required Mixin configuration')
             def membership = []
@@ -54,7 +55,8 @@ tasks.register('verifyMixinBootstrap') {
                     membership.addAll(config[side])
                 }
             }
-            require(membership.size() == 22 && membership.toSet().size() == 22, 'Required hooks must be unique and complete')
+            require(membership.size() == expectedHookCount && membership.toSet().size() == expectedHookCount,
+                    'Required hooks must be unique and complete')
             require(attributes.FMLCorePlugin == propertyString('coremod_plugin_class_name')
                     && attributes.FMLCorePluginContainsFMLMod == 'true', 'Primary coremod/normal mod discovery metadata missing')
             require(!['MixinConfigs', 'MixinConnector', 'TweakClass'].any { attributes.containsKey(it) },
@@ -110,7 +112,7 @@ tasks.register('verifyMixinBootstrap') {
         reject('missing native config') { validate([(late): configs[late]], attributes, runArguments) }
         reject('missing single hook') {
             def changed = copyConfigs()
-            changed[early].mixins.remove('NetworkManagerWandPublicationMixin')
+            changed[early].mixins.remove('PlayerListManaLifecycleMixin')
             validate(changed, attributes, runArguments)
         }
         reject('wrong target phase') {
@@ -138,7 +140,7 @@ tasks.register('verifyMixinBootstrap') {
         report.parentFile.mkdirs()
         report.text = JsonOutput.prettyPrint(JsonOutput.toJson([
                 type: 'Static artifact and development run-model inspection; no runtime application proof',
-                configNames: configs.keySet(), hookCount: 22, buildPin: '11.8',
+                configNames: configs.keySet(), hookCount: expectedHookCount, buildPin: '11.8',
                 primaryCoremod: attributes.FMLCorePlugin, runArguments: runArguments,
                 sensitivityCases: ['missing native config', 'missing single hook', 'wrong target phase', 'duplicate hook', 'wrong side', 'manifest route', 'missing dev entry', 'coremod composition']
         ]))
