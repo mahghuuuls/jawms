@@ -217,9 +217,8 @@ public final class ManaService implements IManaService {
         ManaState state = requireServerState(player);
         if (!state.profileHeld() && state.hasPendingLoadedMana()
                 && !ManaEvaluationGuard.isEvaluating(player.getUniqueID())) {
-            state.applyProfileEvaluation(evaluateProfile(
-                    player, GameplayRulesManager.current()
-            ));
+            ManaProfileEvaluation evaluation = evaluateCurrentProfile(player, state, GameplayRulesManager.current());
+            if (evaluation != null) state.applyProfileEvaluation(evaluation);
         }
         return state;
     }
@@ -238,7 +237,7 @@ public final class ManaService implements IManaService {
         return state.explainAcceptedProfile();
     }
 
-    private static ManaState requireServerState(EntityPlayer player) {
+    static ManaState requireServerState(EntityPlayer player) {
         if (player == null) {
             throw new NullPointerException("Player must not be null.");
         }
@@ -271,7 +270,9 @@ public final class ManaService implements IManaService {
     }
 
     public static ManaProfileReadiness getProfileReadiness(EntityPlayer player) {
-        ManaReadiness readiness = requireServerState(player).readiness;
+        ManaState state = requireServerState(player);
+        if (state.checkingDeath) return ManaProfileReadiness.PENDING;
+        ManaReadiness readiness = state.readiness;
         return readiness == null || (!readiness.held() && !readiness.hasEligibleProvider())
                 ? ManaProfileReadiness.LEGACY : readiness.phase();
     }
@@ -284,6 +285,7 @@ public final class ManaService implements IManaService {
         if (!(player instanceof EntityPlayerMP) || !(player.world instanceof WorldServer)
                 || player instanceof net.minecraftforge.common.util.FakePlayer) return;
         Set<ResourceLocation> eligible = ManaProviderRegistry.instance().eligibleReadinessProviders(rules);
+        ManaLifecycle.applyTransferSourcePolicy(state, eligible);
         if (state.readiness != null) {
             state.readiness.applyPolicy(eligible);
         } else if (!eligible.isEmpty()) {
@@ -295,30 +297,29 @@ public final class ManaService implements IManaService {
     public static void bindLogin(EntityPlayerMP player) {
         ManaState state = requireServerState(player);
         configureReadiness(player, state, GameplayRulesManager.current());
-        state.loginBound = true;
+        if (state.readiness != null) state.readiness.bound = true;
     }
 
     public static void finishLogin(EntityPlayerMP player) {
-        requireServerState(player).loginComplete = true;
+        ManaReadiness readiness = requireServerState(player).readiness;
+        if (readiness != null) {
+            readiness.world = player.getServerWorld();
+            readiness.complete = true;
+        }
     }
 
     public static void retireLogout(EntityPlayerMP player) {
-        ManaState state = requireServerState(player);
-        if (state.readiness == null) return;
-        state.retireReadiness();
-        ManaProviderRegistry.instance().remove(player);
+        ManaLifecycle.retire(player);
     }
 
     private static Object publicationContext(EntityPlayer player, ManaState state) {
-        net.minecraft.network.NetHandlerPlayServer connection = ((EntityPlayerMP) player).connection;
-        if (!state.loginBound || connection == null || connection.player != player) return null;
-        return player.world;
+        return ManaLifecycle.publicationWorld((EntityPlayerMP) player, state.readiness);
     }
 
     public static Optional<ManaProfileGeneration> getReadinessGeneration(EntityPlayer player,
             ResourceLocation id, Supplier<ManaProfileGeneration> create) {
         ManaState state = requireServerState(player);
-        return state.readiness == null ? Optional.empty()
+        return state.readiness == null || state.checkingDeath ? Optional.empty()
                 : state.readiness.generation(id, publicationContext(player, state), create);
     }
 
@@ -334,7 +335,7 @@ public final class ManaService implements IManaService {
         if (!initial && revision < 1) throw new IllegalArgumentException("Expected a positive revision.");
         ManaState state = requireServerState(player);
         if (state.readiness == null) return ManaReadiness.rejection(ManaContributionPublicationStatus.INAPPLICABLE);
-        if (ManaEvaluationGuard.isEvaluating(player.getUniqueID())
+        if (state.checkingDeath || ManaEvaluationGuard.isEvaluating(player.getUniqueID())
                 || ManaMutationCoordinator.currentDepth(player.getUniqueID()) > 0) {
             return ManaReadiness.rejection(ManaContributionPublicationStatus.BUSY);
         }
@@ -343,7 +344,9 @@ public final class ManaService implements IManaService {
         if (result.getRevision().isPresent() && !state.profileHeld()) {
             try (ManaMutationCoordinator.Scope ignored = ManaMutationCoordinator.enter(player.getUniqueID())) {
                 ManaPublicState before = snapshot(state);
-                boolean profileChanged = state.applyProfileEvaluation(evaluateProfile(player, GameplayRulesManager.current()));
+                ManaProfileEvaluation evaluation = evaluateCurrentProfile(player, state, GameplayRulesManager.current());
+                if (evaluation == null) return result;
+                boolean profileChanged = state.applyProfileEvaluation(evaluation);
                 ManaPublicState after = snapshot(state);
                 if (!before.equals(after)) {
                     synchronizeDisplayChange(player, before, after, state);
@@ -357,20 +360,21 @@ public final class ManaService implements IManaService {
     }
 
     private static void tickHeldProfile(EntityPlayerMP player, ManaState state, GameplayRules rules) {
+        if (state.checkingDeath) return;
+        if (state.recoveringTransfer) ManaLifecycle.recoverTransfer(player, state, rules);
         ManaReadiness readiness = state.readiness;
         if (readiness.isRetired()) return;
         int tick = player.getServer().getTickCounter();
         List<ResourceLocation> missing = readiness.missing();
-        if (state.loginComplete && player.connection != null && player.connection.player == player
-                && player.getServer().getPlayerList().getPlayerByUUID(player.getUniqueID()) == player
-                && player.getServerWorld() == player.getServer().getWorld(player.dimension) && missing.isEmpty()) {
-            ManaProfileEvaluation evaluation = evaluateProfile(player, rules);
+        if (missing.isEmpty() && ManaLifecycle.canAccept(player, readiness)) {
+            ManaProfileEvaluation evaluation = evaluateCurrentProfile(player, state, rules);
+            if (evaluation == null || !readiness.missing().isEmpty() || !ManaLifecycle.canAccept(player, readiness)) return;
             boolean recovering = readiness.phase() == ManaProfileReadiness.UNAVAILABLE;
             Integer input = state.acceptFirstProfile(evaluation);
             if (Boolean.getBoolean("jawms.debugManaReadiness")) {
                 JustAnotherWizardryManaSystemMod.LOGGER.info(
-                        "MANA_PROFILE_ACCEPTED player={} generation={} lifecycle=LOGIN path=PLAYER_END_TICK input={} current={} maximum={} rulesRevision={} recovery={}",
-                        player.getUniqueID(), readiness.identity, input, state.getCurrentMana(),
+                        "MANA_PROFILE_ACCEPTED player={} generation={} lifecycle={} path=PLAYER_END_TICK input={} current={} maximum={} rulesRevision={} recovery={}",
+                        player.getUniqueID(), readiness.identity, readiness.lifecycle, input, state.getCurrentMana(),
                         state.getMaximumMana(), rules.getRevision(), recovering);
             }
             if (recovering) {
@@ -381,8 +385,8 @@ public final class ManaService implements IManaService {
         } else if (readiness.deadlineElapsed(tick)) {
             readiness.unavailable();
             JustAnotherWizardryManaSystemMod.LOGGER.warn(
-                    "MANA_PROFILE_UNAVAILABLE player={} generation={} lifecycle=LOGIN missingProviders={}",
-                    player.getUniqueID(), readiness.identity, missing);
+                    "MANA_PROFILE_UNAVAILABLE player={} generation={} lifecycle={} missingProviders={}",
+                    player.getUniqueID(), readiness.identity, readiness.lifecycle, missing);
             ManaNetwork.synchronize(player, state);
         }
     }
@@ -413,7 +417,7 @@ public final class ManaService implements IManaService {
 
     public static void completeSuccessfulWandCast(EntityPlayer player, ManaReservation reservation) {
         ManaState state = requireMutableState(player);
-        if (reservation == null || !reservation.belongsTo(state)) {
+        if (state.profileHeld() || reservation == null || !reservation.belongsTo(state)) {
             throw new IllegalStateException("Successful wand cast has no matching mana reservation.");
         }
         transition(player, state, ManaCauses.SPELL_COST, false,
@@ -428,7 +432,7 @@ public final class ManaService implements IManaService {
             ResourceLocation spellId
     ) {
         ManaState state = requireMutableState(player);
-        if (reservation == null || !reservation.belongsTo(state)) {
+        if (state.profileHeld() || reservation == null || !reservation.belongsTo(state)) {
             throw new IllegalStateException(
                     "Successful continuous cast has no matching mana reservation."
             );
@@ -453,7 +457,7 @@ public final class ManaService implements IManaService {
             throw new IllegalArgumentException("Minimum hunger must not exceed 20.");
         }
         ManaState state = requireMutableState(player);
-        if (reservation == null
+        if (state.profileHeld() || reservation == null
                 || !reservation.belongsTo(state)
                 || !reservation.isActive()) {
             throw new IllegalStateException(
@@ -498,7 +502,7 @@ public final class ManaService implements IManaService {
 
     public static boolean isReservationValid(EntityPlayer player, ManaReservation reservation) {
         ManaState state = requireServerState(player);
-        return reservation != null && reservation.belongsTo(state) && reservation.isActive()
+        return !state.profileHeld() && reservation != null && reservation.belongsTo(state) && reservation.isActive()
                 && state.hasPayableReservation(reservation);
     }
 
@@ -506,6 +510,7 @@ public final class ManaService implements IManaService {
     public static void completeParticipatingCast(EntityPlayer player, boolean continuous,
             EnumHand hand, ResourceLocation spellId) {
         ManaState state = requireMutableState(player);
+        if (state.profileHeld()) return;
         if (continuous && !player.isCreative()) state.markContinuousCastSuccessful(hand, spellId);
         else if (!player.isCreative()) startRegenerationLockout(player, state, true);
     }
@@ -587,18 +592,30 @@ public final class ManaService implements IManaService {
                 transition(player, state, ManaCauses.LIFECYCLE, force, state::clearTransientLifecycleState);
             }
         } finally {
-            ManaMutationCoordinator.clear(player.getUniqueID());
-            CastCostContextManager.clearAll(player);
-            CastPaymentContextManager.clearAll(player);
-            CastPaymentService.clear(player);
+            clearLifecycleContexts(player);
         }
+    }
+
+    static void clearLifecycleContexts(EntityPlayer player) {
+        ManaMutationCoordinator.clear(player.getUniqueID());
+        CastCostContextManager.clearAll(player);
+        CastPaymentContextManager.clearAll(player);
+        CastPaymentService.clear(player);
     }
 
     public static void copyForClone(EntityPlayer replacementPlayer, ManaState original) {
         if (original == null) {
             throw new NullPointerException("Original mana state must not be null.");
         }
-        ManaState replacement = requireMutableState(replacementPlayer);
+        ManaState replacement = requireServerState(replacementPlayer);
+        if (replacement.readiness != null || original.readiness != null) {
+            if (replacement.readiness == null) {
+                ManaLifecycle.armReplacement((EntityPlayerMP) replacementPlayer, replacement);
+            }
+            replacement.copyIntrinsicMana(original);
+            return;
+        }
+        replacement = requireMutableState(replacementPlayer);
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(replacementPlayer.getUniqueID())) {
             ManaPublicState oldState = snapshot(original);
@@ -640,9 +657,9 @@ public final class ManaService implements IManaService {
         ManaPublicState oldState = snapshot(state);
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
-            boolean profileChanged = state.applyProfileEvaluation(
-                    evaluateProfile(player, rules)
-            );
+            ManaProfileEvaluation evaluation = evaluateCurrentProfile(player, state, rules);
+            if (evaluation == null) return;
+            boolean profileChanged = state.applyProfileEvaluation(evaluation);
             boolean lockoutEnded = state.getRemainingLockoutTicks() > 0L;
             boolean gateOpen = state.advanceRegenerationGate();
             lockoutEnded = lockoutEnded && state.getRemainingLockoutTicks() == 0L;
@@ -668,7 +685,18 @@ public final class ManaService implements IManaService {
             GameplayRules replacement
     ) {
         ManaState state = requireServerState(player);
+        boolean wasLegacy = state.readiness == null;
         configureReadiness(player, state, replacement);
+        if (state.checkingDeath || state.transfer != null && !state.transfer.mutated) {
+            state.deferProfileReload();
+            return;
+        }
+        if (wasLegacy && state.readiness != null
+                && ManaLifecycle.isCurrent((EntityPlayerMP) player, (WorldServer) player.world)) {
+            state.readiness.bound = true;
+            state.readiness.complete = true;
+            state.readiness.world = (WorldServer) player.world;
+        }
         if (state.profileHeld()) {
             ManaNetwork.synchronize(player, state);
             return;
@@ -678,9 +706,8 @@ public final class ManaService implements IManaService {
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
             ManaPublicState oldState = snapshot(state);
             boolean hadLockout = state.getRemainingLockoutTicks() > 0L;
-            ManaProfileEvaluation replacementEvaluation = evaluateProfile(
-                    player, replacement
-            );
+            ManaProfileEvaluation replacementEvaluation = evaluateCurrentProfile(player, state, replacement);
+            if (replacementEvaluation == null) return;
             boolean profileChanged = state.applyReloadProfileEvaluation(replacementEvaluation);
             ManaPublicState newState = snapshot(state);
             boolean lockoutEnded = hadLockout && newState.getRemainingLockoutTicks() == 0L;
@@ -847,10 +874,17 @@ public final class ManaService implements IManaService {
         }
     }
 
-    private static ManaProfileEvaluation evaluateProfile(
-            EntityPlayer player, GameplayRules rules
+    private static ManaProfileEvaluation evaluateCurrentProfile(
+            EntityPlayer player, ManaState state, GameplayRules rules
     ) {
-        return ManaProfileEvaluator.evaluate(player, rules);
+        ManaReadiness readiness = state.readiness;
+        GameplayRules activeRules = GameplayRulesManager.current();
+        ManaProfileEvaluation evaluation = ManaProfileEvaluator.evaluate(player, rules);
+        // A provider can synchronously invoke a native lifecycle transition during evaluation.
+        if (state.readiness != readiness || state.checkingDeath) return null;
+        if (readiness != null && (readiness.isRetired() || activeRules != GameplayRulesManager.current()
+                || !ManaLifecycle.isCurrent((EntityPlayerMP) player, readiness.world))) return null;
+        return evaluation;
     }
 
     private interface StateMutation {

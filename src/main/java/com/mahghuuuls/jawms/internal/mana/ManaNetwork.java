@@ -49,8 +49,12 @@ public final class ManaNetwork {
     public static void synchronize(EntityPlayer player, ManaState state) {
         if (!(player instanceof EntityPlayerMP)) return;
         EntityPlayerMP recipient = (EntityPlayerMP) player;
-        if (recipient.connection == null) return;
+        if (recipient.connection == null || state.checkingDeath) return;
         ManaReadiness readiness = state.readiness;
+        if (readiness != null && (readiness.isRetired() && !state.recoveringTransfer
+                || !readiness.bound && !state.recoveringTransfer
+                || recipient.connection.player != recipient
+                        && !ManaLifecycle.isReconcilingReplacement(recipient, readiness))) return;
         ManaStateMessage payload = state.profileHeld() ? null : new ManaStateMessage(
                 state.getCurrentMana(), state.getMaximumMana(), state.getEffectiveRegeneration(),
                 state.getRevision(), state.getGlobalSpellEfficiency(), state.getElementSpellEfficiency(),

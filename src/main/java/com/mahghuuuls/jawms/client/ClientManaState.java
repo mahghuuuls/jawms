@@ -6,6 +6,7 @@ import com.mahghuuuls.jawms.internal.mana.ManaReadinessMessage;
 import electroblob.wizardry.constants.Element;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.UUID;
 import com.mahghuuuls.jawms.internal.casting.CastCostContextManager;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentContextManager;
 import net.minecraft.client.Minecraft;
@@ -17,6 +18,8 @@ public final class ClientManaState {
     private static Object viewConnection;
     private static long managedSequence;
     private static boolean managedHeld;
+    private static UUID managedGeneration;
+    private static boolean awaitingLifecycle;
     private static int currentMana;
 
     public static boolean acceptsLegacy(Object handler, Object activeConnection) {
@@ -30,11 +33,24 @@ public final class ClientManaState {
         if (handler == null || handler != activeConnection) return;
         bindConnection(handler);
         if (message.getSequence() <= managedSequence) return;
-        if (managedSequence == 0) clear();
         managedSequence = message.getSequence();
-        managedHeld = message.getPhase() != ManaProfileReadiness.READY;
+        UUID generation = message.getGeneration();
+        boolean ready = message.getPhase() == ManaProfileReadiness.READY;
+        if (awaitingLifecycle && (ready || generation.equals(managedGeneration))) return;
+        if (ready && managedGeneration != null && !generation.equals(managedGeneration)) return;
+        awaitingLifecycle = false;
+        if (!generation.equals(managedGeneration)) clear();
+        managedGeneration = generation;
+        managedHeld = !ready;
         if (managedHeld) clear();
         else message.deliverPayload();
+    }
+
+    public static void invalidateLifecycle(Object handler, Object activeConnection) {
+        if (handler == null || handler != activeConnection || handler != viewConnection || managedSequence == 0) return;
+        awaitingLifecycle = true;
+        managedHeld = true;
+        clear();
     }
 
     public static boolean isManagedHeld(Object activeConnection) {
@@ -42,10 +58,12 @@ public final class ClientManaState {
     }
 
     private static void bindConnection(Object handler) {
-        if (viewConnection == handler) return;
+        if (handler != null && viewConnection == handler) return;
         viewConnection = handler;
         managedSequence = 0;
         managedHeld = false;
+        managedGeneration = null;
+        awaitingLifecycle = false;
         clear();
     }
     private static int maximumMana;
@@ -147,10 +165,7 @@ public final class ClientManaState {
             if (active != null && active != event.getHandler()) return;
             CastCostContextManager.clearClientSide();
             CastPaymentContextManager.clearClientSide();
-            viewConnection = null;
-            managedSequence = 0;
-            managedHeld = false;
-            clear();
+            bindConnection(null);
         });
     }
 

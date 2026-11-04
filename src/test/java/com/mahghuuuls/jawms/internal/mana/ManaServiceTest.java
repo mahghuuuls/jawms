@@ -19,9 +19,8 @@ import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorProfile;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.init.Bootstrap;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.network.NetHandlerPlayServer;
-import net.minecraft.network.NetworkManager;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.management.PlayerList;
 import net.minecraft.util.EnumHand;
@@ -31,6 +30,7 @@ import net.minecraft.world.World;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -54,6 +54,11 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 
 class ManaServiceTest {
+
+    @BeforeAll
+    static void bootstrapMinecraft() {
+        Bootstrap.register();
+    }
 
     @Test
     void earlyCallsDoNotConsumeLoadedManaBeforeFirstCompleteProfile() {
@@ -880,14 +885,14 @@ class ManaServiceTest {
         WorldServer world = (WorldServer) player.world;
         MinecraftServer server = mock(MinecraftServer.class);
         PlayerList players = mock(PlayerList.class);
-        new NetHandlerPlayServer(server, mock(NetworkManager.class), player);
+        ManaTestConnection.open(server, player);
         when(player.getServer()).thenReturn(server);
         when(player.getServerWorld()).thenReturn(world);
         when(server.getWorld(0)).thenReturn(world);
         when(server.getPlayerList()).thenReturn(players);
         when(players.getPlayerByUUID(player.getUniqueID())).thenReturn(player);
         fixture.state.readiness = new ManaReadiness(new LinkedHashSet<>(Arrays.asList(providers)), 0, false);
-        fixture.state.loginBound = true;
+        fixture.state.readiness.bound = true;
         ManaService.finishLogin(player);
         return fixture;
     }

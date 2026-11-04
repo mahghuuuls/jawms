@@ -60,8 +60,45 @@ class ClientManaStateTest {
         assertFalse(ClientManaState.acceptsLegacy(active, active));
         assertFalse(ClientManaState.acceptsLegacy(old, active));
 
-        com.mahghuuuls.jawms.proxy.CommonProxy previous =
-                com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod.proxy;
+        withClientSink(() -> {
+            ClientManaState.acceptManaged(managedView(3, true), active, active);
+            assertFalse(ClientManaState.isManagedHeld(active));
+            assertTrue(ClientManaState.isAvailable());
+            assertEquals(100, ClientManaState.getCurrentMana());
+        });
+        assertTrue(ClientManaState.acceptsLegacy(old, old));
+    }
+
+    @Test
+    void sameConnectionLifecycleRejectsDelayedSourceReadyUntilTheDestinationCompletes() {
+        Object active = new Object();
+        Object obsolete = new Object();
+        withClientSink(() -> {
+            ClientManaState.acceptManaged(managedView(8, 1, true, 110, 20), active, active);
+            assertEquals(110, ClientManaState.snapshot(active).getCurrentMana());
+            ClientManaState.invalidateLifecycle(obsolete, active);
+            assertTrue(ClientManaState.snapshot(active).isAvailable());
+
+            ClientManaState.invalidateLifecycle(active, active);
+            assertTrue(ClientManaState.isManagedHeld(active));
+            assertFalse(ClientManaState.snapshot(active).isAvailable());
+            assertEquals(1.0D, ClientManaState.getSpellCostMultiplier(Element.FIRE));
+            ClientManaState.acceptManaged(managedView(7, 1, true, 110, 19), active, active);
+            ClientManaState.acceptManaged(managedView(9, 1, true, 110, 21), active, active);
+            assertFalse(ClientManaState.snapshot(active).isAvailable());
+
+            ClientManaState.acceptManaged(managedView(10, 2, false, 0, 0), active, active);
+            ClientManaState.acceptManaged(managedView(11, 1, true, 110, 22), active, active);
+            assertFalse(ClientManaState.snapshot(active).isAvailable());
+            ClientManaState.acceptManaged(managedView(12, 2, true, 100, 1), active, active);
+            assertFalse(ClientManaState.isManagedHeld(active));
+            assertEquals(100, ClientManaState.snapshot(active).getCurrentMana());
+            assertEquals(1, ClientManaState.snapshot(active).getRevision());
+        });
+    }
+
+    private static void withClientSink(Runnable action) {
+        com.mahghuuuls.jawms.proxy.CommonProxy previous = com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod.proxy;
         com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod.proxy = new com.mahghuuuls.jawms.proxy.CommonProxy() {
             @Override
             public void acceptManaState(int current, int maximum, double regeneration, long revision,
@@ -72,24 +109,25 @@ class ClientManaStateTest {
             }
         };
         try {
-            ClientManaState.acceptManaged(managedView(3, true), active, active);
-            assertFalse(ClientManaState.isManagedHeld(active));
-            assertTrue(ClientManaState.isAvailable());
-            assertEquals(100, ClientManaState.getCurrentMana());
+            action.run();
         } finally {
             com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod.proxy = previous;
         }
-        assertTrue(ClientManaState.acceptsLegacy(old, old));
     }
 
     private static com.mahghuuuls.jawms.internal.mana.ManaReadinessMessage managedView(long sequence, boolean ready) {
+        return managedView(sequence, 1, ready, 100, 1);
+    }
+
+    private static com.mahghuuuls.jawms.internal.mana.ManaReadinessMessage managedView(
+            long sequence, long generation, boolean ready, int current, long revision) {
         io.netty.buffer.ByteBuf buffer = io.netty.buffer.Unpooled.buffer();
         try {
             buffer.writeLong(sequence);
-            buffer.writeLong(1);
+            buffer.writeLong(generation);
             buffer.writeLong(2);
             buffer.writeByte(ready ? 2 : 0);
-            if (ready) new com.mahghuuuls.jawms.internal.mana.ManaStateMessage(100, 100, 0, 1).toBytes(buffer);
+            if (ready) new com.mahghuuuls.jawms.internal.mana.ManaStateMessage(current, 120, 0, revision).toBytes(buffer);
             com.mahghuuuls.jawms.internal.mana.ManaReadinessMessage view =
                     new com.mahghuuuls.jawms.internal.mana.ManaReadinessMessage();
             view.fromBytes(buffer);

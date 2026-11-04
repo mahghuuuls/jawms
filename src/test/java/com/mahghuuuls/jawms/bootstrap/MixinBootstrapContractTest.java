@@ -9,6 +9,8 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
@@ -59,9 +61,9 @@ class MixinBootstrapContractTest {
     void requiredConfigurationsCoverEveryCandidateHookOnceOnItsOriginalSide() throws Exception {
         JsonObject early = json(EARLY);
         JsonObject late = json(LATE);
-        assertEquals(set("EntityLivingBaseMixin", "PlayerListManaLifecycleMixin", "EntityPlayerMixin", "ContainerWandPublicationMixin", "EntityPlayerMPWandPublicationMixin", "InventoryPlayerWandPublicationMixin", "NetHandlerWandPublicationServerMixin", "NetworkManagerWandPublicationMixin", "NonNullListWandMutationMixin"),
+        assertEquals(set("EntityLivingBaseMixin", "PlayerListManaLifecycleMixin", "EntityPlayerManaLifecycleMixin", "EntityPlayerMixin", "ContainerWandPublicationMixin", "EntityPlayerMPWandPublicationMixin", "InventoryPlayerWandPublicationMixin", "NetHandlerWandPublicationServerMixin", "NetworkManagerWandPublicationMixin", "NonNullListWandMutationMixin"),
                 strings(early.getAsJsonArray("mixins")));
-        assertEquals(set("ItemStackTooltipClientMixin", "MinecraftWandSelectionClientMixin", "NetHandlerWandPublicationClientMixin", "PlayerControllerParticipantUseMixin"), strings(early.getAsJsonArray("client")));
+        assertEquals(set("ItemStackTooltipClientMixin", "MinecraftWandSelectionClientMixin", "NetHandlerWandPublicationClientMixin", "ClientManaLifecycleMixin", "PlayerControllerParticipantUseMixin"), strings(early.getAsJsonArray("client")));
         assertEquals(set("WandHelperBindingMutationMixin", "EntityForceArrowMixin", "ForceArrowMixin", "ItemWandMixin",
                 "ItemWizardArmourMixin", "ItemArtefactMixin", "ItemManaFlaskMixin"),
                 strings(late.getAsJsonArray("mixins")));
@@ -85,7 +87,7 @@ class MixinBootstrapContractTest {
                 }
             }
         }
-        assertEquals(23, count);
+        assertEquals(25, count);
         assertNull(getClass().getClassLoader().getResource("mixins.jawms.json"),
                 "The former unsplit resource must not remain a fallback");
     }
@@ -148,6 +150,84 @@ class MixinBootstrapContractTest {
                         "Lzone/rong/mixinbooter/MixinLoader;")), "No second annotation discovery route");
             }
         }
+    }
+
+    @Test
+    void forgeLifecycleAnchorsKeepCancellationAndVanillaPacketOrdering() throws Exception {
+        String playerType = "net/minecraft/entity/player/EntityPlayerMP";
+        String teleporter = "Lnet/minecraftforge/common/util/ITeleporter;";
+        MethodNode travel = method(bytecode(playerType), "changeDimension",
+                "(I" + teleporter + ")Lnet/minecraft/entity/Entity;");
+        int cancellation = callIndex(travel, "onTravelToDimension");
+        AbstractInsnNode branch = nextInstruction(travel.instructions.get(cancellation));
+        assertEquals(Opcodes.IFNE, branch.getOpcode());
+        assertEquals(Opcodes.ARETURN, nextInstruction(nextInstruction(branch)).getOpcode());
+        int continuing = travel.instructions.indexOf(((JumpInsnNode) branch).label);
+        assertTrue(continuing < callIndex(travel, "removeEntity"));
+        assertTrue(continuing < callIndex(travel, "transferPlayerToDimension"));
+
+        MethodNode transfer = method(bytecode("net/minecraft/server/management/PlayerList"),
+                "transferPlayerToDimension", "(L" + playerType + ";I" + teleporter + ")V");
+        int write = -1;
+        for (AbstractInsnNode instruction : transfer.instructions.toArray()) {
+            if (instruction.getOpcode() == Opcodes.PUTFIELD && instruction instanceof FieldInsnNode) {
+                FieldInsnNode field = (FieldInsnNode) instruction;
+                if (field.owner.equals(playerType) && field.name.equals("dimension")) {
+                    assertEquals(-1, write, "The native mutation anchor must be unique");
+                    write = transfer.instructions.indexOf(instruction);
+                }
+            }
+        }
+        int respawn = callIndex(transfer, "sendPacket");
+        assertTrue(write >= 0 && write < respawn);
+        assertTrue(respawn < callIndex(transfer, "firePlayerChangedDimensionEvent"));
+
+        ClassNode handler = bytecode("net/minecraft/client/network/NetHandlerPlayClient");
+        for (String[] endpoint : new String[][] {
+                {"handleCombatEvent", "SPacketCombatEvent"},
+                {"handleChangeGameState", "SPacketChangeGameState"},
+                {"handleRespawn", "SPacketRespawn"}
+        }) {
+            MethodNode incoming = method(handler, endpoint[0], "(Lnet/minecraft/network/play/server/" + endpoint[1] + ";)V");
+            assertTrue(callIndex(incoming, "checkThreadAndEnqueue") < 10);
+        }
+    }
+
+    @Test
+    void newCommonLifecycleHooksHaveNoClientLinkage() throws Exception {
+        for (String name : Arrays.asList("mixin/PlayerListManaLifecycleMixin", "mixin/EntityPlayerManaLifecycleMixin",
+                "internal/mana/ManaLifecycle")) {
+            ClassNode type = bytecode("com/mahghuuuls/jawms/" + name);
+            for (MethodNode method : type.methods) {
+                assertFalse(method.desc.contains("net/minecraft/client/"), name);
+                for (AbstractInsnNode instruction : method.instructions.toArray()) {
+                    if (instruction instanceof MethodInsnNode) {
+                        assertFalse(((MethodInsnNode) instruction).owner.startsWith("net/minecraft/client/"), name);
+                    }
+                }
+            }
+        }
+    }
+
+    private static MethodNode method(ClassNode owner, String name, String descriptor) {
+        return owner.methods.stream().filter(method -> method.name.equals(name) && method.desc.equals(descriptor))
+                .findFirst().orElseThrow(() -> new AssertionError("Missing native target " + owner.name + "." + name));
+    }
+
+    private static int callIndex(MethodNode method, String name) {
+        for (AbstractInsnNode instruction : method.instructions.toArray()) {
+            if (instruction instanceof MethodInsnNode && ((MethodInsnNode) instruction).name.equals(name)) {
+                return method.instructions.indexOf(instruction);
+            }
+        }
+        throw new AssertionError("Missing call " + method.name + "." + name);
+    }
+
+    private static AbstractInsnNode nextInstruction(AbstractInsnNode instruction) {
+        do {
+            instruction = instruction.getNext();
+        } while (instruction.getOpcode() < 0);
+        return instruction;
     }
 
     private void assertAdapter(String name, String config, String... expectedInterfaces) throws Exception {

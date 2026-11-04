@@ -8,6 +8,7 @@
   "mixins": [
         "EntityLivingBaseMixin",
         "PlayerListManaLifecycleMixin",
+        "EntityPlayerManaLifecycleMixin",
         "EntityPlayerMixin",
         "ContainerWandPublicationMixin",
         "EntityPlayerMPWandPublicationMixin",
@@ -21,6 +22,7 @@
         "ItemStackTooltipClientMixin",
         "MinecraftWandSelectionClientMixin",
         "NetHandlerWandPublicationClientMixin",
+        "ClientManaLifecycleMixin",
         "PlayerControllerParticipantUseMixin"
     ],
   "injectors": {

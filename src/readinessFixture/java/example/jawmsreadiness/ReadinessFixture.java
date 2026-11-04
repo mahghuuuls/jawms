@@ -45,6 +45,7 @@ public final class ReadinessFixture {
     private ManaReadinessProvider provider;
     private ManaReadinessProvider peer;
     private volatile LoginHold nextLoginHold;
+    private TransitionProbe nextTransition;
     private int earlyEvents;
     private final Map<EntityPlayer, Integer> delayedPeers = new IdentityHashMap<>();
 
@@ -64,6 +65,7 @@ public final class ReadinessFixture {
     @Mod.EventHandler
     public void serverStopped(FMLServerStoppedEvent event) {
         delayedPeers.clear();
+        nextTransition = null;
     }
 
     @SubscribeEvent
@@ -96,8 +98,57 @@ public final class ReadinessFixture {
             return;
         }
         complete(event.player, provider, BONUS);
-        if (peer.getGeneration(event.player).isPresent()) {
-            delayedPeers.put(event.player, event.player.getServer().getTickCounter() + 10);
+        delayPeer(event.player);
+    }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public void completeTransfer(PlayerEvent.PlayerChangedDimensionEvent event) {
+        completeTransition(event.player, "transfer");
+    }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public void completeRespawn(PlayerEvent.PlayerRespawnEvent event) {
+        completeTransition(event.player, event.isEndConquered() ? "end-return" : "respawn");
+    }
+
+    private void completeTransition(EntityPlayer player, String lifecycle) {
+        if (!(player instanceof EntityPlayerMP)) return;
+        TransitionProbe probe = nextTransition;
+        if (probe != null && !probe.source.getUniqueID().equals(player.getUniqueID())) probe = null;
+        boolean held = probe != null && "hold-transition".equals(probe.action);
+        boolean empty = probe != null && "empty-transition".equals(probe.action);
+        if (probe != null) {
+            nextTransition = null;
+            delayedPeers.remove(probe.source);
+            ManaContributionPublicationResult replay = provider.update(
+                    probe.source, probe.token, 1, ManaContribution.EMPTY);
+            LOG.info("READINESS_FIXTURE_RETIRED_REPLAY player={} lifecycle={} sameEntity={} result={}",
+                    player.getUniqueID(), lifecycle, probe.source == player, replay.getStatus());
+        }
+        LOG.info("READINESS_FIXTURE_TRANSITION player={} lifecycle={} dimension={} entity={} phase={} held={} empty={} token={}",
+                player.getUniqueID(), lifecycle, player.dimension, player.getEntityId(),
+                ManaApi.getProfileReadiness(player), held, empty, provider.getGeneration(player).isPresent());
+        if (!held) {
+            complete(player, provider, empty ? ManaContribution.EMPTY : BONUS);
+            delayPeer(player);
+        }
+    }
+
+    private void delayPeer(EntityPlayer player) {
+        if (peer.getGeneration(player).isPresent()) {
+            delayedPeers.put(player, player.getServer().getTickCounter() + 10);
+        }
+    }
+
+    private static final class TransitionProbe {
+        final EntityPlayerMP source;
+        final ManaProfileGeneration token;
+        final String action;
+
+        TransitionProbe(EntityPlayerMP source, ManaProfileGeneration token, String action) {
+            this.source = source;
+            this.token = token;
+            this.action = action;
         }
     }
 
@@ -128,6 +179,7 @@ public final class ReadinessFixture {
     @SubscribeEvent
     public void logout(PlayerEvent.PlayerLoggedOutEvent event) {
         delayedPeers.remove(event.player);
+        if (nextTransition != null && nextTransition.source == event.player) nextTransition = null;
     }
 
     private static void complete(EntityPlayer player, ManaReadinessProvider source, ManaContribution group) {
@@ -150,7 +202,7 @@ public final class ReadinessFixture {
 
         @Override
         public String getUsage(ICommandSender sender) {
-            return "/readinessfixture <hold|release|seed|remove|inspect>";
+            return "/readinessfixture <hold|release|seed|remove|inspect|hold-transition|empty-transition|trace-transition>";
         }
 
         @Override
@@ -175,6 +227,16 @@ public final class ReadinessFixture {
                     nextLoginHold = null;
                     complete(player, provider, BONUS);
                     complete(player, peer, ManaContribution.EMPTY);
+                    break;
+                case "hold-transition":
+                case "empty-transition":
+                case "trace-transition":
+                    if (ManaApi.getProfileReadiness(player) != ManaProfileReadiness.READY) {
+                        throw new CommandException("Expected ready source profile.");
+                    }
+                    ManaProfileGeneration sourceToken = provider.getGeneration(player)
+                            .orElseThrow(() -> new CommandException("No source readiness token."));
+                    nextTransition = new TransitionProbe(player, sourceToken, arguments[0]);
                     break;
                 case "seed":
                     if (ManaApi.getProfileReadiness(player) != ManaProfileReadiness.READY

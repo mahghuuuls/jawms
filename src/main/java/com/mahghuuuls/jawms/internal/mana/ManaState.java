@@ -46,11 +46,12 @@ public final class ManaState {
     private ManaProfileEvaluation pendingProfileEvaluation;
     private boolean pendingReloadLockoutClamp;
     ManaReadiness readiness;
-    boolean loginBound;
-    boolean loginComplete;
+    boolean checkingDeath;
+    boolean recoveringTransfer;
+    ManaLifecycle.Transfer transfer;
 
     boolean profileHeld() {
-        return readiness != null && readiness.held();
+        return checkingDeath || readiness != null && readiness.held();
     }
 
     boolean hasAcceptedProfile() {
@@ -66,10 +67,22 @@ public final class ManaState {
     }
 
     void retireReadiness() {
-        if (!readiness.held()) {
+        retainIntrinsicMana(readiness);
+        readiness.retire();
+        clearTransientLifecycleState();
+    }
+
+    void retainIntrinsicMana(ManaReadiness source) {
+        if (pendingLoadedMana == null && (!source.held() || hasAcceptedProfile())) {
             pendingLoadedMana = currentMana;
         }
-        readiness.retire();
+    }
+
+    void copyIntrinsicMana(ManaState original) {
+        pendingLoadedMana = original.pendingLoadedMana;
+        if (pendingLoadedMana == null && (!original.profileHeld() || original.hasAcceptedProfile())) {
+            pendingLoadedMana = original.currentMana;
+        }
         clearTransientLifecycleState();
     }
 
@@ -490,6 +503,11 @@ public final class ManaState {
 
     boolean applyReloadProfileEvaluation(ManaProfileEvaluation evaluation) {
         return applyProfileEvaluation(evaluation, true);
+    }
+
+    void deferProfileReload() {
+        pendingProfileEvaluation = null;
+        pendingReloadLockoutClamp = true;
     }
 
     private boolean applyProfileEvaluation(ManaProfileEvaluation evaluation, boolean rulesReload) {

@@ -6,6 +6,7 @@ import com.mahghuuuls.jawms.api.ManaContributionPublicationStatus;
 import com.mahghuuuls.jawms.api.ManaProfileGeneration;
 import com.mahghuuuls.jawms.api.ManaProfileReadiness;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.world.WorldServer;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -21,6 +22,10 @@ import static com.mahghuuuls.jawms.api.ManaContributionPublicationStatus.*;
 
 /** Bounded publication slots and acceptance phase for one player lifecycle. */
 final class ManaReadiness {
+    enum Lifecycle {
+        LOGIN, RESPAWN, END_RETURN, DIMENSION_TRANSFER, TRANSFER_RECOVERY
+    }
+
     private static final int DEADLINE_TICKS = 100;
 
     final UUID identity = UUID.randomUUID();
@@ -28,6 +33,10 @@ final class ManaReadiness {
     private final int startTick;
     private ManaProfileReadiness phase;
     private boolean retired;
+    Lifecycle lifecycle = Lifecycle.LOGIN;
+    WorldServer world;
+    boolean bound;
+    boolean complete;
 
     ManaReadiness(Set<ResourceLocation> eligible, int tick, boolean hasAcceptedProfile) {
         startTick = tick;

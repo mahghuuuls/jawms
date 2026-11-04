@@ -31,13 +31,13 @@ tasks.register('verifyMixinBootstrap') {
         def early = 'mixins.jawms.early.json'
         def late = 'mixins.jawms.late.json'
         def expected = [
-                (early): [mixins: ['EntityLivingBaseMixin', 'PlayerListManaLifecycleMixin', 'EntityPlayerMixin', 'ContainerWandPublicationMixin', 'EntityPlayerMPWandPublicationMixin', 'InventoryPlayerWandPublicationMixin', 'NetHandlerWandPublicationServerMixin', 'NetworkManagerWandPublicationMixin', 'NonNullListWandMutationMixin'],
-                          client: ['ItemStackTooltipClientMixin', 'MinecraftWandSelectionClientMixin', 'NetHandlerWandPublicationClientMixin', 'PlayerControllerParticipantUseMixin']],
+                (early): [mixins: ['EntityLivingBaseMixin', 'PlayerListManaLifecycleMixin', 'EntityPlayerManaLifecycleMixin', 'EntityPlayerMixin', 'ContainerWandPublicationMixin', 'EntityPlayerMPWandPublicationMixin', 'InventoryPlayerWandPublicationMixin', 'NetHandlerWandPublicationServerMixin', 'NetworkManagerWandPublicationMixin', 'NonNullListWandMutationMixin'],
+                          client: ['ItemStackTooltipClientMixin', 'MinecraftWandSelectionClientMixin', 'NetHandlerWandPublicationClientMixin', 'ClientManaLifecycleMixin', 'PlayerControllerParticipantUseMixin']],
                 (late): [mixins: ['WandHelperBindingMutationMixin', 'EntityForceArrowMixin', 'ForceArrowMixin', 'ItemWandMixin',
                                  'ItemWizardArmourMixin', 'ItemArtefactMixin', 'ItemManaFlaskMixin'],
                          client: ['GuiSpellInfoMixin', 'ItemWandClientMixin', 'ItemManaFlaskClientMixin']]
         ]
-        def expectedHookCount = 23
+        def expectedHookCount = 25
         def validate = { Map configs, Map attributes, Map runArguments ->
             require(configs.keySet() == expected.keySet(), 'Missing or unexpected required Mixin configuration')
             def membership = []
