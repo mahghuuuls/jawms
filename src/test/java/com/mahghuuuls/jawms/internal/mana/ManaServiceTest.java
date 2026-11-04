@@ -4,6 +4,10 @@ import com.mahghuuuls.jawms.api.ManaMutationResult;
 import com.mahghuuuls.jawms.api.ManaMutationFailure;
 import com.mahghuuuls.jawms.api.ManaCauses;
 import com.mahghuuuls.jawms.api.IManaService;
+import com.mahghuuuls.jawms.api.ManaContribution;
+import com.mahghuuuls.jawms.api.ManaContributionPublicationStatus;
+import com.mahghuuuls.jawms.api.ManaProfileGeneration;
+import com.mahghuuuls.jawms.api.ManaProfileReadiness;
 import com.mahghuuuls.jawms.api.ManaPublicState;
 import com.mahghuuuls.jawms.api.ManaStateChangeEvent;
 import com.mahghuuuls.jawms.internal.modifier.ResolvedManaProfile;
@@ -15,6 +19,11 @@ import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorProfile;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.network.NetHandlerPlayServer;
+import net.minecraft.network.NetworkManager;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.management.PlayerList;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.WorldServer;
@@ -25,7 +34,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -113,30 +124,15 @@ class ManaServiceTest {
 
     @Test
     void playerTickWaitsForAllPublicationsAndAcceptsOnlyAfterValidRecovery() {
-        PlayerFixture fixture = playerFixture();
-        EntityPlayerMP player = (EntityPlayerMP) fixture.player;
-        WorldServer world = (WorldServer) player.world;
-        net.minecraft.server.MinecraftServer server = mock(net.minecraft.server.MinecraftServer.class);
-        net.minecraft.server.management.PlayerList players = mock(net.minecraft.server.management.PlayerList.class);
-        net.minecraft.network.NetworkManager network = mock(net.minecraft.network.NetworkManager.class);
-        new net.minecraft.network.NetHandlerPlayServer(server, network, player);
-        when(player.getServer()).thenReturn(server);
-        when(player.getServerWorld()).thenReturn(world);
-        when(server.getWorld(0)).thenReturn(world);
-        when(server.getPlayerList()).thenReturn(players);
-        when(players.getPlayerByUUID(player.getUniqueID())).thenReturn(player);
-
         ResourceLocation first = new ResourceLocation("test", "first");
         ResourceLocation peer = new ResourceLocation("test", "peer");
-        fixture.state.readiness = new ManaReadiness(
-                new java.util.LinkedHashSet<>(java.util.Arrays.asList(first, peer)), 0, false);
-        fixture.state.loginBound = true;
-        fixture.state.loginComplete = true;
-        net.minecraft.nbt.NBTTagCompound saved = new net.minecraft.nbt.NBTTagCompound();
+        PlayerFixture fixture = boundLoginFixture(first, peer);
+        EntityPlayer player = fixture.player;
+        MinecraftServer server = player.getServer();
+        NBTTagCompound saved = new NBTTagCompound();
         saved.setInteger("currentMana", 110);
         fixture.state.deserializeIntrinsicState(saved);
-        GameplayRules rules = new GameplayRules(1, 120, 0, 0L, "base",
-                20, 50, 100, Collections.emptyMap(), Collections.emptyList(), WizardryArmorProfile.DEFAULT);
+        GameplayRules rules = readinessRules(120);
         com.mahghuuuls.jawms.api.ManaProfileGeneration firstToken = ManaService.getReadinessGeneration(
                 player, first, ManaReadinessTest::newToken).get();
         com.mahghuuuls.jawms.api.ManaProfileGeneration peerToken = ManaService.getReadinessGeneration(
@@ -161,6 +157,64 @@ class ManaServiceTest {
         assertEquals(com.mahghuuuls.jawms.api.ManaProfileReadiness.READY, ManaService.getProfileReadiness(player));
         assertEquals(110, new ManaService().getCurrentMana(player));
         assertEquals(120, new ManaService().getMaximumMana(player));
+    }
+
+    @Test
+    void freshProfileFillsToItsFirstCompleteMaximum() {
+        ResourceLocation provider = new ResourceLocation("test", "fresh");
+        PlayerFixture fixture = boundLoginFixture(provider);
+        fixture.state.applyEffectiveStats(100, 0);
+        fixture.state.deserializeIntrinsicState(new NBTTagCompound());
+        GameplayRules rules = readinessRules(120);
+
+        ManaService.tickPlayer(fixture.player, rules);
+        assertEquals(ManaProfileReadiness.PENDING, ManaService.getProfileReadiness(fixture.player));
+        assertFalse(fixture.state.hasAcceptedProfile());
+        assertEquals(100, fixture.state.getCurrentMana());
+        assertFalse(fixture.state.serializeIntrinsicState().hasKey("currentMana"));
+
+        publishEmptyInitialGroup(fixture.player, provider);
+        ManaService.tickPlayer(fixture.player, rules);
+
+        ManaPublicState accepted = new ManaService().getState(fixture.player);
+        assertEquals(ManaProfileReadiness.READY, ManaService.getProfileReadiness(fixture.player));
+        assertEquals(120, accepted.getCurrentMana());
+        assertEquals(120, accepted.getMaximumMana());
+        assertEquals(120, fixture.state.serializeIntrinsicState().getInteger("currentMana"));
+    }
+
+    @Test
+    void allEmptyInitialGroupsWaitForEveryProviderBeforeClampingSavedMana() {
+        ResourceLocation first = new ResourceLocation("test", "empty_first");
+        ResourceLocation peer = new ResourceLocation("test", "empty_peer");
+        PlayerFixture fixture = boundLoginFixture(first, peer);
+        EntityPlayer player = fixture.player;
+        NBTTagCompound saved = new NBTTagCompound();
+        saved.setInteger("currentMana", 110);
+        fixture.state.deserializeIntrinsicState(saved);
+        GameplayRules rules = readinessRules(100);
+        ManaService service = new ManaService();
+
+        publishEmptyInitialGroup(player, first);
+        ManaService.tickPlayer(player, rules);
+        assertEquals(ManaProfileReadiness.PENDING, ManaService.getProfileReadiness(player));
+        assertFalse(fixture.state.hasAcceptedProfile());
+        assertEquals(0, service.getCurrentMana(player));
+        assertEquals(110, fixture.state.serializeIntrinsicState().getInteger("currentMana"));
+
+        publishEmptyInitialGroup(player, peer);
+        assertEquals(ManaProfileReadiness.PENDING, ManaService.getProfileReadiness(player));
+        assertEquals(110, fixture.state.serializeIntrinsicState().getInteger("currentMana"));
+        ManaService.tickPlayer(player, rules);
+
+        assertEquals(ManaProfileReadiness.READY, ManaService.getProfileReadiness(player));
+        assertEquals(100, service.getCurrentMana(player));
+        assertEquals(100, service.getMaximumMana(player));
+        assertFalse(fixture.state.hasPendingLoadedMana());
+        assertEquals(100, fixture.state.serializeIntrinsicState().getInteger("currentMana"));
+        long revision = fixture.state.getRevision();
+        ManaService.tickPlayer(player, rules);
+        assertEquals(revision, fixture.state.getRevision());
     }
 
     private final List<Object> registeredListeners = new ArrayList<>();
@@ -818,6 +872,36 @@ class ManaServiceTest {
         when(player.getUniqueID()).thenReturn(UUID.randomUUID());
         when(player.getCapability(ManaCapability.INSTANCE, null)).thenReturn(state);
         return new PlayerFixture(player, state);
+    }
+
+    private static PlayerFixture boundLoginFixture(ResourceLocation... providers) {
+        PlayerFixture fixture = playerFixture();
+        EntityPlayerMP player = (EntityPlayerMP) fixture.player;
+        WorldServer world = (WorldServer) player.world;
+        MinecraftServer server = mock(MinecraftServer.class);
+        PlayerList players = mock(PlayerList.class);
+        new NetHandlerPlayServer(server, mock(NetworkManager.class), player);
+        when(player.getServer()).thenReturn(server);
+        when(player.getServerWorld()).thenReturn(world);
+        when(server.getWorld(0)).thenReturn(world);
+        when(server.getPlayerList()).thenReturn(players);
+        when(players.getPlayerByUUID(player.getUniqueID())).thenReturn(player);
+        fixture.state.readiness = new ManaReadiness(new LinkedHashSet<>(Arrays.asList(providers)), 0, false);
+        fixture.state.loginBound = true;
+        ManaService.finishLogin(player);
+        return fixture;
+    }
+
+    private static GameplayRules readinessRules(int baseMaximum) {
+        return new GameplayRules(1, baseMaximum, 0, 0L, "base",
+                20, 50, 100, Collections.emptyMap(), Collections.emptyList(), WizardryArmorProfile.DEFAULT);
+    }
+
+    private static void publishEmptyInitialGroup(EntityPlayer player, ResourceLocation provider) {
+        ManaProfileGeneration token = ManaService.getReadinessGeneration(
+                player, provider, ManaReadinessTest::newToken).get();
+        assertEquals(ManaContributionPublicationStatus.INITIAL_RECORDED,
+                ManaService.publishReadiness(player, provider, token, ManaContribution.EMPTY, true, 0).getStatus());
     }
 
     private static ResolvedManaProfile profileWithLockout(long lockoutTicks) {

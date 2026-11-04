@@ -33,6 +33,51 @@ import static org.mockito.Mockito.*;
 class ContinuousParticipationBridgeTest {
     @BeforeAll static void bootstrap() { Bootstrap.register(); }
 
+    @Test
+    void pendingProfileStopsCreativeBeforeEffectOrPayment() throws Exception {
+        assertPendingCastBlocked(4, true);
+    }
+
+    @Test
+    void pendingProfileStopsZeroCostBeforeEffectOrPayment() throws Exception {
+        assertPendingCastBlocked(0, false);
+    }
+
+    private static void assertPendingCastBlocked(int cost, boolean creative) throws Exception {
+        Fixture fixture = new Fixture(cost, creative);
+        int depth = WizardryWandBridge.captureAttemptDepth();
+        try {
+            Field readiness = ManaState.class.getDeclaredField("readiness");
+            readiness.setAccessible(true);
+            Constructor<?> hold = readiness.getType().getDeclaredConstructor(Set.class, int.class, boolean.class);
+            hold.setAccessible(true);
+            readiness.set(fixture.state, hold.newInstance(
+                    Collections.singleton(new ResourceLocation("fixture", "pending_cast")), 0, false));
+
+            long revision = fixture.state.getRevision();
+            SpellModifiers modifiers = new SpellModifiers();
+            assertEquals(ManaProfileReadiness.PENDING, ManaService.getProfileReadiness(fixture.player));
+            assertEquals(cost, SpellCostService.getFinalCost(fixture.player, fixture.spell, modifiers));
+            assertFalse(WizardryWandBridge.castWithReservation(fixture.stack, fixture.spell,
+                    fixture.world, fixture.player, EnumHand.MAIN_HAND, 0, modifiers));
+            verify(fixture.spell, never()).cast(fixture.world, fixture.player, EnumHand.MAIN_HAND, 0, modifiers);
+            assertEquals("none", CastPaymentService.describeLastPayment(fixture.player));
+            assertEquals(revision, fixture.state.getRevision());
+            assertEquals(0, fixture.state.getRemainingLockoutTicks());
+
+            readiness.set(fixture.state, null);
+            assertTrue(WizardryWandBridge.castWithReservation(fixture.stack, fixture.spell,
+                    fixture.world, fixture.player, EnumHand.MAIN_HAND, 0, modifiers));
+            verify(fixture.spell).cast(fixture.world, fixture.player, EnumHand.MAIN_HAND, 0, modifiers);
+        } finally {
+            try {
+                WizardryWandBridge.cleanupToDepth(fixture.player, depth);
+            } finally {
+                fixture.clear();
+            }
+        }
+    }
+
     @Test void actualBridgeCoordinatesZeroTotalZeroPortionAndCreative() throws Exception {
         // Integer tick1 of rate1 is zero; Creative must still coordinate its positive-rate effect.
         for (int[] variant : new int[][] { {0, 0, 0}, {1, 1, 0}, {4, 0, 1} }) {
