@@ -199,6 +199,10 @@ dependencies {
 }
 
 sourceSets {
+    readinessFixture {
+        java.srcDir 'src/readinessFixture/java'
+        runtimeClasspath += output + sourceSets.main.runtimeClasspath
+    }
     castCostFixture {
         java.srcDir 'src/castCostFixture/java'
         resources.setSrcDirs(['src/castCostFixture/resources'])
@@ -231,6 +235,8 @@ sourceSets {
 }
 
 configurations {
+    readinessFixtureImplementation.extendsFrom implementation
+    readinessFixtureCompileOnly.extendsFrom compileOnly
     castCostFixtureImplementation.extendsFrom implementation
     castCostFixtureCompileOnly.extendsFrom compileOnly
     api12PublishedArtifact {
@@ -493,6 +499,22 @@ def castCostFixtureJar = tasks.register('castCostFixtureJar', Jar) {
     reproducibleFileOrder = true
 }
 def reobfCastCostFixtureJar = tasks.named('reobfCastCostFixtureJar')
+
+tasks.named(sourceSets.readinessFixture.compileJavaTaskName, JavaCompile).configure {
+    dependsOn tasks.named(sourceSets.main.classesTaskName)
+    classpath = tasks.named('compileJava', JavaCompile).get().classpath + sourceSets.main.output
+    sourceCompatibility = targetCompatibility = 8
+}
+def readinessFixtureJar = tasks.register('readinessFixtureJar', Jar) {
+    group = 'verification'
+    dependsOn sourceSets.readinessFixture.classesTaskName
+    from sourceSets.readinessFixture.output
+    archiveBaseName.set('jawms-readiness-fixture')
+    archiveVersion.set('1.0')
+    archiveClassifier.set('dev')
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
 tasks.named('test', Test).configure {
     dependsOn castCostFixtureJar
     inputs.file(castCostFixtureJar.flatMap { it.archiveFile })
@@ -1620,12 +1642,12 @@ tasks.register('verifyStableReleaseMetadata') {
     inputs.file 'README.md'
     inputs.file 'MOD-PAGE.md'
     doLast {
-        def expectedVersion = '1.2.0'
+        def expectedVersion = '1.3.0'
         if (propertyString('mod_version') != expectedVersion
                 || propertyString('developer_tools_version') != expectedVersion
                 || propertyString('release_type') != 'release') {
             throw new GradleException(
-                    'Candidate must use primary/tool version 1.2.0 and release_type=release.')
+                    'Candidate must use primary/tool version 1.3.0 and release_type=release.')
         }
     }
 }
@@ -1642,11 +1664,11 @@ tasks.register('verifyReleasePresentation') {
         def changelog = file('CHANGELOG.md').getText('UTF-8')
         def readme = file('README.md').getText('UTF-8')
         def modPage = file('MOD-PAGE.md').getText('UTF-8')
-        if (!changelog.contains('## [1.2.0]')
+        if (!changelog.contains("## [${propertyString('mod_version')}]")
                 || readme.contains('public beta')
                 || modPage.contains('Beta release:')) {
             throw new GradleException(
-                    'Stable 1.2.0 release copy is not ready for presentation.')
+                    'Stable release copy is not ready for presentation.')
         }
     }
 }
@@ -1679,6 +1701,14 @@ def includeDeveloperToolsInRuns = providers.gradleProperty('jawmsIncludeDevelope
 
 ['runClient', 'runServer'].each { runTaskName ->
     tasks.named(runTaskName).configure {
+        if (providers.gradleProperty('jawmsIncludeReadinessFixture').getOrElse('false').toBoolean()) {
+            dependsOn readinessFixtureJar
+            classpath += files(readinessFixtureJar.flatMap { it.archiveFile })
+        }
+        def frozenReadinessConsumer = providers.gradleProperty('jawmsReadinessLegacyFixture')
+        if (frozenReadinessConsumer.isPresent()) {
+            classpath += files(frozenReadinessConsumer.get())
+        }
         if (providers.gradleProperty('jawmsIncludeCastCostFixture').getOrElse('false').toBoolean()) {
             dependsOn castCostFixtureJar
             // Wizardry scans the mod's own origin, not separate resource classpath roots.

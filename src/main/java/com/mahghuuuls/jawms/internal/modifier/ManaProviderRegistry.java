@@ -89,6 +89,21 @@ public final class ManaProviderRegistry {
         put(id, new ContextualRegistration(id, provider));
     }
 
+    public synchronized void registerReadiness(ResourceLocation id) {
+        requireRegistration(id, id);
+        put(id, new ReadinessRegistration(id));
+    }
+
+    public synchronized Set<ResourceLocation> eligibleReadinessProviders(GameplayRules rules) {
+        Set<ResourceLocation> eligible = new java.util.LinkedHashSet<>();
+        for (Registration registration : registrations.values()) {
+            if (registration instanceof ReadinessRegistration && !rules.isProviderDisabled(registration.id)) {
+                eligible.add(registration.id);
+            }
+        }
+        return eligible;
+    }
+
     public synchronized void freeze() {
         frozen = true;
     }
@@ -226,7 +241,8 @@ public final class ManaProviderRegistry {
         PlayerCache cache = cache(player, rules);
         List<ContributionEvaluationRecord> result = new ArrayList<>();
         for (Registration registration : registrations.values()) {
-            if (!(registration instanceof ContextualRegistration)) {
+            if (!(registration instanceof ContextualRegistration)
+                    && !(registration instanceof ReadinessRegistration)) {
                 continue;
             }
             if (rules.isProviderDisabled(registration.id)) {
@@ -237,6 +253,17 @@ public final class ManaProviderRegistry {
                         ManaContributionFailure.NONE,
                         null
                 ));
+                continue;
+            }
+            if (registration instanceof ReadinessRegistration) {
+                ManaContribution group = ManaService.readinessContribution(player, registration.id);
+                if (group != null) {
+                    result.add(ContributionEvaluationRecord.playerWide(
+                            registration.id, ManaContributionSourceKind.CONTEXTUAL_PROVIDER,
+                            group.isEmpty() ? ManaContributionDisposition.EMPTY
+                                    : ManaContributionDisposition.APPLIED,
+                            ManaContributionFailure.NONE, group));
+                }
                 continue;
             }
             CacheKey key = CacheKey.contextual(registration.id);
@@ -460,6 +487,12 @@ public final class ManaProviderRegistry {
             super(id);
             this.item = item;
             this.provider = provider;
+        }
+    }
+
+    private static final class ReadinessRegistration extends Registration {
+        private ReadinessRegistration(ResourceLocation id) {
+            super(id);
         }
     }
 

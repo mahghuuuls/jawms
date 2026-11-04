@@ -543,6 +543,7 @@ public abstract class ItemWandMixin {
             return;
         }
         EntityPlayer player = (EntityPlayer) user;
+        if (!WizardryWandBridge.hasUsableManaProfile(player)) return;
         Spell spell = electroblob.wizardry.util.WandHelper.getCurrentSpell(stack);
         EnumHand hand = player.getActiveHand();
         if (!world.isRemote && (ParticipantUseService.suppressesFinish(player, hand, spell)

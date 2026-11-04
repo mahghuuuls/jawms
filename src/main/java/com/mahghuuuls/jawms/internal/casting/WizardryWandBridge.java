@@ -118,9 +118,8 @@ public final class WizardryWandBridge {
             int castingTick,
             SpellModifiers modifiers
     ) {
-        if (caster.world.isRemote
-                && JustAnotherWizardryManaSystemMod.proxy
-                .isClientContinuousCastBlocked(spell, hand)) {
+        if (!hasUsableManaProfile(caster) || (caster.world.isRemote
+                && JustAnotherWizardryManaSystemMod.proxy.isClientContinuousCastBlocked(spell, hand))) {
             return -1;
         }
         if (caster.isCreative()) {
@@ -202,7 +201,7 @@ public final class WizardryWandBridge {
     public static boolean castWithReservation(
             ItemStack owningStack, Spell spell, World world, EntityPlayer caster,
             EnumHand hand, int castingTick, SpellModifiers modifiers) {
-        if (!world.isRemote && !isCastAllowed()) return false;
+        if (!hasUsableManaProfile(caster) || (!world.isRemote && !isCastAllowed())) return false;
         if (world.isRemote || CastCostRegistry.instance().isEmpty()) {
             return castLegacyWithReservation(spell, world, caster, hand, castingTick, modifiers);
         }
@@ -423,7 +422,7 @@ public final class WizardryWandBridge {
             CastCostContextManager.clear(caster, hand);
             CastPaymentContextManager.clear(caster, hand);
         }
-        if (caster.world.isRemote) {
+        if (caster.world.isRemote || !ManaService.canUseManaProfile(caster)) {
             return;
         }
         if (!spell.isContinuous) {
@@ -478,7 +477,7 @@ public final class WizardryWandBridge {
         boolean correlatedStop = !caster.world.isRemote && ParticipantUseService.ownsPhysicalStop(caster);
         CastCostContextManager.clear(caster, hand);
         CastPaymentContextManager.clear(caster, hand);
-        if (caster.world.isRemote || !spell.isContinuous) {
+        if (caster.world.isRemote || !spell.isContinuous || !ManaService.canUseManaProfile(caster)) {
             return;
         }
         boolean manaExhausted = ManaService.requireState(caster)
@@ -495,6 +494,12 @@ public final class WizardryWandBridge {
                 0,
                 ManaService.getAvailableMana(caster)
         );
+    }
+
+    public static boolean hasUsableManaProfile(EntityPlayer caster) {
+        return caster.world.isRemote
+                ? !JustAnotherWizardryManaSystemMod.proxy.isClientManaProfileHeld()
+                : ManaService.canUseManaProfile(caster);
     }
 
     public static int getManaForContinuousFinish(
@@ -527,7 +532,7 @@ public final class WizardryWandBridge {
     public static void finishContinuousCast(EntityPlayer caster, Spell spell, EnumHand hand) {
         CastCostContextManager.clear(caster, hand);
         CastPaymentContextManager.clear(caster, hand);
-        if (caster.world.isRemote || !spell.isContinuous) {
+        if (caster.world.isRemote || !spell.isContinuous || !ManaService.canUseManaProfile(caster)) {
             return;
         }
         boolean lockoutStarted = ManaService.finishContinuousCast(caster);

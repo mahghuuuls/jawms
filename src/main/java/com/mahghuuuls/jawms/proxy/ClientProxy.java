@@ -84,6 +84,23 @@ public final class ClientProxy extends CommonProxy {
     }
 
     @Override
+    public void acceptLegacyMana(com.mahghuuuls.jawms.internal.mana.ManaStateMessage message, Object handler) {
+        if (ClientManaState.acceptsLegacy(handler, net.minecraft.client.Minecraft.getMinecraft().getConnection())) {
+            message.deliver();
+        }
+    }
+
+    @Override
+    public void acceptManagedMana(com.mahghuuuls.jawms.internal.mana.ManaReadinessMessage message, Object handler) {
+        ClientManaState.acceptManaged(message, handler, net.minecraft.client.Minecraft.getMinecraft().getConnection());
+    }
+
+    @Override
+    public boolean isClientManaProfileHeld() {
+        return ClientManaState.isManagedHeld(net.minecraft.client.Minecraft.getMinecraft().getConnection());
+    }
+
+    @Override
     public void acceptManaState(
             int currentMana,
             int maximumMana,

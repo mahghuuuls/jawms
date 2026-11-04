@@ -147,6 +147,12 @@ public final class ManaStateMessage implements IMessage {
         return java.util.Collections.unmodifiableMap(elementSpellCostMultiplier);
     }
 
+    public void deliver() {
+        JustAnotherWizardryManaSystemMod.proxy.acceptManaState(
+                currentMana, maximumMana, effectiveRegeneration, revision, globalSpellEfficiency,
+                elementSpellEfficiency, globalSpellCostMultiplier, elementSpellCostMultiplier);
+    }
+
     public static final class Handler implements IMessageHandler<ManaStateMessage, IMessage> {
 
         @Override
@@ -163,16 +169,8 @@ public final class ManaStateMessage implements IMessage {
             }
 
             IThreadListener thread = FMLCommonHandler.instance().getWorldThread(context.netHandler);
-            thread.addScheduledTask(() -> JustAnotherWizardryManaSystemMod.proxy.acceptManaState(
-                    message.currentMana,
-                    message.maximumMana,
-                    message.effectiveRegeneration,
-                    message.revision,
-                    message.globalSpellEfficiency,
-                    message.elementSpellEfficiency,
-                    message.globalSpellCostMultiplier,
-                    message.elementSpellCostMultiplier
-            ));
+            thread.addScheduledTask(() ->
+                    JustAnotherWizardryManaSystemMod.proxy.acceptLegacyMana(message, context.netHandler));
             return null;
         }
     }

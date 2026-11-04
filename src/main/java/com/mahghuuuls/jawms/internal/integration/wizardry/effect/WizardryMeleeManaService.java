@@ -42,7 +42,8 @@ public final class WizardryMeleeManaService {
             return finalDamage;
         }
 
-        if (player.world.isRemote) {
+        if (player.world.isRemote
+                || !com.mahghuuuls.jawms.internal.mana.ManaService.canUseManaProfile(player)) {
             return finalDamage;
         }
         ItemStack mainHand = player.getHeldItemMainhand();

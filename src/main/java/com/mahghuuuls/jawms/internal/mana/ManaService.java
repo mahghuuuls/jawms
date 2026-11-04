@@ -2,6 +2,18 @@ package com.mahghuuuls.jawms.internal.mana;
 
 import com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod;
 import com.mahghuuuls.jawms.api.IManaService;
+import com.mahghuuuls.jawms.api.ManaContribution;
+import com.mahghuuuls.jawms.api.ManaContributionPublicationResult;
+import com.mahghuuuls.jawms.api.ManaContributionPublicationStatus;
+import com.mahghuuuls.jawms.api.ManaProfileGeneration;
+import com.mahghuuuls.jawms.api.ManaProfileReadiness;
+import com.mahghuuuls.jawms.internal.modifier.ManaProviderRegistry;
+
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Supplier;
 import com.mahghuuuls.jawms.api.ManaCauses;
 import com.mahghuuuls.jawms.api.ManaMutationResult;
 import com.mahghuuuls.jawms.api.ManaMutationFailure;
@@ -28,7 +40,7 @@ public final class ManaService implements IManaService {
     @Override
     public ManaPublicState getState(EntityPlayer player) {
         ManaState state = requireState(player);
-        return snapshot(state);
+        return state.profileHeld() ? compatibilityView() : snapshot(state);
     }
 
     @Override
@@ -75,14 +87,14 @@ public final class ManaService implements IManaService {
     public double getApplicableSpellEfficiency(EntityPlayer player, Spell spell) {
         ManaState state = requireState(player);
         requireRegisteredSpell(spell);
-        return state.getSpellEfficiency(spell.getElement());
+        return state.profileHeld() ? 0.0D : state.getSpellEfficiency(spell.getElement());
     }
 
     @Override
     public double getApplicableSpellCostMultiplier(EntityPlayer player, Spell spell) {
         ManaState state = requireState(player);
         requireRegisteredSpell(spell);
-        return state.getSpellCostMultiplier(spell.getElement());
+        return state.profileHeld() ? 1.0D : state.getSpellCostMultiplier(spell.getElement());
     }
 
     private static void requireRegisteredSpell(Spell spell) {
@@ -153,7 +165,9 @@ public final class ManaService implements IManaService {
             ResourceLocation cause
     ) {
         ResourceLocation checkedCause = requireCause(cause);
-        ManaState state = requireAcceptedMutableState(player);
+        ManaState state = requireServerState(player);
+        if (state.profileHeld()) return 0;
+        requireMutationAllowed(player);
         long duration = state.getEffectiveLockoutTicks();
         boolean wasActive = state.getRemainingLockoutTicks() > 0L;
         transition(
@@ -172,7 +186,13 @@ public final class ManaService implements IManaService {
             ResourceLocation cause,
             StateMutation mutation
     ) {
-        ManaState state = requireMutableState(player);
+        ManaState state = requireState(player);
+        if (state.profileHeld()) {
+            ManaPublicState view = compatibilityView();
+            return new ManaMutationResult(ManaMutationFailure.PROFILE_NOT_READY,
+                    requestedAmount, 0, cause, view, view);
+        }
+        requireMutationAllowed(player);
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
             ManaPublicState oldState = snapshot(state);
@@ -195,7 +215,7 @@ public final class ManaService implements IManaService {
 
     public static ManaState requireState(EntityPlayer player) {
         ManaState state = requireServerState(player);
-        if (state.hasPendingLoadedMana()
+        if (!state.profileHeld() && state.hasPendingLoadedMana()
                 && !ManaEvaluationGuard.isEvaluating(player.getUniqueID())) {
             state.applyProfileEvaluation(evaluateProfile(
                     player, GameplayRulesManager.current()
@@ -211,7 +231,11 @@ public final class ManaService implements IManaService {
 
     /** Returns the retained accepted explanation without evaluating providers. */
     public static ManaProfileExplanation explainAcceptedProfile(EntityPlayer player) {
-        return requireServerState(player).explainAcceptedProfile();
+        ManaState state = requireServerState(player);
+        if (state.profileHeld()) {
+            throw new IllegalStateException("No authoritative JAWMS mana-profile evaluation has been accepted yet.");
+        }
+        return state.explainAcceptedProfile();
     }
 
     private static ManaState requireServerState(EntityPlayer player) {
@@ -241,10 +265,126 @@ public final class ManaService implements IManaService {
         return state;
     }
 
-    private static ManaState requireAcceptedMutableState(EntityPlayer player) {
+    private static ManaPublicState compatibilityView() {
+        return new ManaPublicState(0, GameplayRulesManager.current().getBaseMaximum(), 0.0D,
+                0L, 0L, false, false, false, false);
+    }
+
+    public static ManaProfileReadiness getProfileReadiness(EntityPlayer player) {
+        ManaReadiness readiness = requireServerState(player).readiness;
+        return readiness == null || (!readiness.held() && !readiness.hasEligibleProvider())
+                ? ManaProfileReadiness.LEGACY : readiness.phase();
+    }
+
+    public static boolean canUseManaProfile(EntityPlayer player) {
+        return !requireServerState(player).profileHeld();
+    }
+
+    static void configureReadiness(EntityPlayer player, ManaState state, GameplayRules rules) {
+        if (!(player instanceof EntityPlayerMP) || !(player.world instanceof WorldServer)
+                || player instanceof net.minecraftforge.common.util.FakePlayer) return;
+        Set<ResourceLocation> eligible = ManaProviderRegistry.instance().eligibleReadinessProviders(rules);
+        if (state.readiness != null) {
+            state.readiness.applyPolicy(eligible);
+        } else if (!eligible.isEmpty()) {
+            state.readiness = new ManaReadiness(eligible, player.world.getMinecraftServer().getTickCounter(),
+                    state.hasAcceptedProfile());
+        }
+    }
+
+    public static void bindLogin(EntityPlayerMP player) {
         ManaState state = requireServerState(player);
-        requireMutationAllowed(player);
-        return state;
+        configureReadiness(player, state, GameplayRulesManager.current());
+        state.loginBound = true;
+    }
+
+    public static void finishLogin(EntityPlayerMP player) {
+        requireServerState(player).loginComplete = true;
+    }
+
+    public static void retireLogout(EntityPlayerMP player) {
+        ManaState state = requireServerState(player);
+        if (state.readiness == null) return;
+        state.retireReadiness();
+        ManaProviderRegistry.instance().remove(player);
+    }
+
+    private static Object publicationContext(EntityPlayer player, ManaState state) {
+        net.minecraft.network.NetHandlerPlayServer connection = ((EntityPlayerMP) player).connection;
+        if (!state.loginBound || connection == null || connection.player != player) return null;
+        return player.world;
+    }
+
+    public static Optional<ManaProfileGeneration> getReadinessGeneration(EntityPlayer player,
+            ResourceLocation id, Supplier<ManaProfileGeneration> create) {
+        ManaState state = requireServerState(player);
+        return state.readiness == null ? Optional.empty()
+                : state.readiness.generation(id, publicationContext(player, state), create);
+    }
+
+    public static ManaContribution readinessContribution(EntityPlayer player, ResourceLocation id) {
+        ManaState state = requireServerState(player);
+        return state.readiness == null ? null : state.readiness.contribution(id);
+    }
+
+    public static ManaContributionPublicationResult publishReadiness(EntityPlayer player, ResourceLocation id,
+            ManaProfileGeneration generation, ManaContribution contribution, boolean initial, long revision) {
+        Objects.requireNonNull(generation, "generation");
+        Objects.requireNonNull(contribution, "contribution");
+        if (!initial && revision < 1) throw new IllegalArgumentException("Expected a positive revision.");
+        ManaState state = requireServerState(player);
+        if (state.readiness == null) return ManaReadiness.rejection(ManaContributionPublicationStatus.INAPPLICABLE);
+        if (ManaEvaluationGuard.isEvaluating(player.getUniqueID())
+                || ManaMutationCoordinator.currentDepth(player.getUniqueID()) > 0) {
+            return ManaReadiness.rejection(ManaContributionPublicationStatus.BUSY);
+        }
+        ManaContributionPublicationResult result = state.readiness.publish(id, publicationContext(player, state),
+                generation, contribution, initial, revision);
+        if (result.getRevision().isPresent() && !state.profileHeld()) {
+            try (ManaMutationCoordinator.Scope ignored = ManaMutationCoordinator.enter(player.getUniqueID())) {
+                ManaPublicState before = snapshot(state);
+                boolean profileChanged = state.applyProfileEvaluation(evaluateProfile(player, GameplayRulesManager.current()));
+                ManaPublicState after = snapshot(state);
+                if (!before.equals(after)) {
+                    synchronizeDisplayChange(player, before, after, state);
+                    publishTransition(player, before, after, ManaCauses.STAT_CLAMP, false);
+                } else if (profileChanged) {
+                    ManaNetwork.synchronize(player, state);
+                }
+            }
+        }
+        return result;
+    }
+
+    private static void tickHeldProfile(EntityPlayerMP player, ManaState state, GameplayRules rules) {
+        ManaReadiness readiness = state.readiness;
+        if (readiness.isRetired()) return;
+        int tick = player.getServer().getTickCounter();
+        List<ResourceLocation> missing = readiness.missing();
+        if (state.loginComplete && player.connection != null && player.connection.player == player
+                && player.getServer().getPlayerList().getPlayerByUUID(player.getUniqueID()) == player
+                && player.getServerWorld() == player.getServer().getWorld(player.dimension) && missing.isEmpty()) {
+            ManaProfileEvaluation evaluation = evaluateProfile(player, rules);
+            boolean recovering = readiness.phase() == ManaProfileReadiness.UNAVAILABLE;
+            Integer input = state.acceptFirstProfile(evaluation);
+            if (Boolean.getBoolean("jawms.debugManaReadiness")) {
+                JustAnotherWizardryManaSystemMod.LOGGER.info(
+                        "MANA_PROFILE_ACCEPTED player={} generation={} lifecycle=LOGIN path=PLAYER_END_TICK input={} current={} maximum={} rulesRevision={} recovery={}",
+                        player.getUniqueID(), readiness.identity, input, state.getCurrentMana(),
+                        state.getMaximumMana(), rules.getRevision(), recovering);
+            }
+            if (recovering) {
+                JustAnotherWizardryManaSystemMod.LOGGER.info("MANA_PROFILE_RECOVERED player={} generation={}",
+                        player.getUniqueID(), readiness.identity);
+            }
+            ManaNetwork.synchronize(player, state);
+        } else if (readiness.deadlineElapsed(tick)) {
+            readiness.unavailable();
+            JustAnotherWizardryManaSystemMod.LOGGER.warn(
+                    "MANA_PROFILE_UNAVAILABLE player={} generation={} lifecycle=LOGIN missingProviders={}",
+                    player.getUniqueID(), readiness.identity, missing);
+            ManaNetwork.synchronize(player, state);
+        }
     }
 
     private static void requireMutationAllowed(EntityPlayer player) {
@@ -256,11 +396,13 @@ public final class ManaService implements IManaService {
     }
 
     public static int getAvailableMana(EntityPlayer player) {
-        return requireState(player).getAvailableMana();
+        ManaState state = requireState(player);
+        return state.profileHeld() ? 0 : state.getAvailableMana();
     }
 
     public static ManaReservation reserveMana(EntityPlayer player, int amount) {
-        return requireMutableState(player).reserve(amount);
+        ManaState state = requireMutableState(player);
+        return state.profileHeld() ? null : state.reserve(amount);
     }
 
     public static void releaseReservation(ManaReservation reservation) {
@@ -439,8 +581,11 @@ public final class ManaService implements IManaService {
         ManaState state = requireMutableState(player);
         boolean force = state.isContinuousCastActive() || state.getRemainingLockoutTicks() > 0L;
         try {
-            transition(player, state, ManaCauses.LIFECYCLE, force,
-                    state::clearTransientLifecycleState);
+            if (state.profileHeld()) {
+                state.clearTransientLifecycleState();
+            } else {
+                transition(player, state, ManaCauses.LIFECYCLE, force, state::clearTransientLifecycleState);
+            }
         } finally {
             ManaMutationCoordinator.clear(player.getUniqueID());
             CastCostContextManager.clearAll(player);
@@ -482,12 +627,16 @@ public final class ManaService implements IManaService {
         } catch (IllegalStateException invalidLifecycle) {
             return;
         }
-        if (!reservation.matchesGeneration(state) || !state.hasPendingProfileEvaluation()) return;
+        if (state.profileHeld() || !reservation.matchesGeneration(state) || !state.hasPendingProfileEvaluation()) return;
         transition(player, state, ManaCauses.STAT_CLAMP, false, state::applyPendingProfileEvaluation);
     }
 
     public static void tickPlayer(EntityPlayer player, GameplayRules rules) {
         ManaState state = requireMutableState(player);
+        if (state.profileHeld()) {
+            tickHeldProfile((EntityPlayerMP) player, state, rules);
+            return;
+        }
         ManaPublicState oldState = snapshot(state);
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
@@ -518,7 +667,13 @@ public final class ManaService implements IManaService {
             GameplayRules previous,
             GameplayRules replacement
     ) {
-        ManaState state = requireMutableState(player);
+        ManaState state = requireServerState(player);
+        configureReadiness(player, state, replacement);
+        if (state.profileHeld()) {
+            ManaNetwork.synchronize(player, state);
+            return;
+        }
+        state = requireMutableState(player);
         try (ManaMutationCoordinator.Scope ignored =
                      ManaMutationCoordinator.enter(player.getUniqueID())) {
             ManaPublicState oldState = snapshot(state);

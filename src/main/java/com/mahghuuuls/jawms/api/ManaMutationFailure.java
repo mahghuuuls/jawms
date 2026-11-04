@@ -15,5 +15,7 @@ public enum ManaMutationFailure {
     INSUFFICIENT_MANA,
 
     /** Legacy or otherwise unspecified rejection. */
-    REJECTED
+    REJECTED,
+    /** No authoritative mana profile is available for the current lifecycle. */
+    PROFILE_NOT_READY
 }

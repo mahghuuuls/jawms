@@ -1,17 +1,53 @@
 package com.mahghuuuls.jawms.client;
 
 import com.mahghuuuls.jawms.api.client.ClientManaSnapshot;
+import com.mahghuuuls.jawms.api.ManaProfileReadiness;
+import com.mahghuuuls.jawms.internal.mana.ManaReadinessMessage;
 import electroblob.wizardry.constants.Element;
 import java.util.EnumMap;
 import java.util.Map;
 import com.mahghuuuls.jawms.internal.casting.CastCostContextManager;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentContextManager;
+import net.minecraft.client.Minecraft;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.network.FMLNetworkEvent;
 
 public final class ClientManaState {
 
+    private static Object viewConnection;
+    private static long managedSequence;
+    private static boolean managedHeld;
     private static int currentMana;
+
+    public static boolean acceptsLegacy(Object handler, Object activeConnection) {
+        if (handler == null || handler != activeConnection) return false;
+        bindConnection(handler);
+        return managedSequence == 0;
+    }
+
+    public static void acceptManaged(ManaReadinessMessage message,
+            Object handler, Object activeConnection) {
+        if (handler == null || handler != activeConnection) return;
+        bindConnection(handler);
+        if (message.getSequence() <= managedSequence) return;
+        if (managedSequence == 0) clear();
+        managedSequence = message.getSequence();
+        managedHeld = message.getPhase() != ManaProfileReadiness.READY;
+        if (managedHeld) clear();
+        else message.deliverPayload();
+    }
+
+    public static boolean isManagedHeld(Object activeConnection) {
+        return activeConnection != null && viewConnection == activeConnection && managedHeld;
+    }
+
+    private static void bindConnection(Object handler) {
+        if (viewConnection == handler) return;
+        viewConnection = handler;
+        managedSequence = 0;
+        managedHeld = false;
+        clear();
+    }
     private static int maximumMana;
     private static double effectiveRegeneration;
     private static long revision = Long.MIN_VALUE;
@@ -91,9 +127,17 @@ public final class ClientManaState {
 
     @SubscribeEvent
     public void disconnected(FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
-        CastCostContextManager.clearClientSide();
-        CastPaymentContextManager.clearClientSide();
-        clear();
+        Minecraft client = Minecraft.getMinecraft();
+        client.addScheduledTask(() -> {
+            Object active = client.getConnection();
+            if (active != null && active != event.getHandler()) return;
+            CastCostContextManager.clearClientSide();
+            CastPaymentContextManager.clearClientSide();
+            viewConnection = null;
+            managedSequence = 0;
+            managedHeld = false;
+            clear();
+        });
     }
 
     static void clear() {

@@ -18,6 +18,9 @@ public final class ManaNetwork {
 
     private static final SimpleNetworkWrapper CHANNEL = NetworkRegistry.INSTANCE.newSimpleChannel(Tags.MOD_ID);
 
+    private static final java.util.Map<net.minecraft.network.NetHandlerPlayServer, Long> MANAGED_SEQUENCES =
+            new java.util.WeakHashMap<>();
+
     private ManaNetwork() {
     }
 
@@ -27,6 +30,7 @@ public final class ManaNetwork {
         CHANNEL.registerMessage(ParticipantUseMessages.ReleaseHandler.class, ParticipantUseMessages.Release.class, 6, Side.SERVER);
         CHANNEL.registerMessage(ParticipantUseMessages.CloseHandler.class, ParticipantUseMessages.Close.class, 7, Side.CLIENT);
         CHANNEL.registerMessage(ManaStateMessage.Handler.class, ManaStateMessage.class, 0, Side.CLIENT);
+        CHANNEL.registerMessage(ManaReadinessMessage.Handler.class, ManaReadinessMessage.class, 8, Side.CLIENT);
         CHANNEL.registerMessage(GameplayRulesMessage.Handler.class, GameplayRulesMessage.class, 1, Side.CLIENT);
         CHANNEL.registerMessage(
                 ContinuousCastStopMessage.Handler.class,
@@ -43,20 +47,20 @@ public final class ManaNetwork {
     }
 
     public static void synchronize(EntityPlayer player, ManaState state) {
-        if (player instanceof EntityPlayerMP) {
-            CHANNEL.sendTo(
-                    new ManaStateMessage(
-                            state.getCurrentMana(),
-                            state.getMaximumMana(),
-                            state.getEffectiveRegeneration(),
-                            state.getRevision(),
-                            state.getGlobalSpellEfficiency(),
-                            state.getElementSpellEfficiency(),
-                            state.getGlobalSpellCostMultiplier(),
-                            state.getElementSpellCostMultipliers()
-                    ),
-                    (EntityPlayerMP) player
-            );
+        if (!(player instanceof EntityPlayerMP)) return;
+        EntityPlayerMP recipient = (EntityPlayerMP) player;
+        if (recipient.connection == null) return;
+        ManaReadiness readiness = state.readiness;
+        ManaStateMessage payload = state.profileHeld() ? null : new ManaStateMessage(
+                state.getCurrentMana(), state.getMaximumMana(), state.getEffectiveRegeneration(),
+                state.getRevision(), state.getGlobalSpellEfficiency(), state.getElementSpellEfficiency(),
+                state.getGlobalSpellCostMultiplier(), state.getElementSpellCostMultipliers());
+        if (readiness != null) {
+            if (!recipient.connection.getNetworkManager().isChannelOpen()) return;
+            long sequence = MANAGED_SEQUENCES.merge(recipient.connection, 1L, Math::addExact);
+            CHANNEL.sendTo(new ManaReadinessMessage(sequence, readiness.identity, readiness.phase(), payload), recipient);
+        } else if (!MANAGED_SEQUENCES.containsKey(recipient.connection)) {
+            CHANNEL.sendTo(payload, recipient);
         }
     }
 
@@ -96,6 +100,10 @@ public final class ManaNetwork {
 
     public static void synchronizeLifecycle(EntityPlayer player, String reason) {
         ManaState state = ManaService.requireState(player);
+        if (state.profileHeld()) {
+            synchronize(player, state);
+            return;
+        }
         state.advanceRevision();
         synchronize(player, state);
         com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod.LOGGER.info(

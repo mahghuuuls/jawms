@@ -37,6 +37,16 @@ public class CommonProxy {
         // Common initialization is performed without referencing client classes.
     }
 
+    public void acceptLegacyMana(com.mahghuuuls.jawms.internal.mana.ManaStateMessage message, Object handler) {
+    }
+
+    public void acceptManagedMana(com.mahghuuuls.jawms.internal.mana.ManaReadinessMessage message, Object handler) {
+    }
+
+    public boolean isClientManaProfileHeld() {
+        return false;
+    }
+
     public void acceptManaState(
             int currentMana,
             int maximumMana,

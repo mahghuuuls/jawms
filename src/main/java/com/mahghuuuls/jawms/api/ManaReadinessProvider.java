@@ -1,0 +1,32 @@
+package com.mahghuuuls.jawms.api;
+
+import com.mahghuuuls.jawms.internal.mana.ManaService;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.ResourceLocation;
+
+import java.util.Optional;
+
+/** Provider-bound, server-thread interface for publishing complete mana contributions. */
+public final class ManaReadinessProvider {
+    private final ResourceLocation id;
+
+    ManaReadinessProvider(ResourceLocation id) {
+        this.id = id;
+    }
+
+    public Optional<ManaProfileGeneration> getGeneration(EntityPlayer player) {
+        return ManaService.getReadinessGeneration(player, id, ManaProfileGeneration::new);
+    }
+
+    /** Submit the first complete group. Pass ManaContribution.EMPTY for a verified empty group. */
+    public ManaContributionPublicationResult completeInitial(
+            EntityPlayer player, ManaProfileGeneration generation, ManaContribution contribution) {
+        return ManaService.publishReadiness(player, id, generation, contribution, true, 0);
+    }
+
+    /** Replace the complete group using this provider's last recorded revision. */
+    public ManaContributionPublicationResult update(EntityPlayer player, ManaProfileGeneration generation,
+            long expectedRevision, ManaContribution contribution) {
+        return ManaService.publishReadiness(player, id, generation, contribution, false, expectedRevision);
+    }
+}

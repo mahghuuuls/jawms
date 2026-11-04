@@ -12,6 +12,14 @@ public final class ManaProvider implements ICapabilitySerializable<NBTTagCompoun
 
     private final ManaState state = new ManaState();
 
+    public ManaProvider() {
+    }
+
+    ManaProvider(net.minecraft.entity.player.EntityPlayer player) {
+        ManaService.configureReadiness(player, state,
+                com.mahghuuuls.jawms.internal.rules.GameplayRulesManager.current());
+    }
+
     @Override
     public boolean hasCapability(@Nonnull Capability<?> capability, @Nullable EnumFacing facing) {
         return capability == ManaCapability.INSTANCE;

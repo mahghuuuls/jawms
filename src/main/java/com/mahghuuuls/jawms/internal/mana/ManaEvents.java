@@ -25,7 +25,7 @@ public final class ManaEvents {
     @SubscribeEvent
     public void attachCapabilities(AttachCapabilitiesEvent<Entity> event) {
         if (event.getObject() instanceof EntityPlayer) {
-            event.addCapability(CAPABILITY_ID, new ManaProvider());
+            event.addCapability(CAPABILITY_ID, new ManaProvider((EntityPlayer) event.getObject()));
         }
     }
 
@@ -60,8 +60,10 @@ public final class ManaEvents {
         GameplayRules rules = GameplayRulesManager.current();
         if (state != null) {
             ManaProviderRegistry.instance().consumeDeferredRefresh(event.player);
-            WizardryWandBridge.reconcileContinuousCast(event.player);
-            ParticipantUseService.tick(event.player);
+            if (!state.profileHeld()) {
+                WizardryWandBridge.reconcileContinuousCast(event.player);
+                ParticipantUseService.tick(event.player);
+            }
             ManaService.tickPlayer(event.player, rules);
         }
     }

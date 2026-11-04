@@ -17,6 +17,17 @@ public final class ManaApi {
 
     public static final String API_VERSION = ManaApiVersion.CURRENT;
 
+    /** Register a contextual source that publishes complete groups before first acceptance. */
+    public static ManaReadinessProvider registerReadinessProvider(ResourceLocation id) {
+        ManaProviderRegistry.instance().registerReadiness(id);
+        return new ManaReadinessProvider(id);
+    }
+
+    /** Read lifecycle readiness without evaluating modifiers or accepting a profile. */
+    public static ManaProfileReadiness getProfileReadiness(EntityPlayer player) {
+        return ManaService.getProfileReadiness(player);
+    }
+
     private static final IManaService SERVICE = new ManaService();
 
     private ManaApi() {

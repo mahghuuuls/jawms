@@ -5,6 +5,7 @@ import com.mahghuuuls.jawms.api.IManaService;
 import com.mahghuuuls.jawms.api.ManaApi;
 import com.mahghuuuls.jawms.api.ManaCauses;
 import com.mahghuuuls.jawms.api.ManaMutationResult;
+import com.mahghuuuls.jawms.internal.mana.ManaService;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import electroblob.wizardry.item.IManaStoringItem;
 import electroblob.wizardry.item.ItemManaFlask;
@@ -51,8 +52,10 @@ public final class WizardryFlaskBridge {
         }
         int playerMissing;
         if (player.world.isRemote) {
+            if (JustAnotherWizardryManaSystemMod.proxy.isClientManaProfileHeld()) return false;
             playerMissing = JustAnotherWizardryManaSystemMod.proxy.getClientMissingMana();
         } else {
+            if (!ManaService.canUseManaProfile(player)) return false;
             IManaService service = ManaApi.getManaService();
             playerMissing = Math.max(0, service.getMaximumMana(player) - service.getCurrentMana(player));
         }
@@ -61,7 +64,7 @@ public final class WizardryFlaskBridge {
 
     /** Applies one authoritative budget and returns whether anything changed. */
     public static boolean restore(EntityPlayer player, int budget) {
-        if (player == null || player.world.isRemote || budget <= 0) {
+        if (player == null || player.world.isRemote || budget <= 0 || !ManaService.canUseManaProfile(player)) {
             return false;
         }
         IManaService service = ManaApi.getManaService();

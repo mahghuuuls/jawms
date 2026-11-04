@@ -45,6 +45,33 @@ public final class ManaState {
     private ManaProfileEvaluation acceptedProfileEvaluation;
     private ManaProfileEvaluation pendingProfileEvaluation;
     private boolean pendingReloadLockoutClamp;
+    ManaReadiness readiness;
+    boolean loginBound;
+    boolean loginComplete;
+
+    boolean profileHeld() {
+        return readiness != null && readiness.held();
+    }
+
+    boolean hasAcceptedProfile() {
+        return acceptedProfileEvaluation != null;
+    }
+
+    Integer acceptFirstProfile(ManaProfileEvaluation evaluation) {
+        Integer input = pendingLoadedMana;
+        if (input == null) pendingLoadedMana = evaluation.getProfile().getMaximumMana();
+        readiness.accept();
+        applyProfileEvaluation(evaluation);
+        return input;
+    }
+
+    void retireReadiness() {
+        if (!readiness.held()) {
+            pendingLoadedMana = currentMana;
+        }
+        readiness.retire();
+        clearTransientLifecycleState();
+    }
 
     public ManaState() {
         GameplayRules rules = GameplayRulesManager.current();
@@ -526,7 +553,11 @@ public final class ManaState {
 
     public NBTTagCompound serializeIntrinsicState() {
         NBTTagCompound tag = new NBTTagCompound();
-        tag.setInteger("currentMana", pendingLoadedMana == null ? currentMana : pendingLoadedMana);
+        if (pendingLoadedMana != null) {
+            tag.setInteger("currentMana", pendingLoadedMana);
+        } else if (!profileHeld() || hasAcceptedProfile()) {
+            tag.setInteger("currentMana", currentMana);
+        }
         return tag;
     }
 
@@ -534,7 +565,7 @@ public final class ManaState {
         acceptedProfileEvaluation = null;
         if (tag.hasKey("currentMana", 3)) {
             pendingLoadedMana = Math.max(0, tag.getInteger("currentMana"));
-            currentMana = clamp(pendingLoadedMana);
+            if (!profileHeld()) currentMana = clamp(pendingLoadedMana);
         } else {
             pendingLoadedMana = null;
             currentMana = getMaximumMana();

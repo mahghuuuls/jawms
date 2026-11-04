@@ -14,6 +14,61 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClientManaStateTest {
 
+    @Test
+    void managedHoldRejectsAnOlderViewAndAnObsoleteHandler() {
+        Object old = new Object();
+        Object active = new Object();
+        com.mahghuuuls.jawms.internal.mana.ManaReadinessMessage pending = managedView(2, false);
+        com.mahghuuuls.jawms.internal.mana.ManaReadinessMessage accepted = managedView(1, true);
+        ClientManaState.accept(100, 100, 0, 1);
+
+        ClientManaState.acceptManaged(pending, active, active);
+        ClientManaState.acceptManaged(accepted, active, active);
+        ClientManaState.acceptManaged(accepted, old, active);
+        assertTrue(ClientManaState.isManagedHeld(active));
+        assertFalse(ClientManaState.isAvailable());
+        assertFalse(ClientManaState.acceptsLegacy(active, active));
+        assertFalse(ClientManaState.acceptsLegacy(old, active));
+
+        com.mahghuuuls.jawms.proxy.CommonProxy previous =
+                com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod.proxy;
+        com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod.proxy = new com.mahghuuuls.jawms.proxy.CommonProxy() {
+            @Override
+            public void acceptManaState(int current, int maximum, double regeneration, long revision,
+                    double efficiency, java.util.Map<Element, Double> efficiencies,
+                    double multiplier, java.util.Map<Element, Double> multipliers) {
+                ClientManaState.accept(current, maximum, regeneration, revision, efficiency,
+                        efficiencies, multiplier, multipliers);
+            }
+        };
+        try {
+            ClientManaState.acceptManaged(managedView(3, true), active, active);
+            assertFalse(ClientManaState.isManagedHeld(active));
+            assertTrue(ClientManaState.isAvailable());
+            assertEquals(100, ClientManaState.getCurrentMana());
+        } finally {
+            com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod.proxy = previous;
+        }
+        assertTrue(ClientManaState.acceptsLegacy(old, old));
+    }
+
+    private static com.mahghuuuls.jawms.internal.mana.ManaReadinessMessage managedView(long sequence, boolean ready) {
+        io.netty.buffer.ByteBuf buffer = io.netty.buffer.Unpooled.buffer();
+        try {
+            buffer.writeLong(sequence);
+            buffer.writeLong(1);
+            buffer.writeLong(2);
+            buffer.writeByte(ready ? 2 : 0);
+            if (ready) new com.mahghuuuls.jawms.internal.mana.ManaStateMessage(100, 100, 0, 1).toBytes(buffer);
+            com.mahghuuuls.jawms.internal.mana.ManaReadinessMessage view =
+                    new com.mahghuuuls.jawms.internal.mana.ManaReadinessMessage();
+            view.fromBytes(buffer);
+            return view;
+        } finally {
+            buffer.release();
+        }
+    }
+
     @AfterEach
     void reset() {
         ClientManaState.clear();

@@ -37,9 +37,7 @@ class AddonDocumentationContractTest {
     void currentGuideStaysCurrentAndHistoryOwnsOlderVersions() throws IOException {
         String guide = read(GUIDE_PATH);
         String history = read("docs/API-HISTORY.md");
-        String jawmsRange = openRange(
-                "jawms", property("developer_tools_jawms_min_version")
-        );
+        String jawmsRange = openRange("jawms", "1.2.0");
         String wizardryRange = openRange(
                 "ebwizardry", property("wizardry_min_version")
         );
@@ -86,7 +84,7 @@ class AddonDocumentationContractTest {
 
     @Test
     void currentDependencyGuidanceUsesBuildOwnedOpenMinimums() throws IOException {
-        String jawmsMinimum = property("developer_tools_jawms_min_version");
+        String jawmsMinimum = "1.2.0";
         String wizardryMinimum = property("wizardry_min_version");
         String mixinMinimum = property("mixin_booter_min_version");
         String baublesMinimum = property("baubles_min_version");
@@ -235,7 +233,7 @@ class AddonDocumentationContractTest {
         assertTrue(modPage.contains("(" + GUIDE_URL + ")"));
         assertTrue(rootPackage.contains(GUIDE_URL));
         assertTrue(clientPackage.contains(GUIDE_URL));
-        assertTrue(readme.contains("JAWMS `" + property("mod_version") + "` development candidate provides addon API `1.7`"));
+        assertTrue(readme.contains("JAWMS `1.2.0` development candidate provides addon API `1.7`"));
         assertTrue(readme.contains("Use the guide for current dependency setup and API usage"));
         assertTrue(readme.contains("[API History](docs/API-HISTORY.md)"));
         assertTrue(readme.contains(

@@ -52,14 +52,14 @@ class MixinBootstrapContractTest {
         }
         assertEquals("11.8", properties.getProperty("mixin_booter_version").trim());
         assertEquals("10.7", properties.getProperty("mixin_booter_min_version").trim());
-        assertEquals("1.2.0", metadata.get("version").getAsString());
+        assertEquals("1.3.0", metadata.get("version").getAsString());
     }
 
     @Test
     void requiredConfigurationsCoverEveryCandidateHookOnceOnItsOriginalSide() throws Exception {
         JsonObject early = json(EARLY);
         JsonObject late = json(LATE);
-        assertEquals(set("EntityLivingBaseMixin", "EntityPlayerMixin", "ContainerWandPublicationMixin", "EntityPlayerMPWandPublicationMixin", "InventoryPlayerWandPublicationMixin", "NetHandlerWandPublicationServerMixin", "NetworkManagerWandPublicationMixin", "NonNullListWandMutationMixin"),
+        assertEquals(set("EntityLivingBaseMixin", "PlayerListManaLifecycleMixin", "EntityPlayerMixin", "ContainerWandPublicationMixin", "EntityPlayerMPWandPublicationMixin", "InventoryPlayerWandPublicationMixin", "NetHandlerWandPublicationServerMixin", "NetworkManagerWandPublicationMixin", "NonNullListWandMutationMixin"),
                 strings(early.getAsJsonArray("mixins")));
         assertEquals(set("ItemStackTooltipClientMixin", "MinecraftWandSelectionClientMixin", "NetHandlerWandPublicationClientMixin", "PlayerControllerParticipantUseMixin"), strings(early.getAsJsonArray("client")));
         assertEquals(set("WandHelperBindingMutationMixin", "EntityForceArrowMixin", "ForceArrowMixin", "ItemWandMixin",
@@ -85,7 +85,7 @@ class MixinBootstrapContractTest {
                 }
             }
         }
-        assertEquals(22, count);
+        assertEquals(23, count);
         assertNull(getClass().getClassLoader().getResource("mixins.jawms.json"),
                 "The former unsplit resource must not remain a fallback");
     }
