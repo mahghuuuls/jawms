@@ -56,7 +56,17 @@ public final class ClientManaState {
     private static final EnumMap<Element, Double> elementSpellEfficiency = new EnumMap<>(Element.class);
     private static double globalSpellCostMultiplier = 1.0D;
     private static final EnumMap<Element, Double> elementSpellCostMultiplier = new EnumMap<>(Element.class);
-    private static volatile ClientManaSnapshot snapshot = ClientManaSnapshot.unavailable();
+    private static volatile PublishedSnapshot publishedSnapshot;
+
+    private static final class PublishedSnapshot {
+        private final Object connection;
+        private final ClientManaSnapshot value;
+
+        private PublishedSnapshot(Object connection, ClientManaSnapshot value) {
+            this.connection = connection;
+            this.value = value;
+        }
+    }
 
     public static void accept(int current, int maximum, double regeneration, long incomingRevision) {
         accept(current, maximum, regeneration, incomingRevision, 0.0D,
@@ -86,17 +96,21 @@ public final class ClientManaState {
             elementSpellCostMultiplier.clear();
             elementSpellCostMultiplier.putAll(elementCostMultiplier);
             available = true;
-            snapshot = ClientManaSnapshot.available(
+            publishedSnapshot = new PublishedSnapshot(viewConnection, ClientManaSnapshot.available(
                     current,
                     maximum,
                     regeneration,
                     incomingRevision
-            );
+            ));
         }
     }
 
-    static ClientManaSnapshot snapshot() {
-        return snapshot;
+    static ClientManaSnapshot snapshot(Object activeConnection) {
+        // The visible connection can disappear before the queued disconnect cleanup runs.
+        PublishedSnapshot published = publishedSnapshot;
+        return activeConnection != null && published != null && published.connection == activeConnection
+                ? published.value
+                : ClientManaSnapshot.unavailable();
     }
 
     public static boolean isAvailable() {
@@ -150,6 +164,6 @@ public final class ClientManaState {
         elementSpellEfficiency.clear();
         globalSpellCostMultiplier = 1.0D;
         elementSpellCostMultiplier.clear();
-        snapshot = ClientManaSnapshot.unavailable();
+        publishedSnapshot = null;
     }
 }

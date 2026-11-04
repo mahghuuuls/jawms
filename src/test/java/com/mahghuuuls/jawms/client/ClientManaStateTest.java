@@ -15,6 +15,36 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ClientManaStateTest {
 
     @Test
+    void snapshotIsUnavailableWhenTheConnectionDisappearsBeforeCleanup() {
+        Object connection = new Object();
+        assertTrue(ClientManaState.acceptsLegacy(connection, connection));
+        ClientManaState.accept(110, 120, 0, 20);
+        assertEquals(110, ClientManaState.snapshot(connection).getCurrentMana());
+
+        assertEquals(ClientManaSnapshot.unavailable(), ClientManaState.snapshot(null));
+        assertFalse(ClientManaState.snapshot(null).hasKnownRevision());
+    }
+
+    @Test
+    void replacementConnectionCannotReadOrAcceptTheOldSnapshot() {
+        Object previous = new Object();
+        Object replacement = new Object();
+        assertTrue(ClientManaState.acceptsLegacy(previous, previous));
+        ClientManaState.accept(110, 120, 0, 20);
+
+        assertEquals(ClientManaSnapshot.unavailable(), ClientManaState.snapshot(replacement));
+        assertFalse(ClientManaState.acceptsLegacy(previous, replacement));
+        ClientManaState.acceptManaged(managedView(21, true), previous, replacement);
+        assertEquals(ClientManaSnapshot.unavailable(), ClientManaState.snapshot(replacement));
+
+        assertTrue(ClientManaState.acceptsLegacy(replacement, replacement));
+        ClientManaState.accept(100, 120, 0, 1);
+        assertEquals(100, ClientManaState.snapshot(replacement).getCurrentMana());
+        assertEquals(1L, ClientManaState.snapshot(replacement).getRevision());
+        assertEquals(ClientManaSnapshot.unavailable(), ClientManaState.snapshot(previous));
+    }
+
+    @Test
     void managedHoldRejectsAnOlderViewAndAnObsoleteHandler() {
         Object old = new Object();
         Object active = new Object();
@@ -76,13 +106,15 @@ class ClientManaStateTest {
 
     @Test
     void acceptsOnlyNewerRevisionsWithinASession() {
+        Object connection = new Object();
+        assertTrue(ClientManaState.acceptsLegacy(connection, connection));
         ClientManaState.accept(40, 50, 2.0D, 4);
         ClientManaState.accept(30, 50, 3.0D, 3);
 
         assertTrue(ClientManaState.isAvailable());
         assertEquals(40, ClientManaState.getCurrentMana());
         assertEquals(2.0D, ClientManaState.getEffectiveRegeneration());
-        ClientManaSnapshot first = ClientManaState.snapshot();
+        ClientManaSnapshot first = ClientManaState.snapshot(connection);
         assertEquals(40, first.getCurrentMana());
         assertEquals(50, first.getMaximumMana());
         assertEquals(2.0D, first.getEffectiveRegeneration());
@@ -90,16 +122,18 @@ class ClientManaStateTest {
         assertEquals(4L, first.getRevision());
 
         ClientManaState.accept(10, 50, 4.0D, 4);
-        assertEquals(first, ClientManaState.snapshot());
+        assertEquals(first, ClientManaState.snapshot(connection));
 
         ClientManaState.accept(20, 50, 3.0D, 5);
         assertEquals(20, ClientManaState.getCurrentMana());
         assertEquals(3.0D, ClientManaState.getEffectiveRegeneration());
-        assertEquals(5L, ClientManaState.snapshot().getRevision());
+        assertEquals(5L, ClientManaState.snapshot(connection).getRevision());
     }
 
     @Test
     void clearingAllowsARevisionResetOnReconnect() {
+        Object connection = new Object();
+        assertTrue(ClientManaState.acceptsLegacy(connection, connection));
         ClientManaState.accept(40, 50, 2.0D, 20);
         ClientManaState.clear();
         ClientManaState.accept(30, 50, 2.0D, 1);
@@ -107,19 +141,21 @@ class ClientManaStateTest {
         assertTrue(ClientManaState.isAvailable());
         assertEquals(30, ClientManaState.getCurrentMana());
         assertEquals(50, ClientManaState.getMaximumMana());
-        assertEquals(1L, ClientManaState.snapshot().getRevision());
+        assertEquals(1L, ClientManaState.snapshot(connection).getRevision());
     }
 
     @Test
     void clearRemovesDisplayState() {
+        Object connection = new Object();
+        assertTrue(ClientManaState.acceptsLegacy(connection, connection));
         ClientManaState.accept(40, 50, 2.0D, 1);
 
         ClientManaState.clear();
 
         assertFalse(ClientManaState.isAvailable());
-        assertFalse(ClientManaState.snapshot().isAvailable());
-        assertFalse(ClientManaState.snapshot().hasKnownRevision());
-        assertEquals(ClientManaSnapshot.UNKNOWN_REVISION, ClientManaState.snapshot().getRevision());
+        assertFalse(ClientManaState.snapshot(connection).isAvailable());
+        assertFalse(ClientManaState.snapshot(connection).hasKnownRevision());
+        assertEquals(ClientManaSnapshot.UNKNOWN_REVISION, ClientManaState.snapshot(connection).getRevision());
         assertEquals(1.0D, ClientManaState.getSpellCostMultiplier(Element.FIRE));
     }
 
