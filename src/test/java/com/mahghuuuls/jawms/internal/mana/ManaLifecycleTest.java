@@ -10,6 +10,7 @@ import com.mahghuuuls.jawms.internal.modifier.ManaTestEvaluations;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorProfile;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.init.Bootstrap;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.management.PlayerInteractionManager;
@@ -18,6 +19,14 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldProvider;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.common.util.ITeleporter;
+import net.minecraftforge.event.entity.EntityTravelToDimensionEvent;
+import net.minecraftforge.fml.common.eventhandler.Event;
+import net.minecraftforge.fml.common.eventhandler.EventBus;
+import net.minecraftforge.fml.common.eventhandler.EventPriority;
+import net.minecraftforge.fml.common.eventhandler.IEventListener;
+import net.minecraftforge.fml.common.eventhandler.ListenerList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,10 +35,14 @@ import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.mahghuuuls.jawms.api.ManaContributionPublicationStatus.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ManaLifecycleTest {
@@ -160,6 +173,60 @@ class ManaLifecycleTest {
         })));
         assertSame(original, token(player));
         assertEquals(110, mana.getCurrentMana(player));
+        assertTrue(ManaService.isReservationValid(player, claim));
+        ManaService.releaseReservation(claim);
+    }
+
+    @Test
+    void cancelledForgeTravelKeepsTheAcceptedSourceProfile() throws Exception {
+        Bootstrap.register();
+        EntityPlayerMP player = acceptedPlayer();
+        ManaProfileGeneration source = token(player);
+        ManaReadiness.Lifecycle lifecycle = state(player).readiness.lifecycle;
+        long revision = state(player).getRevision();
+        ManaReservation claim = ManaService.reserveMana(player, 10);
+        ITeleporter teleporter = mock(ITeleporter.class);
+        Field playerServer = EntityPlayerMP.class.getField("server");
+        playerServer.setAccessible(true);
+        playerServer.set(player, server);
+        doCallRealMethod().when(player).changeDimension(-1, teleporter);
+
+        // Plain unit tests lack Forge's event transformer. Install a scoped listener
+        // and set the cancellation bit that ForgeHooks reads in the real travel path.
+        Field busId = EventBus.class.getDeclaredField("busID");
+        busId.setAccessible(true);
+        int forgeBus = busId.getInt(MinecraftForge.EVENT_BUS);
+        Field cancelled = Event.class.getDeclaredField("isCanceled");
+        cancelled.setAccessible(true);
+        ListenerList listeners = new EntityTravelToDimensionEvent(player, -1).getListenerList();
+        AtomicInteger calls = new AtomicInteger();
+        IEventListener cancelTravel = event -> {
+            if (!(event instanceof EntityTravelToDimensionEvent)) return;
+            EntityTravelToDimensionEvent travel = (EntityTravelToDimensionEvent) event;
+            if (travel.getEntity() != player || travel.getDimension() != -1) return;
+            calls.incrementAndGet();
+            assertSame(source, token(player));
+            assertEquals(ManaProfileReadiness.READY, ManaApi.getProfileReadiness(player));
+            assertDoesNotThrow(() -> cancelled.setBoolean(travel, true));
+        };
+        listeners.register(forgeBus, EventPriority.NORMAL, cancelTravel);
+        try {
+            assertSame(player, player.changeDimension(-1, teleporter));
+        } finally {
+            listeners.unregister(forgeBus, cancelTravel);
+        }
+
+        assertEquals(1, calls.get());
+        verify(players, never()).transferPlayerToDimension(player, -1, teleporter);
+        assertSame(overworld, player.world);
+        assertEquals(0, player.dimension);
+        ManaService.tickPlayer(player, RULES);
+        assertSame(source, token(player));
+        assertEquals(lifecycle, state(player).readiness.lifecycle);
+        assertEquals(revision, state(player).getRevision());
+        assertEquals(110, mana.getCurrentMana(player));
+        assertEquals(120, mana.getMaximumMana(player));
+        assertEquals(110, savedMana(player));
         assertTrue(ManaService.isReservationValid(player, claim));
         ManaService.releaseReservation(claim);
     }
