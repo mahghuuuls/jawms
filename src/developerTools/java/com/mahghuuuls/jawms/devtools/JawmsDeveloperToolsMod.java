@@ -14,7 +14,7 @@ import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 public final class JawmsDeveloperToolsMod {
 
     public static final String MOD_ID = "jawms_devtools";
-    public static final String VERSION = "1.3.0";
+    public static final String VERSION = "1.4.0";
 
     @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {

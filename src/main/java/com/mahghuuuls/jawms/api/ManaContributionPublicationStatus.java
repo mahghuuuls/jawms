@@ -1,6 +1,6 @@
 package com.mahghuuuls.jawms.api;
 
-/** Outcome of submitting a full provider contribution. */
+/** Outcome of publishing or suspending a provider contribution. */
 public enum ManaContributionPublicationStatus {
     INITIAL_RECORDED,
     UPDATE_RECORDED,
@@ -9,5 +9,7 @@ public enum ManaContributionPublicationStatus {
     REVISION_MISMATCH,
     STALE_GENERATION,
     INAPPLICABLE,
-    BUSY
+    BUSY,
+    SUSPENDED,
+    ALREADY_ACCEPTED
 }

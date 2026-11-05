@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 class AddonDocumentationContractTest {
 
@@ -32,12 +33,29 @@ class AddonDocumentationContractTest {
     private static final String GUIDE_PATH = "docs/ADDON-DEVELOPMENT.md";
     private static final String GUIDE_URL =
             "https://github.com/mahghuuuls/jawms/blob/main/" + GUIDE_PATH;
+    private static final Pattern DOCUMENTED_IDENTITY = Pattern.compile(
+            "JAWMS `([0-9.]+)` provides API `([0-9.]+)`\\.");
+
+    private static Matcher documentedIdentity(String guide) {
+        Matcher identity = DOCUMENTED_IDENTITY.matcher(guide);
+        assertTrue(identity.find(), "The addon guide must identify the documented release and API.");
+        return identity;
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "jawms.verifyReleaseDocumentation", matches = "true")
+    void presentationDocumentsTheCandidateIdentity() throws IOException {
+        Matcher identity = documentedIdentity(read(GUIDE_PATH));
+        assertEquals(property("mod_version"), identity.group(1));
+        assertEquals(ManaApiVersion.CURRENT, identity.group(2));
+    }
 
     @Test
     void currentGuideStaysCurrentAndHistoryOwnsOlderVersions() throws IOException {
         String guide = read(GUIDE_PATH);
         String history = read("docs/API-HISTORY.md");
-        String jawmsVersion = property("mod_version");
+        Matcher identity = documentedIdentity(guide);
+        String jawmsVersion = identity.group(1);
         String jawmsRange = openRange("jawms", jawmsVersion);
         String wizardryRange = openRange(
                 "ebwizardry", property("wizardry_min_version")
@@ -46,9 +64,7 @@ class AddonDocumentationContractTest {
                 "mixinbooter", property("mixin_booter_min_version")
         );
 
-        assertTrue(guide.contains(
-                "JAWMS `" + jawmsVersion + "` provides API `" + ManaApiVersion.CURRENT + "`"
-        ));
+        assertTrue(history.contains("for JAWMS `" + jawmsVersion + "` and API `" + identity.group(2) + "`"));
         assertTrue(guide.contains("[API History](API-HISTORY.md)"));
         assertTrue(guide.contains("jawms_curseforge_file=REPLACE_WITH_NUMERIC_FILE_ID"));
         assertTrue(guide.contains(
@@ -85,7 +101,8 @@ class AddonDocumentationContractTest {
 
     @Test
     void currentDependencyGuidanceUsesBuildOwnedOpenMinimums() throws IOException {
-        String jawmsMinimum = property("mod_version");
+        String guide = read(GUIDE_PATH);
+        String jawmsMinimum = documentedIdentity(guide).group(1);
         String wizardryMinimum = property("wizardry_min_version");
         String mixinMinimum = property("mixin_booter_min_version");
         String baublesMinimum = property("baubles_min_version");
@@ -93,7 +110,6 @@ class AddonDocumentationContractTest {
         String wizardryRange = openRange("ebwizardry", wizardryMinimum);
         String mixinRange = openRange("mixinbooter", mixinMinimum);
 
-        String guide = read(GUIDE_PATH);
         String commands = read("docs/COMMANDS.md");
         String readme = read("README.md");
         String modPage = read("MOD-PAGE.md");
@@ -101,7 +117,8 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains(jawmsRange));
         assertTrue(guide.contains(wizardryRange));
         assertTrue(guide.contains(mixinRange));
-        assertTrue(commands.contains("JAWMS `[" + jawmsMinimum + ",)`"));
+        assertTrue(commands.contains("jawms-devtools-" + jawmsMinimum + ".jar"));
+        assertTrue(commands.contains("JAWMS `[" + property("developer_tools_jawms_min_version") + ",)`"));
         assertTrue(readme.contains(
                 "Electroblob's Wizardry `" + wizardryMinimum + "` or newer"
         ));
@@ -193,8 +210,8 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("plain JVM test"));
         assertTrue(guide.contains("launched Forge test"));
         assertTrue(guide.contains("docs/COMMANDS.md"));
-        assertTrue(guide.contains("jawms-devtools-" + property("developer_tools_version") + ".jar"));
-        assertTrue(guide.contains("JAWMS `[" + property("mod_version") + ",)`"));
+        assertTrue(guide.contains("jawms-devtools-" + documentedIdentity(guide).group(1) + ".jar"));
+        assertTrue(guide.contains("JAWMS `[" + property("developer_tools_jawms_min_version") + ",)`"));
     }
 
     @Test
@@ -234,12 +251,15 @@ class AddonDocumentationContractTest {
         assertTrue(modPage.contains("(" + GUIDE_URL + ")"));
         assertTrue(rootPackage.contains(GUIDE_URL));
         assertTrue(clientPackage.contains(GUIDE_URL));
-        assertTrue(readme.contains("JAWMS `" + property("mod_version")
-                + "` provides addon API `" + ManaApiVersion.CURRENT + "`"));
+        Matcher identity = documentedIdentity(read(GUIDE_PATH));
+        String api = identity.group(2);
+        int separator = api.lastIndexOf('.');
+        String previousApi = api.substring(0, separator + 1) + (Integer.parseInt(api.substring(separator + 1)) - 1);
+        assertTrue(readme.contains("JAWMS `" + identity.group(1) + "` provides addon API `" + api + "`"));
         assertTrue(readme.contains("Use the guide for current dependency setup and API usage"));
         assertTrue(readme.contains("[API History](docs/API-HISTORY.md)"));
         assertTrue(readme.contains(
-                "earlier API `1.2` through `1.7` binary surfaces"
+                "earlier API `1.2` through `" + previousApi + "` binary surfaces"
         ));
         assertFalse(readme.contains("public beta"));
         assertFalse(modPage.contains("Beta release:"));

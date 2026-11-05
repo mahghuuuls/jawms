@@ -510,11 +510,45 @@ def readinessFixtureJar = tasks.register('readinessFixtureJar', Jar) {
     dependsOn sourceSets.readinessFixture.classesTaskName
     from sourceSets.readinessFixture.output
     archiveBaseName.set('jawms-readiness-fixture')
-    archiveVersion.set('1.0')
+    archiveVersion.set('1.1')
     archiveClassifier.set('dev')
     preserveFileTimestamps = false
     reproducibleFileOrder = true
 }
+
+def api18Oracle = providers.gradleProperty('jawmsApi18Oracle').map { file(it) }
+def requireApi18Oracle = { File oracle ->
+    def expected = '5cf0d7af943e0e477550b62716373b24698ef3b213bc2d3a28d56a587be6e4f4'
+    if (!oracle.isFile() || java.security.MessageDigest.getInstance('SHA-256')
+            .digest(oracle.bytes).encodeHex().toString() != expected) {
+        throw new GradleException('Expected the verified JAWMS 1.3.0 release JAR for the API 1.8 oracle.')
+    }
+    return oracle
+}
+if (api18Oracle.isPresent()) {
+    def mainCompile = tasks.named('compileJava', JavaCompile)
+    def compileApi18Consumer = tasks.register('compileApi18BinaryFixtureJava', JavaCompile) {
+        source fileTree('src/api18BinaryFixture/java')
+        destinationDirectory.set(layout.buildDirectory.dir('classes/java/api18BinaryFixture'))
+        javaCompiler.set(mainCompile.flatMap { it.javaCompiler })
+        classpath = files(api18Oracle) + mainCompile.get().classpath
+        sourceCompatibility = targetCompatibility = 8
+        options.compilerArgs.add('-proc:none')
+        inputs.file(api18Oracle)
+        doFirst {
+            requireApi18Oracle(api18Oracle.get())
+            if (!classpath.files.intersect(sourceSets.main.output.files).empty) {
+                throw new GradleException('API 1.8 binary fixture classpath includes candidate output.')
+            }
+        }
+    }
+    tasks.named('test', Test).configure {
+        dependsOn compileApi18Consumer
+        classpath += files(compileApi18Consumer.flatMap { it.destinationDirectory })
+        systemProperty 'jawms.api18FrozenConsumer', 'true'
+    }
+}
+
 tasks.named('test', Test).configure {
     dependsOn castCostFixtureJar
     inputs.file(castCostFixtureJar.flatMap { it.archiveFile })
@@ -699,11 +733,8 @@ tasks.register('verifyDeveloperToolsArtifact') {
                     .getText('UTF-8')
             def expectedToolVersion = propertyString('developer_tools_version')
             def expectedPrimaryVersion = propertyString('mod_version')
-            def expectedJawmsMinimum = propertyString('developer_tools_jawms_min_version')
-            if (expectedToolVersion != expectedPrimaryVersion
-                    || expectedJawmsMinimum != expectedPrimaryVersion) {
-                throw new GradleException(
-                        'Developer Tools version and minimum JAWMS version must match the primary candidate.')
+            if (expectedToolVersion != expectedPrimaryVersion) {
+                throw new GradleException('Developer Tools artifact version must match the primary candidate.')
             }
             def expectedJawmsRange = openRuntimeRange(
                     'jawms', 'developer_tools_jawms_min_version')
@@ -1072,6 +1103,9 @@ tasks.register('verifyApiCompatibilityFixture') {
             }
         }
         comparePublishedApi(file('src/api16BinaryFixture/artifacts/jawms-1.1.0.jar'), '1.6')
+        if (api18Oracle.isPresent()) {
+            comparePublishedApi(requireApi18Oracle(api18Oracle.get()), '1.8')
+        }
 
         def candidateOutputs = sourceSets.main.output.files.collect { it.canonicalFile }
         def api12CompileClasspath = compileApi12BinaryFixture.get().classpath.files
@@ -1642,21 +1676,31 @@ tasks.register('verifyStableReleaseMetadata') {
     inputs.file 'README.md'
     inputs.file 'MOD-PAGE.md'
     doLast {
-        def expectedVersion = '1.3.0'
+        def expectedVersion = '1.4.0'
         if (propertyString('mod_version') != expectedVersion
                 || propertyString('developer_tools_version') != expectedVersion
                 || propertyString('release_type') != 'release') {
             throw new GradleException(
-                    'Candidate must use primary/tool version 1.3.0 and release_type=release.')
+                    "Candidate must use primary/tool version ${expectedVersion} and release_type=release.")
         }
     }
 }
 
 // Release copy is checked explicitly at presentation; intermediate candidates
 // must have honest identity without pretending their gameplay is release-ready.
+def verifyReleaseDocumentation = tasks.register('verifyReleaseDocumentation', Test) {
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    include '**/AddonDocumentationContractTest.class'
+    systemProperty 'jawms.verifyReleaseDocumentation', 'true'
+    inputs.files('gradle.properties', 'README.md', 'MOD-PAGE.md', 'docs/ADDON-DEVELOPMENT.md',
+            'docs/API-HISTORY.md', 'docs/COMMANDS.md')
+}
 tasks.register('verifyReleasePresentation') {
     group = 'verification'
-    dependsOn tasks.named('verifyStableReleaseMetadata')
+    dependsOn tasks.named('verifyStableReleaseMetadata'), verifyReleaseDocumentation
     inputs.file 'CHANGELOG.md'
     inputs.file 'README.md'
     inputs.file 'MOD-PAGE.md'

@@ -20,9 +20,9 @@ class ApiBoundaryTest {
 
     @Test
     void apiVersionAndSurfaceAreStableAndServerSafe() throws Exception {
-        assertEquals("1.8", ManaApi.API_VERSION);
+        assertEquals("1.9", ManaApi.API_VERSION);
         assertEquals(1, ManaApiVersion.MAJOR);
-        assertEquals(8, ManaApiVersion.MINOR);
+        assertEquals(9, ManaApiVersion.MINOR);
         String packageContract = new String(Files.readAllBytes(Paths.get(
                 "src/main/java/com/mahghuuuls/jawms/api/package-info.java")), StandardCharsets.UTF_8);
         assertTrue(packageContract.contains("JAWMS API, version " + ManaApi.API_VERSION + "."));
@@ -49,6 +49,8 @@ class ApiBoundaryTest {
         assertPublicSignaturesDoNotExposeImplementation(ManaProviderKind.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaStateChangeEvent.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaContribution.class);
+        assertPublicSignaturesDoNotExposeImplementation(ManaReadinessProvider.class);
+        assertPublicSignaturesDoNotExposeImplementation(ManaContributionPublicationResult.class);
         assertPublicSignaturesDoNotExposeImplementation(ConfiguredFlaskSnapshot.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaItemContext.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaTooltips.class);

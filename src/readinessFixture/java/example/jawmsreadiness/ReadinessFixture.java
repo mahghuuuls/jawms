@@ -4,6 +4,7 @@ import com.mahghuuuls.jawms.api.IManaService;
 import com.mahghuuuls.jawms.api.ManaApi;
 import com.mahghuuuls.jawms.api.ManaContribution;
 import com.mahghuuuls.jawms.api.ManaContributionPublicationResult;
+import com.mahghuuuls.jawms.api.ManaContributionPublicationStatus;
 import com.mahghuuuls.jawms.api.ManaProfileGeneration;
 import com.mahghuuuls.jawms.api.ManaProfileReadiness;
 import com.mahghuuuls.jawms.api.ManaPublicState;
@@ -34,8 +35,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-@Mod(modid = ReadinessFixture.ID, name = "JAWMS Readiness Verification", version = "1.0",
-        dependencies = "required-after:jawms@[1.3.0,)")
+@Mod(modid = ReadinessFixture.ID, name = "JAWMS Readiness Verification", version = "1.1",
+        dependencies = "required-after:jawms@[1.4.0,)")
 public final class ReadinessFixture {
     static final String ID = "jawmsreadinessfixture";
     private static final Logger LOG = LogManager.getLogger(ID);
@@ -48,6 +49,7 @@ public final class ReadinessFixture {
     private TransitionProbe nextTransition;
     private int earlyEvents;
     private final Map<EntityPlayer, Integer> delayedPeers = new IdentityHashMap<>();
+    private final Map<EntityPlayer, SuspensionProbe> suspensions = new IdentityHashMap<>();
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
@@ -65,6 +67,7 @@ public final class ReadinessFixture {
     @Mod.EventHandler
     public void serverStopped(FMLServerStoppedEvent event) {
         delayedPeers.clear();
+        suspensions.clear();
         nextTransition = null;
     }
 
@@ -94,6 +97,10 @@ public final class ReadinessFixture {
         if (hold != null && hold.player.equals(event.player.getUniqueID())
                 && hold.save.equals(saveDirectory(event.player.getServer()))) {
             nextLoginHold = null;
+            if (hold.suspend) {
+                beginSuspension(event.player);
+                return;
+            }
             LOG.info("READINESS_FIXTURE_WITHHELD player={}", event.player.getUniqueID());
             return;
         }
@@ -140,6 +147,32 @@ public final class ReadinessFixture {
         }
     }
 
+    private void beginSuspension(EntityPlayer player) {
+        Optional<ManaProfileGeneration> token = provider.getGeneration(player);
+        if (!token.isPresent()) {
+            LOG.error("READINESS_FIXTURE_SUSPENSION no token for player={}", player.getUniqueID());
+            return;
+        }
+        ManaContributionPublicationResult initial = provider.completeInitial(player, token.get(), ManaContribution.EMPTY);
+        logSuspension(player, "record-empty", initial);
+        if (initial.getStatus() != ManaContributionPublicationStatus.INITIAL_RECORDED) return;
+        ManaContributionPublicationResult suspended = provider.suspend(player, token.get(), initial.getRevision().getAsLong());
+        logSuspension(player, "suspend", suspended);
+        if (suspended.getStatus() != ManaContributionPublicationStatus.SUSPENDED) return;
+        suspensions.put(player, new SuspensionProbe(token.get(), suspended.getRevision().getAsLong()));
+        delayPeer(player);
+    }
+
+    private static final class SuspensionProbe {
+        final ManaProfileGeneration token;
+        long revision;
+
+        SuspensionProbe(ManaProfileGeneration token, long revision) {
+            this.token = token;
+            this.revision = revision;
+        }
+    }
+
     private static final class TransitionProbe {
         final EntityPlayerMP source;
         final ManaProfileGeneration token;
@@ -159,10 +192,12 @@ public final class ReadinessFixture {
     private static final class LoginHold {
         final UUID player;
         final File save;
+        final boolean suspend;
 
-        private LoginHold(UUID player, File save) {
+        private LoginHold(UUID player, File save, boolean suspend) {
             this.player = player;
             this.save = save;
+            this.suspend = suspend;
         }
     }
 
@@ -172,13 +207,19 @@ public final class ReadinessFixture {
         Integer due = delayedPeers.get(event.player);
         if (due != null && event.player.getServer().getTickCounter() - due >= 0) {
             delayedPeers.remove(event.player);
-            complete(event.player, peer, ManaContribution.EMPTY);
+            if (suspensions.containsKey(event.player)) {
+                peer.getGeneration(event.player).ifPresent(token -> logSuspension(event.player, "complete-peer",
+                        peer.completeInitial(event.player, token, ManaContribution.EMPTY)));
+            } else {
+                complete(event.player, peer, ManaContribution.EMPTY);
+            }
         }
     }
 
     @SubscribeEvent
     public void logout(PlayerEvent.PlayerLoggedOutEvent event) {
         delayedPeers.remove(event.player);
+        suspensions.remove(event.player);
         if (nextTransition != null && nextTransition.source == event.player) nextTransition = null;
     }
 
@@ -194,6 +235,11 @@ public final class ReadinessFixture {
                 result.getStatus(), result.getRevision());
     }
 
+    private static void logSuspension(EntityPlayer player, String action, ManaContributionPublicationResult result) {
+        LOG.info("READINESS_FIXTURE_SUSPENSION player={} action={} tick={} result={} revision={}",
+                player.getUniqueID(), action, player.getServer().getTickCounter(), result.getStatus(), result.getRevision());
+    }
+
     private final class ProbeCommand extends CommandBase {
         @Override
         public String getName() {
@@ -202,7 +248,8 @@ public final class ReadinessFixture {
 
         @Override
         public String getUsage(ICommandSender sender) {
-            return "/readinessfixture <hold|release|seed|remove|inspect|hold-transition|empty-transition|trace-transition>";
+            return "/readinessfixture <hold|hold-suspend|release|recover-suspended|refuse-suspend|seed|remove|inspect"
+                    + "|hold-transition|empty-transition|trace-transition>";
         }
 
         @Override
@@ -218,10 +265,34 @@ public final class ReadinessFixture {
             }
             EntityPlayerMP player = (EntityPlayerMP) sender.getCommandSenderEntity();
             IManaService service = ManaApi.getManaService();
+            SuspensionProbe probe = suspensions.get(player);
             switch (arguments[0]) {
                 case "hold":
+                case "hold-suspend":
                     // Reopening single-player stops and recreates the logical server in this JVM.
-                    nextLoginHold = new LoginHold(player.getUniqueID(), saveDirectory(server));
+                    nextLoginHold = new LoginHold(player.getUniqueID(), saveDirectory(server),
+                            "hold-suspend".equals(arguments[0]));
+                    break;
+                case "recover-suspended":
+                    if (probe == null || ManaApi.getProfileReadiness(player) == ManaProfileReadiness.READY) {
+                        throw new CommandException("Expected a suspended generation before first acceptance.");
+                    }
+                    ManaContributionPublicationResult recovery = provider.update(player, probe.token, probe.revision, BONUS);
+                    logSuspension(player, "recover", recovery);
+                    if (recovery.getStatus() != ManaContributionPublicationStatus.UPDATE_RECORDED) {
+                        throw new CommandException("Recovery publication refused.");
+                    }
+                    probe.revision = recovery.getRevision().getAsLong();
+                    break;
+                case "refuse-suspend":
+                    if (probe == null || ManaApi.getProfileReadiness(player) != ManaProfileReadiness.READY) {
+                        throw new CommandException("Expected an accepted generation after recovery.");
+                    }
+                    ManaContributionPublicationResult refusal = provider.suspend(player, probe.token, probe.revision);
+                    logSuspension(player, "refuse-accepted", refusal);
+                    if (refusal.getStatus() != ManaContributionPublicationStatus.ALREADY_ACCEPTED) {
+                        throw new CommandException("Expected suspension to refuse the accepted generation.");
+                    }
                     break;
                 case "release":
                     nextLoginHold = null;
@@ -246,7 +317,12 @@ public final class ReadinessFixture {
                 case "remove":
                     ManaProfileGeneration token = provider.getGeneration(player)
                             .orElseThrow(() -> new CommandException("No readiness token."));
-                    logReceipt(player, provider.update(player, token, 1, ManaContribution.EMPTY));
+                    ManaContributionPublicationResult removal = provider.update(player, token,
+                            probe != null && probe.token == token ? probe.revision : 1, ManaContribution.EMPTY);
+                    logReceipt(player, removal);
+                    if (probe != null && probe.token == token && removal.getStatus() == ManaContributionPublicationStatus.UPDATE_RECORDED) {
+                        probe.revision = removal.getRevision().getAsLong();
+                    }
                     break;
                 case "inspect":
                     break;

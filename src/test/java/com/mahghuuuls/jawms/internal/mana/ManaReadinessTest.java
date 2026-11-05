@@ -40,6 +40,36 @@ class ManaReadinessTest {
     }
 
     @Test
+    void suspendedSlotRetainsItsReceiptAndRequiresARevisionedCompleteUpdate() {
+        ManaReadiness readiness = new ManaReadiness(new LinkedHashSet<>(Arrays.asList(BONUS, PEER)), 20, false);
+        Object world = new Object();
+        ManaProfileGeneration bonus = issue(readiness, BONUS, world);
+        ManaProfileGeneration peer = issue(readiness, PEER, world);
+
+        assertEquals(INITIAL_REQUIRED, readiness.suspend(BONUS, world, bonus, 1).getStatus());
+        assertEquals(STALE_GENERATION, readiness.suspend(BONUS, world, peer, 1).getStatus());
+        assertEquals(INAPPLICABLE, readiness.suspend(new ResourceLocation("test", "absent"), world, bonus, 1)
+                .getStatus());
+        readiness.publish(BONUS, world, bonus, ManaContribution.EMPTY, true, 0);
+        readiness.publish(PEER, world, peer, PLUS_TWENTY, true, 0);
+        readiness.unavailable();
+
+        assertEquals(2, readiness.suspend(BONUS, world, bonus, 1).getRevision().getAsLong());
+        assertEquals(Collections.singletonList(BONUS), readiness.missing());
+        assertSame(PLUS_TWENTY, readiness.contribution(PEER));
+        assertEquals(ManaProfileReadiness.UNAVAILABLE, readiness.phase());
+        long suspendedVersion = readiness.publicationVersion();
+        assertEquals(2, readiness.suspend(BONUS, world, bonus, 2).getRevision().getAsLong());
+        assertEquals(suspendedVersion, readiness.publicationVersion());
+        assertEquals(REVISION_MISMATCH, readiness.suspend(BONUS, world, bonus, 1).getStatus());
+        assertEquals(ALREADY_COMPLETED, readiness.publish(BONUS, world, bonus, PLUS_TWENTY, true, 0).getStatus());
+        assertEquals(REVISION_MISMATCH, readiness.publish(BONUS, world, bonus, PLUS_TWENTY, false, 1).getStatus());
+        assertEquals(3, readiness.publish(BONUS, world, bonus, ManaContribution.EMPTY, false, 2)
+                .getRevision().getAsLong());
+        assertTrue(readiness.missing().isEmpty());
+    }
+
+    @Test
     void deadlineIsOneShotAndPolicyRemovalRevokesTheTokenWithoutRestartingTheClock() {
         ManaReadiness readiness = new ManaReadiness(Collections.singleton(BONUS), 20, false);
         Object world = new Object();

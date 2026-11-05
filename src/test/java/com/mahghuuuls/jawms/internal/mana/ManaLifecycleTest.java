@@ -8,8 +8,10 @@ import com.mahghuuuls.jawms.api.ManaReadinessProvider;
 import com.mahghuuuls.jawms.internal.modifier.ManaProviderRegistry;
 import com.mahghuuuls.jawms.internal.modifier.ManaTestEvaluations;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
+import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorProfile;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Bootstrap;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.server.MinecraftServer;
@@ -30,6 +32,7 @@ import net.minecraftforge.fml.common.eventhandler.ListenerList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import java.lang.reflect.Field;
 import java.util.Collections;
@@ -47,6 +50,7 @@ import static org.mockito.Mockito.when;
 
 class ManaLifecycleTest {
     private static final ResourceLocation PROVIDER = new ResourceLocation("test", "lifecycle");
+    private static final ResourceLocation PEER = new ResourceLocation("test", "lifecycle_peer");
     private static final ResourceLocation REENTRANT = new ResourceLocation("test", "lifecycle_reentrant");
     private static final ManaContribution BONUS = ManaContribution.builder().flatMaximumMana(20).build();
     private static final GameplayRules RULES = new GameplayRules(1, 100, 0, 0L, "base",
@@ -59,9 +63,15 @@ class ManaLifecycleTest {
     private final UUID playerId = UUID.randomUUID();
     private final ManaService mana = new ManaService();
     private ManaReadinessProvider provider;
+    private Field currentRules;
+    private GameplayRules previousRules;
 
     @BeforeEach
     void registerProvider() throws Exception {
+        currentRules = GameplayRulesManager.class.getDeclaredField("current");
+        currentRules.setAccessible(true);
+        previousRules = GameplayRulesManager.current();
+        currentRules.set(null, RULES);
         provider = ManaApi.registerReadinessProvider(PROVIDER);
         when(server.getPlayerList()).thenReturn(players);
         when(server.getWorld(0)).thenReturn(overworld);
@@ -74,12 +84,218 @@ class ManaLifecycleTest {
 
     @AfterEach
     void unregisterProvider() throws Exception {
+        currentRules.set(null, previousRules);
         ManaProviderRegistry registry = ManaProviderRegistry.instance();
         registry.remove(currentPlayer());
         Field registrations = ManaProviderRegistry.class.getDeclaredField("registrations");
         registrations.setAccessible(true);
         ((Map<?, ?>) registrations.get(registry)).remove(PROVIDER);
+        ((Map<?, ?>) registrations.get(registry)).remove(PEER);
         ((Map<?, ?>) registrations.get(registry)).remove(REENTRANT);
+    }
+
+    @Test
+    void withholdingReplacementLeavesTheRecordedGroupEligible() throws Exception {
+        ManaReadinessProvider peer = ManaApi.registerReadinessProvider(PEER);
+        EntityPlayerMP player = pendingPlayer(ManaContribution.EMPTY);
+        ManaProfileGeneration bonusToken = token(player);
+        ManaService.tickPlayer(player, RULES);
+        assertEquals(ManaProfileReadiness.PENDING, ManaApi.getProfileReadiness(player));
+        assertEquals(110, savedMana(player));
+
+        assertEquals(INITIAL_RECORDED, peer.completeInitial(player, peer.getGeneration(player).get(),
+                ManaContribution.EMPTY).getStatus());
+        ManaService.tickPlayer(player, RULES);
+        assertEquals(ManaProfileReadiness.READY, ManaApi.getProfileReadiness(player));
+        assertEquals(100, savedMana(player));
+        assertEquals(100, mana.getMaximumMana(player));
+
+        assertEquals(UPDATE_RECORDED, provider.update(player, bonusToken, 1, BONUS).getStatus());
+        assertEquals(120, mana.getMaximumMana(player));
+        assertEquals(100, savedMana(player));
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "jawms.api18FrozenConsumer", matches = "true")
+    void frozenApi18ConsumerPublishesThroughTheCandidate() throws Exception {
+        ManaReadinessProvider peer = ManaApi.registerReadinessProvider(PEER);
+        EntityPlayerMP player = pendingPlayer(BONUS);
+        Class<?> consumer = Class.forName("example.jawmsapi18.ReadinessConsumer");
+        assertEquals(2L, consumer.getMethod("publish", ManaReadinessProvider.class, EntityPlayer.class)
+                .invoke(null, peer, player));
+        ManaService.tickPlayer(player, RULES);
+        assertEquals(ManaProfileReadiness.READY, ManaApi.getProfileReadiness(player));
+        assertEquals(110, savedMana(player));
+        assertEquals(120, mana.getMaximumMana(player));
+    }
+
+    @Test
+    void suspensionPreservesTheOriginalDeadlineAndSavedManaUntilVerifiedRecovery() throws Exception {
+        ManaReadinessProvider peer = ManaApi.registerReadinessProvider(PEER);
+        EntityPlayerMP player = pendingPlayer(ManaContribution.EMPTY);
+        ManaProfileGeneration token = token(player);
+        long beforeSuspension = managedSequence(player);
+        assertEquals(SUSPENDED, provider.suspend(player, token, 1).getStatus());
+        assertEquals(beforeSuspension, managedSequence(player));
+        assertEquals(INITIAL_RECORDED, peer.completeInitial(player, peer.getGeneration(player).get(),
+                ManaContribution.EMPTY).getStatus());
+
+        when(server.getTickCounter()).thenReturn(99);
+        ManaService.tickPlayer(player, RULES);
+        assertEquals(ManaProfileReadiness.PENDING, ManaApi.getProfileReadiness(player));
+        assertEquals(beforeSuspension, managedSequence(player));
+        when(server.getTickCounter()).thenReturn(100);
+        ManaService.tickPlayer(player, RULES);
+        assertEquals(ManaProfileReadiness.UNAVAILABLE, ManaApi.getProfileReadiness(player));
+        assertFalse(state(player).hasAcceptedProfile());
+        assertEquals(110, savedMana(player));
+        assertSame(token, token(player));
+        assertEquals(beforeSuspension + 1, managedSequence(player));
+
+        when(server.getTickCounter()).thenReturn(101);
+        ManaService.tickPlayer(player, RULES);
+        assertEquals(beforeSuspension + 1, managedSequence(player));
+
+        assertEquals(UPDATE_RECORDED, provider.update(player, token, 2, BONUS).getStatus());
+        ManaService.tickPlayer(player, RULES);
+        assertEquals(ManaProfileReadiness.READY, ManaApi.getProfileReadiness(player));
+        assertEquals(110, mana.getCurrentMana(player));
+        assertEquals(120, mana.getMaximumMana(player));
+        long acceptedSequence = managedSequence(player);
+        assertEquals(beforeSuspension + 2, acceptedSequence);
+        assertEquals(ALREADY_ACCEPTED, provider.suspend(player, token, 3).getStatus());
+        assertEquals(acceptedSequence, managedSequence(player));
+        assertEquals(110, savedMana(player));
+        assertEquals(UPDATE_RECORDED, provider.update(player, token, 3, ManaContribution.EMPTY).getStatus());
+        assertEquals(100, mana.getMaximumMana(player));
+        assertEquals(100, savedMana(player));
+    }
+
+    @Test
+    void verifiedEmptyCanRecoverBeforeTheDeadlineAndClampOnce() throws Exception {
+        EntityPlayerMP player = pendingPlayer(BONUS);
+        ManaProfileGeneration token = token(player);
+        assertThrows(IllegalArgumentException.class, () -> provider.suspend(player, token, 0));
+        assertThrows(IllegalStateException.class, () -> provider.suspend(mock(EntityPlayer.class), token, 1));
+        when(overworld.isCallingFromMinecraftThread()).thenReturn(false);
+        assertThrows(IllegalStateException.class, () -> provider.suspend(player, token, 1));
+        when(overworld.isCallingFromMinecraftThread()).thenReturn(true);
+        assertEquals(SUSPENDED, provider.suspend(player, token, 1).getStatus());
+        assertEquals(110, savedMana(player));
+        assertEquals(UPDATE_RECORDED, provider.update(player, token, 2, ManaContribution.EMPTY).getStatus());
+        ManaService.tickPlayer(player, RULES);
+        assertEquals(ManaProfileReadiness.READY, ManaApi.getProfileReadiness(player));
+        assertEquals(100, mana.getMaximumMana(player));
+        assertEquals(100, savedMana(player));
+    }
+
+    @Test
+    void suspensionDuringEvaluationAtDeadlineStillTimesOutAtThatTick() throws Exception {
+        EntityPlayerMP player = pendingPlayer(ManaContribution.EMPTY);
+        ManaProfileGeneration token = token(player);
+        ManaProviderRegistry.instance().registerContextual(REENTRANT, evaluated -> {
+            assertEquals(SUSPENDED, provider.suspend(evaluated, token, 1).getStatus());
+            assertEquals(BUSY, provider.update(evaluated, token, 2, BONUS).getStatus());
+            return ManaContribution.EMPTY;
+        });
+        when(server.getTickCounter()).thenReturn(100);
+        ManaService.tickPlayer(player, RULES);
+        assertEquals(ManaProfileReadiness.UNAVAILABLE, ManaApi.getProfileReadiness(player));
+        assertFalse(state(player).hasAcceptedProfile());
+        assertEquals(110, savedMana(player));
+    }
+
+    @Test
+    void restoredCompletenessCannotCommitAnEvaluationOfTheOldGroup() throws Exception {
+        EntityPlayerMP player = pendingPlayer(ManaContribution.EMPTY);
+        ManaProfileGeneration token = token(player);
+        AtomicInteger calls = new AtomicInteger();
+        ManaProviderRegistry.instance().registerContextual(REENTRANT, evaluated -> {
+            if (calls.getAndIncrement() == 0) {
+                assertEquals(SUSPENDED, provider.suspend(evaluated, token, 1).getStatus());
+                // Isolate the commit check without permitting reentrant recovery through the public API.
+                assertEquals(UPDATE_RECORDED, state(player).readiness.publish(PROVIDER, overworld, token, BONUS,
+                        false, 2).getStatus());
+            }
+            return ManaContribution.EMPTY;
+        });
+        ManaService.tickPlayer(player, RULES);
+        assertEquals(1, calls.get());
+        assertTrue(state(player).readiness.missing().isEmpty());
+        assertFalse(state(player).hasAcceptedProfile());
+        assertEquals(110, savedMana(player));
+
+        ManaService.tickPlayer(player, RULES);
+        assertEquals(ManaProfileReadiness.READY, ManaApi.getProfileReadiness(player));
+        assertEquals(110, mana.getCurrentMana(player));
+        assertEquals(120, mana.getMaximumMana(player));
+    }
+
+    @Test
+    void reloadedRulesInvalidateAnInFlightFirstAcceptance() throws Exception {
+        EntityPlayerMP player = pendingPlayer(BONUS);
+        GameplayRules replacement = new GameplayRules(2, 90, 0, 0L, "base",
+                20, 50, 100, Collections.emptyMap(), Collections.emptyList(), WizardryArmorProfile.DEFAULT);
+        ManaProviderRegistry.instance().registerContextual(REENTRANT, evaluated -> {
+            assertDoesNotThrow(() -> currentRules.set(null, replacement));
+            return ManaContribution.EMPTY;
+        });
+        ManaService.tickPlayer(player, RULES);
+        assertFalse(state(player).hasAcceptedProfile());
+        assertEquals(110, savedMana(player));
+
+        ManaService.tickPlayer(player, replacement);
+        assertEquals(ManaProfileReadiness.READY, ManaApi.getProfileReadiness(player));
+        assertEquals(110, mana.getMaximumMana(player));
+    }
+
+    @Test
+    void suspensionSurvivesCancelledAndThrowingDeathCallbacks() throws Exception {
+        EntityPlayerMP player = pendingPlayer(ManaContribution.EMPTY);
+        ManaProfileGeneration token = token(player);
+        assertTrue(ManaLifecycle.checkDeath(player, () -> {
+            assertEquals(SUSPENDED, provider.suspend(player, token, 1).getStatus());
+            return true;
+        }));
+        assertEquals(UPDATE_RECORDED, provider.update(player, token, 2, ManaContribution.EMPTY).getStatus());
+        RuntimeException failure = new IllegalStateException("death listener fault");
+        assertSame(failure, assertThrows(RuntimeException.class, () -> ManaLifecycle.checkDeath(player, () -> {
+            assertEquals(SUSPENDED, provider.suspend(player, token, 3).getStatus());
+            throw failure;
+        })));
+        ManaService.tickPlayer(player, RULES);
+        assertSame(token, token(player));
+        assertFalse(state(player).hasAcceptedProfile());
+        assertEquals(110, savedMana(player));
+    }
+
+    @Test
+    void suspensionSurvivesNestedPreMutationRollbackOfTheExactSource() throws Exception {
+        EntityPlayerMP player = pendingPlayer(ManaContribution.EMPTY);
+        ManaProfileGeneration token = token(player);
+        RuntimeException failure = new IllegalStateException("pre-mutation transfer fault");
+        assertSame(failure, assertThrows(RuntimeException.class, () -> ManaLifecycle.transfer(player,
+                () -> ManaLifecycle.transfer(player, () -> {
+                    assertFalse(provider.getGeneration(player).isPresent());
+                    assertEquals(SUSPENDED, provider.suspend(player, token, 1).getStatus());
+                    assertEquals(STALE_GENERATION, provider.update(player, token, 2, BONUS).getStatus());
+                    throw failure;
+                }))));
+        ManaService.tickPlayer(player, RULES);
+        assertSame(token, token(player));
+        assertFalse(state(player).hasAcceptedProfile());
+        assertEquals(110, savedMana(player));
+    }
+
+    @Test
+    void brokenNestedRollbackCannotSuspendAnOlderSource() throws Exception {
+        EntityPlayerMP player = pendingPlayer(ManaContribution.EMPTY);
+        ManaProfileGeneration token = token(player);
+        ManaLifecycle.transfer(player, () -> ManaLifecycle.transfer(player, () -> {
+            ManaLifecycle.transferMutated(player);
+            assertEquals(STALE_GENERATION, provider.suspend(player, token, 1).getStatus());
+        }));
+        assertEquals(110, savedMana(player));
     }
 
     @Test
@@ -92,6 +308,7 @@ class ManaLifecycleTest {
             assertEquals(ManaProfileReadiness.PENDING, ManaApi.getProfileReadiness(player));
             assertFalse(provider.getGeneration(player).isPresent());
             assertEquals(BUSY, provider.update(player, token, 1, ManaContribution.EMPTY).getStatus());
+            assertEquals(ALREADY_ACCEPTED, provider.suspend(player, token, 1).getStatus());
             assertFalse(ManaService.isReservationValid(player, claim));
             assertEquals(110, savedMana(player));
             return true;
@@ -469,6 +686,13 @@ class ManaLifecycleTest {
 
     private static int savedMana(EntityPlayerMP player) {
         return state(player).serializeIntrinsicState().getInteger("currentMana");
+    }
+
+    private static long managedSequence(EntityPlayerMP player) throws Exception {
+        Field field = ManaNetwork.class.getDeclaredField("MANAGED_SEQUENCES");
+        field.setAccessible(true);
+        Long sequence = (Long) ((Map<?, ?>) field.get(null)).get(player.connection);
+        return sequence == null ? 0L : sequence;
     }
 
     private static ManaState state(EntityPlayerMP player) {

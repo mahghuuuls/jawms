@@ -31,6 +31,7 @@ final class ManaReadiness {
     final UUID identity = UUID.randomUUID();
     private final Map<ResourceLocation, Slot> slots = new LinkedHashMap<>();
     private final int startTick;
+    private long publicationVersion;
     private ManaProfileReadiness phase;
     private boolean retired;
     Lifecycle lifecycle = Lifecycle.LOGIN;
@@ -46,10 +47,18 @@ final class ManaReadiness {
 
     void applyPolicy(Set<ResourceLocation> eligible) {
         if (retired) return;
-        slots.keySet().retainAll(eligible);
+        boolean changed = slots.keySet().retainAll(eligible);
         for (ResourceLocation id : eligible) {
-            slots.computeIfAbsent(id, unused -> new Slot());
+            if (!slots.containsKey(id)) {
+                slots.put(id, new Slot());
+                changed = true;
+            }
         }
+        if (changed) publicationVersion++;
+    }
+
+    long publicationVersion() {
+        return publicationVersion;
     }
 
     ManaProfileReadiness phase() {
@@ -69,7 +78,11 @@ final class ManaReadiness {
     }
 
     boolean deadlineElapsed(int tick) {
-        return phase == ManaProfileReadiness.PENDING && tick - startTick >= DEADLINE_TICKS;
+        return phase == ManaProfileReadiness.PENDING && elapsedTicks(tick) >= DEADLINE_TICKS;
+    }
+
+    int elapsedTicks(int tick) {
+        return tick - startTick;
     }
 
     void unavailable() {
@@ -115,17 +128,43 @@ final class ManaReadiness {
         if (retired) return rejection(STALE_GENERATION);
         Slot slot = slots.get(id);
         if (slot == null) return rejection(INAPPLICABLE);
-        if (context == null || slot.context != context || slot.token != token) {
+        if (!slot.matches(context, token)) {
             return rejection(STALE_GENERATION);
         }
-        if (initial && slot.contribution != null) return rejection(ALREADY_COMPLETED);
-        if (!initial && slot.contribution == null) return rejection(INITIAL_REQUIRED);
+        if (initial && slot.revision != 0) return rejection(ALREADY_COMPLETED);
+        if (!initial && slot.revision == 0) return rejection(INITIAL_REQUIRED);
         if (!initial && slot.revision != expected) return rejection(REVISION_MISMATCH);
         long revision = Math.incrementExact(slot.revision);
         slot.contribution = contribution;
         slot.revision = revision;
-        return new ManaContributionPublicationResult(initial ? INITIAL_RECORDED : UPDATE_RECORDED,
-                OptionalLong.of(revision));
+        publicationVersion++;
+        return receipt(initial ? INITIAL_RECORDED : UPDATE_RECORDED, revision);
+    }
+
+    boolean matchesPublication(ResourceLocation id, Object context, ManaProfileGeneration token) {
+        Slot slot = slots.get(id);
+        return !retired && slot != null && slot.matches(context, token);
+    }
+
+    ManaContributionPublicationResult suspend(ResourceLocation id, Object context,
+            ManaProfileGeneration token, long expected) {
+        if (retired || context == null) return rejection(STALE_GENERATION);
+        Slot slot = slots.get(id);
+        if (slot == null) return rejection(INAPPLICABLE);
+        if (!slot.matches(context, token)) return rejection(STALE_GENERATION);
+        if (!held()) return rejection(ALREADY_ACCEPTED);
+        if (slot.revision == 0) return rejection(INITIAL_REQUIRED);
+        if (slot.revision != expected) return rejection(REVISION_MISMATCH);
+        if (slot.contribution != null) {
+            slot.revision = Math.incrementExact(slot.revision);
+            slot.contribution = null;
+            publicationVersion++;
+        }
+        return receipt(SUSPENDED, slot.revision);
+    }
+
+    private static ManaContributionPublicationResult receipt(ManaContributionPublicationStatus status, long revision) {
+        return new ManaContributionPublicationResult(status, OptionalLong.of(revision));
     }
 
     static ManaContributionPublicationResult rejection(ManaContributionPublicationStatus status) {
@@ -136,6 +175,11 @@ final class ManaReadiness {
         private Object context;
         private ManaProfileGeneration token;
         private ManaContribution contribution;
+        // Zero means no initial publication. A positive revision with no group means suspended.
         private long revision;
+
+        private boolean matches(Object publicationContext, ManaProfileGeneration generation) {
+            return publicationContext != null && context == publicationContext && token == generation;
+        }
     }
 }

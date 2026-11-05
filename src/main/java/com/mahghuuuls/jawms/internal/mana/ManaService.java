@@ -328,6 +328,15 @@ public final class ManaService implements IManaService {
         return state.readiness == null ? null : state.readiness.contribution(id);
     }
 
+    public static ManaContributionPublicationResult suspendReadiness(EntityPlayer player, ResourceLocation id,
+            ManaProfileGeneration generation, long expectedRevision) {
+        Objects.requireNonNull(generation, "generation");
+        if (expectedRevision < 1) throw new IllegalArgumentException("Expected a positive revision.");
+        ManaState state = requireServerState(player);
+        if (state.readiness == null) return ManaReadiness.rejection(ManaContributionPublicationStatus.INAPPLICABLE);
+        return ManaLifecycle.suspend((EntityPlayerMP) player, state, id, generation, expectedRevision);
+    }
+
     public static ManaContributionPublicationResult publishReadiness(EntityPlayer player, ResourceLocation id,
             ManaProfileGeneration generation, ManaContribution contribution, boolean initial, long revision) {
         Objects.requireNonNull(generation, "generation");
@@ -367,28 +376,47 @@ public final class ManaService implements IManaService {
         int tick = player.getServer().getTickCounter();
         List<ResourceLocation> missing = readiness.missing();
         if (missing.isEmpty() && ManaLifecycle.canAccept(player, readiness)) {
+            long publicationVersion = readiness.publicationVersion();
             ManaProfileEvaluation evaluation = evaluateCurrentProfile(player, state, rules);
-            if (evaluation == null || !readiness.missing().isEmpty() || !ManaLifecycle.canAccept(player, readiness)) return;
-            boolean recovering = readiness.phase() == ManaProfileReadiness.UNAVAILABLE;
-            Integer input = state.acceptFirstProfile(evaluation);
-            if (Boolean.getBoolean("jawms.debugManaReadiness")) {
-                JustAnotherWizardryManaSystemMod.LOGGER.info(
-                        "MANA_PROFILE_ACCEPTED player={} generation={} lifecycle={} path=PLAYER_END_TICK input={} current={} maximum={} rulesRevision={} recovery={}",
-                        player.getUniqueID(), readiness.identity, readiness.lifecycle, input, state.getCurrentMana(),
-                        state.getMaximumMana(), rules.getRevision(), recovering);
+            if (state.readiness != readiness || !readiness.held() || readiness.isRetired()
+                    || state.checkingDeath || !ManaLifecycle.canAccept(player, readiness)) return;
+            if (evaluation != null && publicationVersion == readiness.publicationVersion()) {
+                acceptHeldProfile(player, state, readiness, evaluation, rules.getRevision());
+                return;
             }
-            if (recovering) {
-                JustAnotherWizardryManaSystemMod.LOGGER.info("MANA_PROFILE_RECOVERED player={} generation={}",
-                        player.getUniqueID(), readiness.identity);
-            }
-            ManaNetwork.synchronize(player, state);
-        } else if (readiness.deadlineElapsed(tick)) {
+            // A suspension during evaluation can leave a required slot missing on the deadline tick.
+            missing = readiness.missing();
+            if (missing.isEmpty()) return;
+        }
+        if (readiness.deadlineElapsed(tick)) {
             readiness.unavailable();
             JustAnotherWizardryManaSystemMod.LOGGER.warn(
                     "MANA_PROFILE_UNAVAILABLE player={} generation={} lifecycle={} missingProviders={}",
                     player.getUniqueID(), readiness.identity, readiness.lifecycle, missing);
+            if (Boolean.getBoolean("jawms.debugManaReadiness")) {
+                JustAnotherWizardryManaSystemMod.LOGGER.info(
+                        "MANA_PROFILE_TIMEOUT_CLOCK player={} generation={} tick={} elapsedTicks={}",
+                        player.getUniqueID(), readiness.identity, tick, readiness.elapsedTicks(tick));
+            }
             ManaNetwork.synchronize(player, state);
         }
+    }
+
+    private static void acceptHeldProfile(EntityPlayerMP player, ManaState state, ManaReadiness readiness,
+            ManaProfileEvaluation evaluation, long rulesRevision) {
+        boolean recovering = readiness.phase() == ManaProfileReadiness.UNAVAILABLE;
+        Integer input = state.acceptFirstProfile(evaluation);
+        if (Boolean.getBoolean("jawms.debugManaReadiness")) {
+            JustAnotherWizardryManaSystemMod.LOGGER.info(
+                    "MANA_PROFILE_ACCEPTED player={} generation={} lifecycle={} path=PLAYER_END_TICK input={} current={} maximum={} rulesRevision={} recovery={}",
+                    player.getUniqueID(), readiness.identity, readiness.lifecycle, input, state.getCurrentMana(),
+                    state.getMaximumMana(), rulesRevision, recovering);
+        }
+        if (recovering) {
+            JustAnotherWizardryManaSystemMod.LOGGER.info("MANA_PROFILE_RECOVERED player={} generation={}",
+                    player.getUniqueID(), readiness.identity);
+        }
+        ManaNetwork.synchronize(player, state);
     }
 
     private static void requireMutationAllowed(EntityPlayer player) {

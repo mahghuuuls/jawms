@@ -1,6 +1,8 @@
 package com.mahghuuuls.jawms.internal.mana;
 
 import com.mahghuuuls.jawms.JustAnotherWizardryManaSystemMod;
+import com.mahghuuuls.jawms.api.ManaContributionPublicationResult;
+import com.mahghuuuls.jawms.api.ManaProfileGeneration;
 import com.mahghuuuls.jawms.internal.casting.ParticipantUseService;
 import com.mahghuuuls.jawms.internal.modifier.ManaProviderRegistry;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
@@ -14,6 +16,8 @@ import net.minecraft.world.WorldServer;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 
+import static com.mahghuuuls.jawms.api.ManaContributionPublicationStatus.INAPPLICABLE;
+import static com.mahghuuuls.jawms.api.ManaContributionPublicationStatus.STALE_GENERATION;
 import static com.mahghuuuls.jawms.internal.mana.ManaReadiness.Lifecycle.*;
 
 /** Translates native lifecycle boundaries into the context consumed by ManaService. */
@@ -158,6 +162,25 @@ public final class ManaLifecycle {
         if (world == null || (readiness.world != null && readiness.world != world)) return null;
         if (isReconcilingReplacement(player, readiness)) return world;
         return isCurrent(player, world) ? world : null;
+    }
+
+    static ManaContributionPublicationResult suspend(EntityPlayerMP player, ManaState state, ResourceLocation id,
+            ManaProfileGeneration token, long expectedRevision) {
+        ManaReadiness destination = state.readiness;
+        ManaContributionPublicationResult result = destination.suspend(id, publicationWorld(player, destination),
+                token, expectedRevision);
+        if (result.getStatus() != STALE_GENERATION && result.getStatus() != INAPPLICABLE) return result;
+
+        // Follow only the chain of exact contexts that a pre-mutation failure could restore.
+        for (Transfer frame = state.transfer; frame != null; frame = frame.previous) {
+            if (frame.destination != destination || frame.mutated || destination.isRetired()
+                    || frame.source.isRetired()) break;
+            if (frame.source.matchesPublication(id, frame.sourceWorld, token)) {
+                return frame.source.suspend(id, frame.sourceWorld, token, expectedRevision);
+            }
+            destination = frame.source;
+        }
+        return result;
     }
 
     static boolean isReconcilingReplacement(EntityPlayerMP player, ManaReadiness readiness) {
