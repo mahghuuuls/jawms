@@ -14,9 +14,6 @@ There are already good mods that add player mana to Wizardry, including [Wizardr
 - Wizardry armor and robes increase maximum mana and mana regeneration.
 - Mana flasks restore player mana, with any configured remainder going to eligible Wizard armor.
 - Wizardry upgrades, artefacts, Demonic Seal, and Font of Mana have been adapted to interact with player mana.
-- Stored wand mana is preserved for compatibility, but it is ignored for casting and its obsolete displays are hidden.
-- Spell books display continuous spell costs as `Mana/sec`.
-- When an addon uses mana profile readiness, JAWMS preserves saved mana while that addon supplies the player's bonuses after joining, respawning, or changing dimensions. Losing a bonus can still lower the player's maximum mana.
 
 Wizardry's spell selection, tiers, cooldowns, progression, charge-up behavior, and spell effects remain in place. JAWMS replaces the mana resource rather than replacing Wizardry's complete casting system.
 

@@ -1,6 +1,6 @@
 # JAWMS API History
 
-This reference records earlier JAWMS releases and their public API additions. Use the current [Addon Development Guide](ADDON-DEVELOPMENT.md) for JAWMS `1.3.0` and API `1.8`.
+This reference records earlier JAWMS releases and their public API additions. Use the current [Addon Development Guide](ADDON-DEVELOPMENT.md) for JAWMS `1.4.0` and API `1.9`.
 
 ## Release Matrix
 
@@ -14,6 +14,7 @@ This reference records earlier JAWMS releases and their public API additions. Us
 | `1.1.0` | See the CurseForge Files page | `1.6` | Explicit attributed regeneration-lockout requests and open minimum-or-newer runtime dependency ranges |
 | `1.1.1` | See the CurseForge Files page | `1.6` | Cleanroom loading compatibility; no API additions |
 | `1.2.0` | `9427782` | `1.7` | Optional additional cast-cost participation for Wizardry wand spells |
+| `1.3.0` | See the CurseForge Files page | `1.8` | Opt-in mana profile readiness and revisioned provider contributions |
 
 CurseForge file IDs identify immutable uploaded files. They are not mod versions or API versions.
 
@@ -74,6 +75,10 @@ Current addons should follow [Addon Development](ADDON-DEVELOPMENT.md), not reco
 
 ## API 1.6
 
-API `1.6` is the current stable API in JAWMS `1.1.0`. It adds an attributed logical-server operation that starts or restarts the player's currently accepted regeneration lockout without simulating a spell, consuming mana or hunger, reserving payment, or changing continuous-cast state.
+JAWMS `1.1.0` introduced API `1.6`. It adds an attributed logical-server operation that starts or restarts the player's currently accepted regeneration lockout without simulating a spell, consuming mana or hunger, reserving payment, or changing continuous-cast state.
 
 JAWMS `1.1.0` also changes current runtime requirements to minimum-or-newer ranges. Those ranges admit later dependency versions without claiming every later version has been tested.
+
+## API 1.8
+
+JAWMS `1.3.0` introduced opt-in mana profile readiness. Providers publish a complete contribution for the current lifecycle and use the returned revision for later updates. JAWMS holds saved mana until the applicable providers finish. Missing contributions leave the profile unavailable at the original deadline and eligible for recovery when the providers complete their groups.

@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.4.0]
+
+### Added
+
+- API `1.9` adds `ManaReadinessProvider.suspend` for a provider's own recorded contribution before first acceptance. A verified update using the returned revision restores the contribution in the same generation.
+
+### Fixed
+
+- Preserve saved mana when an addon suspends a contribution that needs rechecking before first acceptance. The original 100-running-tick deadline still applies.
+
+### Compatibility
+
+- Retains API `1.8` binary compatibility and the existing mana save format. After first acceptance, regular provider updates still apply changes to the mana profile.
+
 ## [1.3.0]
 
 ### Added

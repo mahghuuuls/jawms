@@ -2,7 +2,7 @@
 
 Just Another Wizardry Mana System (JAWMS) replaces Electroblob's Wizardry wand mana with a persistent, server-authoritative player mana pool. It adds configurable regeneration and spell costs, reworks Wizardry's mana-related equipment around the new resource, and provides a simple configurable HUD.
 
-JAWMS `1.3.0` provides addon API `1.8` and builds optional Developer Tools as a separate JAR. See the [detailed mod page](MOD-PAGE.md) for configuration examples and the [changelog](CHANGELOG.md) for release changes.
+JAWMS `1.4.0` provides addon API `1.9` and builds optional Developer Tools as a separate JAR. See the [detailed mod page](MOD-PAGE.md) for configuration examples and the [changelog](CHANGELOG.md) for release changes.
 
 ## Features
 
@@ -26,7 +26,7 @@ Server operators can apply valid gameplay and integration changes with `/jawms r
 
 ## Requirements
 
-JAWMS targets Minecraft 1.12.2 with Forge-compatible loading on Cleanroom. JAWMS `1.3.0` requires the following dependencies.
+JAWMS targets Minecraft 1.12.2 with Forge-compatible loading on Cleanroom. JAWMS `1.4.0` requires the following dependencies.
 
 - Electroblob's Wizardry `4.3.19` or newer
 - MixinBooter `10.7` or newer (provided by Cleanroom; a separate mod on standard Forge)
@@ -46,9 +46,9 @@ The tested Cleanroom baseline is `0.7.14-alpha` with built-in MixinBooter `10.7`
 
 The [Addon Development Guide](docs/ADDON-DEVELOPMENT.md) covers dependency setup, server APIs, modifier providers, and client HUD behavior. The [Command Reference](docs/COMMANDS.md) covers JAWMS, Developer Tools, and contributor fixtures.
 
-JAWMS `1.3.0` retains the earlier API `1.2` through `1.7` binary surfaces. The supported package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`. Use the guide for current dependency setup and API usage. Earlier releases are documented in [API History](docs/API-HISTORY.md).
+JAWMS `1.4.0` retains the earlier API `1.2` through `1.8` binary surfaces. The supported package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`. Use the guide for current dependency setup and API usage. Earlier releases are documented in [API History](docs/API-HISTORY.md).
 
-API 1.8 lets a provider publish a complete mana contribution for the player's current lifecycle. JAWMS holds saved mana until the applicable providers finish, then applies the complete profile. API 1.7 cast-cost participation remains available.
+API 1.9 lets a readiness provider suspend its recorded mana contribution before the profile is first accepted. JAWMS holds saved mana while the provider verifies a replacement and keeps the original deadline of 100 running server ticks.
 
 ## License
 

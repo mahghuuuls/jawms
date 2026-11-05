@@ -9,9 +9,9 @@ Types under `com.mahghuuuls.jawms.internal` are implementation details and carry
 
 ## Setup
 
-JAWMS `1.3.0` provides API `1.8`. Depend on the full JAWMS mod. [API History](API-HISTORY.md) records earlier releases and their API versions.
+JAWMS `1.4.0` provides API `1.9`. Depend on the full JAWMS mod. [API History](API-HISTORY.md) records earlier releases and their API versions.
 
-After publication, find `jawms-1.3.0.jar` on the JAWMS Files page and put its numeric CurseForge file ID in your addon's `gradle.properties`.
+After publication, find `jawms-1.4.0.jar` on the JAWMS Files page and put its numeric CurseForge file ID in your addon's `gradle.properties`.
 
 ```properties
 jawms_curseforge_file=REPLACE_WITH_NUMERIC_FILE_ID
@@ -60,7 +60,7 @@ Declare the runtime requirements in the addon's Forge metadata. The `@Mod` decla
         modid = "exampleaddon",
         name = "Example JAWMS Addon",
         version = "1.0.0",
-        dependencies = "required-after:jawms@[1.3.0,);"
+        dependencies = "required-after:jawms@[1.4.0,);"
                 + "required-after:ebwizardry@[4.3.19,);"
                 + "required-after:mixinbooter@[10.7,)"
 )
@@ -72,13 +72,13 @@ Also list the three ranges in `mcmod.info` if that file is part of the project:
 
 ```json
 "requiredMods": [
-  "jawms@[1.3.0,)",
+  "jawms@[1.4.0,)",
   "ebwizardry@[4.3.19,)",
   "mixinbooter@[10.7,)"
 ]
 ```
 
-Declare Wizardry and MixinBooter explicitly on standard Forge. CurseMaven coordinates alone do not install these dependencies. This example uses open runtime minimums of JAWMS `1.3.0`, Wizardry `4.3.19`, and MixinBooter `10.7`. An open range allows later versions to load under Forge's dependency check. Keep development artifacts pinned to exact coordinates for reproducible builds. JAWMS builds against MixinBooter `11.8`. Cleanroom supplies its own MixinBooter compatibility identity.
+Declare Wizardry and MixinBooter explicitly on standard Forge. CurseMaven coordinates alone do not install these dependencies. This example uses open runtime minimums of JAWMS `1.4.0`, Wizardry `4.3.19`, and MixinBooter `10.7`. An open range allows later versions to load under Forge's dependency check. Keep development artifacts pinned to exact coordinates for reproducible builds. JAWMS builds against MixinBooter `11.8`. Cleanroom supplies its own MixinBooter compatibility identity.
 
 If addon source directly uses Wizardry types exposed by the server API, such as `Spell` or `Element`, change the Wizardry declaration from `runtimeOnly` to `implementation` while keeping the same deobfuscated coordinate. The replacement-HUD-only example does not directly use those types, so `runtimeOnly` is sufficient there.
 
@@ -207,12 +207,16 @@ The example shows registration and publication separately. If reconciliation spa
 
 For a later change in the same generation, use `update(player, generation, lastRecordedRevision, contribution)` with the complete replacement group. Save the revision from each successful receipt. A valid empty update can lower current mana if the new maximum is lower. For example, removing a real `+20` bonus can change `110/120` to `100/100`.
 
+If your recorded group becomes invalid before the profile is first accepted, call `suspend(player, generation, lastRecordedRevision)` on the logical server thread. Your provider stays required, and JAWMS keeps the original 100-running-tick deadline and saved mana. Use the revision from the `SUSPENDED` receipt with `update` once you verify the full replacement group. Recovery can occur after the original deadline. Use `ManaContribution.EMPTY` with `update` when you have verified that the player has no bonus. Calling `suspend` again with the current suspended revision returns that same revision.
+
 | Publication status | Meaning |
 | --- | --- |
 | `INITIAL_RECORDED`, `UPDATE_RECORDED` | The group was recorded. The receipt contains the new positive revision. |
-| `ALREADY_COMPLETED`, `INITIAL_REQUIRED` | Initial publication already exists, or the update arrived before it. A duplicate initial call leaves the existing group intact. |
+| `ALREADY_COMPLETED`, `INITIAL_REQUIRED` | Initial publication already exists, or the operation needs a recorded contribution first. |
 | `REVISION_MISMATCH`, `STALE_GENERATION` | The expected revision or generation no longer matches. Reconcile current state before submitting new work. |
 | `INAPPLICABLE`, `BUSY` | The provider cannot publish for this player, or the call reached a guarded operation. A busy result records no group. Resume only from a valid server-thread callback with a current complete group. |
+| `SUSPENDED` | The group is suspended. The receipt contains the revision to use for recovery. |
+| `ALREADY_ACCEPTED` | The profile has already been accepted. Publish a verified change through the usual provider methods. |
 
 `ManaApi.getProfileReadiness(player)` reports `LEGACY` for ordinary evaluation, `READY` for an accepted managed profile, `PENDING` during the initial hold, or `UNAVAILABLE` after the deadline or loss of a usable lifecycle context. While held, valid existing reads return a compatibility view with zero current mana, the configured base maximum, zero regeneration and lockout, inactive gates, and neutral cost modifiers. Valid writes return `PROFILE_NOT_READY` with zero delta and equal before/after views. Lockout requests return zero. Held writes are rejected immediately. Readiness does not change normal argument, side, thread, or re-entry validation. Profile explanations still require an accepted profile for the current generation.
 
@@ -388,7 +392,7 @@ The maintained, executable Java 8 reference is [`CacheSafeReplacementHud`](../sr
 
 ## Optional Developer Tools
 
-JAWMS `1.3.0` builds a separate `jawms-devtools-1.3.0.jar` for addon-development environments. Install it beside JAWMS `[1.3.0,)` for permission-level-4 state, mutation, provider, accepted-explanation, cache-refresh, or regeneration-lockout diagnostics. Removing the optional tool JAR removes `/jawms-dev`.
+JAWMS `1.4.0` builds a separate `jawms-devtools-1.4.0.jar` for addon-development environments. Install it beside JAWMS `[1.3.0,)` for permission-level-4 state, mutation, provider, accepted-explanation, cache-refresh, or regeneration-lockout diagnostics. Removing the optional tool JAR removes `/jawms-dev`.
 
 The canonical [`docs/COMMANDS.md`](COMMANDS.md) reference distinguishes primary operator commands, optional Developer Tools, contributor-only development fixtures, and API compatibility fixtures. Do not distribute contributor or compatibility fixtures as addon-development tools.
 
@@ -404,7 +408,7 @@ Also test:
 - parent `Chat` cancellation coexistence;
 - normal and exceptional renderer exit paths;
 - dedicated-server startup with public client API classes present but no client linkage;
-- after publication, resolve the exact `1.3.0` dependency in a clean workspace using its CurseForge file ID.
+- after publication, resolve the exact `1.4.0` dependency in a clean workspace using its CurseForge file ID.
 
 ## Prepared Cast-Cost Participation
 
