@@ -2,7 +2,7 @@
 
 JAWMS commands belong to four different availability tiers. Check the tier before trying a command: installing the normal JAWMS JAR does not install Developer Tools or contributor fixtures.
 
-For the matching JAWMS, public-API, and Developer Tools version boundary, see the canonical [`docs/ADDON-DEVELOPMENT.md`](ADDON-DEVELOPMENT.md) release/API matrix.
+The [Addon Development Guide](ADDON-DEVELOPMENT.md) documents the current JAWMS, public API, and Developer Tools versions.
 
 ## Primary JAWMS
 
@@ -24,7 +24,7 @@ Authoritative usage:
 
 ## Optional JAWMS Developer Tools
 
-Availability: the unreleased development candidate builds the separate matching `jawms-devtools-1.2.0.jar` alongside JAWMS `[1.2.0,)`, which provides API 1.7. The runtime range admits newer JAWMS versions without claiming they have all been tested; matching candidate versions still require validation before release. Installing it is the enablement mechanism; JAWMS has no gameplay configuration toggle for it. Audience: addon developers and controlled test servers. Side: logical server; explicit player targets work from dedicated-server console. Permission level: 4. Output is sent to the command sender and logged with the `[jawms-dev]` prefix.
+Install the optional `jawms-devtools-1.3.0.jar` alongside JAWMS `[1.3.0,)` to enable these commands. The intended audience is addon developers and controlled test servers. Commands run on the logical server and require permission level 4. Explicit player targets work from the dedicated-server console. Output goes to the sender and appears in the log with the `[jawms-dev]` prefix.
 
 ### `/jawms-dev`
 
@@ -159,7 +159,7 @@ Authoritative usage:
 /jawms-continuous-fixture setup <mode> [main|off] | inspect | teardown
 ```
 
-Unreleased development candidate; implementation and automated review are in progress, with no runtime acceptance. Modes are normal, terminal, creative, zero, zero-portion, prediction, inapplicable, refused, invalidated, chargeup, synthetic, nofinish, tick-interrupt and creative-interrupt. The last two return not-applicable and cancel a real server SpellCastEvent.Tick after two successful effects; ordinary Finish remains eligible, unlike a cancelled stop callback. Fixed spell rates are 4/1/0 and charge-up 200. Three fixture units per applicable effect, with permitted terminal partial payment; terminal/Creative/zero start at 2 and zero-portion at 5. Other cohorts start at 1,000,000. `prediction` records a provider-local terminal estimate but its actual receipt continues; no prediction API exists. Public fixture cooldown counters observe positive transitions, not setter invocation counts. The separate development observer records actual setter targets. Disable registration only at startup with `-Djawms.castFixtureRegistrationOff=true` for the separate empty-registry cohort. Do not change this flag during a connection. Bundles are retained in `docs/verification/continuous-bundles.json`, not installed or live-verified.
+The contributor fixture supports normal, terminal, creative, zero, zero-portion, prediction, inapplicable, refused, invalidated, chargeup, synthetic, nofinish, tick-interrupt and creative-interrupt. The last two return not-applicable and cancel a real server SpellCastEvent.Tick after two successful effects; ordinary Finish remains eligible, unlike a cancelled stop callback. Fixed spell rates are 4/1/0 and charge-up 200. Three fixture units per applicable effect, with permitted terminal partial payment; terminal/Creative/zero start at 2 and zero-portion at 5. Other cohorts start at 1,000,000. `prediction` records a provider-local terminal estimate but its actual receipt continues; no prediction API exists. Public fixture cooldown counters observe positive transitions, not setter invocation counts. The separate development observer records actual setter targets. Disable registration only at startup with `-Djawms.castFixtureRegistrationOff=true` for the separate empty-registry cohort. Do not change this flag during a connection. Example bundle definitions are in `docs/verification/continuous-bundles.json`.
 
 ### `/jawms-api-fixture`
 

@@ -37,7 +37,8 @@ class AddonDocumentationContractTest {
     void currentGuideStaysCurrentAndHistoryOwnsOlderVersions() throws IOException {
         String guide = read(GUIDE_PATH);
         String history = read("docs/API-HISTORY.md");
-        String jawmsRange = openRange("jawms", "1.2.0");
+        String jawmsVersion = property("mod_version");
+        String jawmsRange = openRange("jawms", jawmsVersion);
         String wizardryRange = openRange(
                 "ebwizardry", property("wizardry_min_version")
         );
@@ -46,7 +47,7 @@ class AddonDocumentationContractTest {
         );
 
         assertTrue(guide.contains(
-                "JAWMS `1.2.0` provides API `1.7`"
+                "JAWMS `" + jawmsVersion + "` provides API `" + ManaApiVersion.CURRENT + "`"
         ));
         assertTrue(guide.contains("[API History](API-HISTORY.md)"));
         assertTrue(guide.contains("jawms_curseforge_file=REPLACE_WITH_NUMERIC_FILE_ID"));
@@ -84,7 +85,7 @@ class AddonDocumentationContractTest {
 
     @Test
     void currentDependencyGuidanceUsesBuildOwnedOpenMinimums() throws IOException {
-        String jawmsMinimum = "1.2.0";
+        String jawmsMinimum = property("mod_version");
         String wizardryMinimum = property("wizardry_min_version");
         String mixinMinimum = property("mixin_booter_min_version");
         String baublesMinimum = property("baubles_min_version");
@@ -192,8 +193,8 @@ class AddonDocumentationContractTest {
         assertTrue(guide.contains("plain JVM test"));
         assertTrue(guide.contains("launched Forge test"));
         assertTrue(guide.contains("docs/COMMANDS.md"));
-        assertTrue(guide.contains("jawms-devtools-1.2.0.jar"));
-        assertTrue(guide.contains("JAWMS `[1.2.0,)`"));
+        assertTrue(guide.contains("jawms-devtools-" + property("developer_tools_version") + ".jar"));
+        assertTrue(guide.contains("JAWMS `[" + property("mod_version") + ",)`"));
     }
 
     @Test
@@ -233,11 +234,12 @@ class AddonDocumentationContractTest {
         assertTrue(modPage.contains("(" + GUIDE_URL + ")"));
         assertTrue(rootPackage.contains(GUIDE_URL));
         assertTrue(clientPackage.contains(GUIDE_URL));
-        assertTrue(readme.contains("JAWMS `1.2.0` development candidate provides addon API `1.7`"));
+        assertTrue(readme.contains("JAWMS `" + property("mod_version")
+                + "` provides addon API `" + ManaApiVersion.CURRENT + "`"));
         assertTrue(readme.contains("Use the guide for current dependency setup and API usage"));
         assertTrue(readme.contains("[API History](docs/API-HISTORY.md)"));
         assertTrue(readme.contains(
-                "earlier API `1.2` through `1.6` binary surfaces"
+                "earlier API `1.2` through `1.7` binary surfaces"
         ));
         assertFalse(readme.contains("public beta"));
         assertFalse(modPage.contains("Beta release:"));

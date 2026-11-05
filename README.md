@@ -2,7 +2,7 @@
 
 Just Another Wizardry Mana System (JAWMS) replaces Electroblob's Wizardry wand mana with a persistent, server-authoritative player mana pool. It adds configurable regeneration and spell costs, reworks Wizardry's mana-related equipment around the new resource, and provides a simple configurable HUD.
 
-The JAWMS `1.2.0` development candidate provides addon API `1.7` and builds separately packaged optional Developer Tools. See the [detailed mod page](MOD-PAGE.md) for configuration examples, stat explanations, Wizardry integration behavior, companion addons, and the public API overview. Player-visible release changes are recorded in the [changelog](CHANGELOG.md).
+JAWMS `1.3.0` provides addon API `1.8` and builds optional Developer Tools as a separate JAR. See the [detailed mod page](MOD-PAGE.md) for configuration examples and the [changelog](CHANGELOG.md) for release changes.
 
 ## Features
 
@@ -26,14 +26,14 @@ Server operators can apply valid gameplay and integration changes with `/jawms r
 
 ## Requirements
 
-JAWMS targets Minecraft 1.12.2 with Forge-compatible loading on Cleanroom. JAWMS `1.2.0` requires:
+JAWMS targets Minecraft 1.12.2 with Forge-compatible loading on Cleanroom. JAWMS `1.3.0` requires the following dependencies.
 
 - Electroblob's Wizardry `4.3.19` or newer
 - MixinBooter `10.7` or newer (provided by Cleanroom; a separate mod on standard Forge)
 
 Install JAWMS on both the client and server for multiplayer. Baubles `1.5.2` or newer is optional.
 
-The packaged 1.2.0 candidate was tested on Cleanroom `0.7.14-alpha` with its built-in MixinBooter `10.7` identity. See the addon guide for the separate development dependency pins.
+The tested Cleanroom baseline is `0.7.14-alpha` with built-in MixinBooter `10.7`. See the addon guide for the separate development dependency pins.
 
 ## Companion Addons
 
@@ -44,11 +44,11 @@ The packaged 1.2.0 candidate was tested on Cleanroom `0.7.14-alpha` with its bui
 
 ## For Addon Developers
 
-Use the canonical [Addon Development Guide](docs/ADDON-DEVELOPMENT.md) for the dependency recipe, release/API matrix, server API, modifier units, client snapshot semantics, replacement-HUD lifecycle, and cache-safe rendering obligations. The separate [Command Reference](docs/COMMANDS.md) documents primary commands, optional Developer Tools, and contributor/API fixtures under their truthful availability tiers.
+The [Addon Development Guide](docs/ADDON-DEVELOPMENT.md) covers dependency setup, server APIs, modifier providers, and client HUD behavior. The [Command Reference](docs/COMMANDS.md) covers JAWMS, Developer Tools, and contributor fixtures.
 
-JAWMS `1.2.0` provides API `1.7` and retains the earlier API `1.2` through `1.6` binary surfaces. The supported package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`; other JAWMS packages are implementation details. Use the guide for current dependency setup and API usage; older releases are documented separately in [API History](docs/API-HISTORY.md).
+JAWMS `1.3.0` retains the earlier API `1.2` through `1.7` binary surfaces. The supported package trees are `com.mahghuuuls.jawms.api` and `com.mahghuuuls.jawms.api.client`. Use the guide for current dependency setup and API usage. Earlier releases are documented in [API History](docs/API-HISTORY.md).
 
-API 1.7 lets addons register an additional cast-cost participant. A participant can reserve its own resource, refuse a cast before the spell takes effect, and settle after a successful effect. A continuous spell can stop after its last effect and the permitted payment. Operators can enable detailed casting diagnostics with the server JVM option `-Djawms.debugCasting=true`.
+API 1.8 lets a provider publish a complete mana contribution for the player's current lifecycle. JAWMS holds saved mana until the applicable providers finish, then applies the complete profile. API 1.7 cast-cost participation remains available.
 
 ## License
 

@@ -1,6 +1,6 @@
 # JAWMS API History
 
-This reference records older JAWMS releases and the public API additions they introduced. Use the current [Addon Development Guide](ADDON-DEVELOPMENT.md) for the API `1.7` development candidate. JAWMS `1.1.1` preserves API `1.6`.
+This reference records earlier JAWMS releases and their public API additions. Use the current [Addon Development Guide](ADDON-DEVELOPMENT.md) for JAWMS `1.3.0` and API `1.8`.
 
 ## Release Matrix
 
@@ -13,6 +13,7 @@ This reference records older JAWMS releases and the public API additions they in
 | `1.0.0` | See the CurseForge Files page | `1.5` | Configured-flask snapshots, directional lockout helpers, invariant provider previews, and final JAWMS tooltip placement |
 | `1.1.0` | See the CurseForge Files page | `1.6` | Explicit attributed regeneration-lockout requests and open minimum-or-newer runtime dependency ranges |
 | `1.1.1` | See the CurseForge Files page | `1.6` | Cleanroom loading compatibility; no API additions |
+| `1.2.0` | `9427782` | `1.7` | Optional additional cast-cost participation for Wizardry wand spells |
 
 CurseForge file IDs identify immutable uploaded files. They are not mod versions or API versions.
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.3.0]
+
+### Added
+
+- API `1.8` adds opt-in mana profile readiness. Providers publish a complete contribution for the current player lifecycle and can replace it later using the last recorded revision.
+- Operators can enable first-acceptance diagnostics with `-Djawms.debugManaReadiness=true`. The log records the accepting path, saved input when present, and the accepted current and maximum mana.
+
+### Fixed
+
+- Preserve saved mana while opted-in addons finish supplying bonuses after login, respawn, or dimension travel. A genuine loss of maximum mana still applies when the new profile is accepted.
+- Clear the old mana display for opted-in profiles while the next profile is pending and after disconnect. Missing provider completion leaves mana unavailable after 100 running server ticks while preserving the saved balance for recovery.
+
+### Compatibility
+
+- Retains the API `1.2` through `1.7` binary surfaces, including cast-cost participation, and the existing mana save format.
+- The MixinBooter runtime minimum remains `10.7`. The separate development build pin remains `11.8`.
+
 ## [1.2.0]
 
 ### Added
