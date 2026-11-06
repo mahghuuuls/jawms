@@ -9,9 +9,9 @@ Types under `com.mahghuuuls.jawms.internal` are implementation details and carry
 
 ## Setup
 
-JAWMS `1.4.0` provides API `1.9`. Depend on the full JAWMS mod. [API History](API-HISTORY.md) records earlier releases and their API versions.
+JAWMS `1.4.1` provides API `1.9`. Depend on the full JAWMS mod. [API History](API-HISTORY.md) records earlier releases and their API versions.
 
-After publication, find `jawms-1.4.0.jar` on the JAWMS Files page and put its numeric CurseForge file ID in your addon's `gradle.properties`.
+After publication, find `jawms-1.4.1.jar` on the JAWMS Files page and put its numeric CurseForge file ID in your addon's `gradle.properties`.
 
 ```properties
 jawms_curseforge_file=REPLACE_WITH_NUMERIC_FILE_ID
@@ -60,7 +60,7 @@ Declare the runtime requirements in the addon's Forge metadata. The `@Mod` decla
         modid = "exampleaddon",
         name = "Example JAWMS Addon",
         version = "1.0.0",
-        dependencies = "required-after:jawms@[1.4.0,);"
+        dependencies = "required-after:jawms@[1.4.1,);"
                 + "required-after:ebwizardry@[4.3.19,);"
                 + "required-after:mixinbooter@[10.7,)"
 )
@@ -72,13 +72,13 @@ Also list the three ranges in `mcmod.info` if that file is part of the project:
 
 ```json
 "requiredMods": [
-  "jawms@[1.4.0,)",
+  "jawms@[1.4.1,)",
   "ebwizardry@[4.3.19,)",
   "mixinbooter@[10.7,)"
 ]
 ```
 
-Declare Wizardry and MixinBooter explicitly on standard Forge. CurseMaven coordinates alone do not install these dependencies. This example uses open runtime minimums of JAWMS `1.4.0`, Wizardry `4.3.19`, and MixinBooter `10.7`. An open range allows later versions to load under Forge's dependency check. Keep development artifacts pinned to exact coordinates for reproducible builds. JAWMS builds against MixinBooter `11.8`. Cleanroom supplies its own MixinBooter compatibility identity.
+Declare Wizardry and MixinBooter explicitly on standard Forge. CurseMaven coordinates alone do not install these dependencies. This example uses open runtime minimums of JAWMS `1.4.1`, Wizardry `4.3.19`, and MixinBooter `10.7`. An open range allows later versions to load under Forge's dependency check. Keep development artifacts pinned to exact coordinates for reproducible builds. JAWMS builds against MixinBooter `11.8`. Cleanroom supplies its own MixinBooter compatibility identity.
 
 If addon source directly uses Wizardry types exposed by the server API, such as `Spell` or `Element`, change the Wizardry declaration from `runtimeOnly` to `implementation` while keeping the same deobfuscated coordinate. The replacement-HUD-only example does not directly use those types, so `runtimeOnly` is sufficient there.
 
@@ -265,6 +265,8 @@ Potion transitions need special timing in Forge 1.12.2. `PotionAddedEvent` is po
 
 `ManaApi.explainManaProfile(player)` returns the immutable server-only explanation retained from the latest profile evaluation accepted by gameplay. It does not scan equipment, invoke a provider, post an event, mutate mana, or send a packet. If the player has not accepted an evaluation yet, it throws `IllegalStateException` instead of performing a speculative calculation.
 
+Use JAWMS `1.4.1` as the minimum if your addon explains profiles that can contain verified empty readiness contributions. This patch fixes the exception on that read path.
+
 The explanation includes the evaluated world tick, gameplay-rules revision, configured bases, numeric aggregation stages, every final profile value, and deterministic source records. Each `ManaContributionExplanation` identifies its stable source ID and kind, optional item and slot identity, one disposition, and a bounded failure category. Only `APPLIED` records expose an accepted `ManaContribution`:
 
 - `APPLIED`: the immutable contribution participated in the accepted arithmetic;
@@ -392,7 +394,7 @@ The maintained, executable Java 8 reference is [`CacheSafeReplacementHud`](../sr
 
 ## Optional Developer Tools
 
-JAWMS `1.4.0` builds a separate `jawms-devtools-1.4.0.jar` for addon-development environments. Install it beside JAWMS `[1.3.0,)` for permission-level-4 state, mutation, provider, accepted-explanation, cache-refresh, or regeneration-lockout diagnostics. Removing the optional tool JAR removes `/jawms-dev`.
+JAWMS `1.4.1` builds a separate `jawms-devtools-1.4.1.jar` for addon-development environments. Install it beside JAWMS `[1.3.0,)` for permission-level-4 state, mutation, provider, accepted-explanation, cache-refresh, or regeneration-lockout diagnostics. Removing the optional tool JAR removes `/jawms-dev`.
 
 The canonical [`docs/COMMANDS.md`](COMMANDS.md) reference distinguishes primary operator commands, optional Developer Tools, contributor-only development fixtures, and API compatibility fixtures. Do not distribute contributor or compatibility fixtures as addon-development tools.
 
@@ -408,7 +410,7 @@ Also test:
 - parent `Chat` cancellation coexistence;
 - normal and exceptional renderer exit paths;
 - dedicated-server startup with public client API classes present but no client linkage;
-- after publication, resolve the exact `1.4.0` dependency in a clean workspace using its CurseForge file ID.
+- after publication, resolve the exact `1.4.1` dependency in a clean workspace using its CurseForge file ID.
 
 ## Prepared Cast-Cost Participation
 

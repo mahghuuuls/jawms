@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.1]
+
+### Fixed
+
+- Fixed an exception in `ManaApi.explainManaProfile` when an accepted mana profile contains a verified empty readiness contribution. The explanation reports the empty source alongside any applied bonuses.
+
 ## [1.4.0]
 
 ### Added

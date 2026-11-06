@@ -1,6 +1,6 @@
 # JAWMS API History
 
-This reference records earlier JAWMS releases and their public API additions. Use the current [Addon Development Guide](ADDON-DEVELOPMENT.md) for JAWMS `1.4.0` and API `1.9`.
+This reference records earlier JAWMS releases and their public API additions. Use the current [Addon Development Guide](ADDON-DEVELOPMENT.md) for JAWMS `1.4.1` and API `1.9`.
 
 ## Release Matrix
 
@@ -15,6 +15,7 @@ This reference records earlier JAWMS releases and their public API additions. Us
 | `1.1.1` | See the CurseForge Files page | `1.6` | Cleanroom loading compatibility; no API additions |
 | `1.2.0` | `9427782` | `1.7` | Optional additional cast-cost participation for Wizardry wand spells |
 | `1.3.0` | See the CurseForge Files page | `1.8` | Opt-in mana profile readiness and revisioned provider contributions |
+| `1.4.0` | See the CurseForge Files page | `1.9` | Suspend a recorded readiness contribution before first acceptance |
 
 CurseForge file IDs identify immutable uploaded files. They are not mod versions or API versions.
 

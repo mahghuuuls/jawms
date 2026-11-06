@@ -24,7 +24,7 @@ Authoritative usage:
 
 ## Optional JAWMS Developer Tools
 
-Install the optional `jawms-devtools-1.4.0.jar` alongside JAWMS `[1.3.0,)` to enable these commands. The intended audience is addon developers and controlled test servers. Commands run on the logical server and require permission level 4. Explicit player targets work from the dedicated-server console. Output goes to the sender and appears in the log with the `[jawms-dev]` prefix.
+Install the optional `jawms-devtools-1.4.1.jar` alongside JAWMS `[1.3.0,)` to enable these commands. The intended audience is addon developers and controlled test servers. Commands run on the logical server and require permission level 4. Explicit player targets work from the dedicated-server console. Output goes to the sender and appears in the log with the `[jawms-dev]` prefix.
 
 ### `/jawms-dev`
 
