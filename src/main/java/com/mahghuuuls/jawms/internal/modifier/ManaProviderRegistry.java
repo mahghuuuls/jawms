@@ -255,29 +255,27 @@ public final class ManaProviderRegistry {
                 ));
                 continue;
             }
+            CachedEvaluation evaluation;
             if (registration instanceof ReadinessRegistration) {
                 ManaContribution group = ManaService.readinessContribution(player, registration.id);
-                if (group != null) {
-                    result.add(ContributionEvaluationRecord.playerWide(
-                            registration.id, ManaContributionSourceKind.CONTEXTUAL_PROVIDER,
-                            group.isEmpty() ? ManaContributionDisposition.EMPTY
-                                    : ManaContributionDisposition.APPLIED,
-                            ManaContributionFailure.NONE, group));
+                if (group == null) {
+                    continue;
                 }
-                continue;
-            }
-            CacheKey key = CacheKey.contextual(registration.id);
-            CachedEvaluation cached = cache.values.get(key);
-            if (cached == null) {
-                cached = evaluateContextualProvider(player, (ContextualRegistration) registration);
-                cache.values.put(key, cached);
+                evaluation = CachedEvaluation.accepted(group);
+            } else {
+                CacheKey key = CacheKey.contextual(registration.id);
+                evaluation = cache.values.get(key);
+                if (evaluation == null) {
+                    evaluation = evaluateContextualProvider(player, (ContextualRegistration) registration);
+                    cache.values.put(key, evaluation);
+                }
             }
             result.add(ContributionEvaluationRecord.playerWide(
                     registration.id,
                     ManaContributionSourceKind.CONTEXTUAL_PROVIDER,
-                    cached.disposition,
-                    cached.failure,
-                    cached.contribution
+                    evaluation.disposition,
+                    evaluation.failure,
+                    evaluation.contribution
             ));
         }
         return result;

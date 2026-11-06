@@ -1,9 +1,16 @@
 package com.mahghuuuls.jawms.internal.mana;
 
 import com.mahghuuuls.jawms.api.ManaApi;
+import com.mahghuuuls.jawms.api.ManaCauses;
 import com.mahghuuuls.jawms.api.ManaContribution;
+import com.mahghuuuls.jawms.api.ManaContributionDisposition;
+import com.mahghuuuls.jawms.api.ManaContributionExplanation;
+import com.mahghuuuls.jawms.api.ManaContributionFailure;
+import com.mahghuuuls.jawms.api.ManaContributionPublicationResult;
+import com.mahghuuuls.jawms.api.ManaProfileExplanation;
 import com.mahghuuuls.jawms.api.ManaProfileGeneration;
 import com.mahghuuuls.jawms.api.ManaProfileReadiness;
+import com.mahghuuuls.jawms.api.ManaPublicState;
 import com.mahghuuuls.jawms.api.ManaReadinessProvider;
 import com.mahghuuuls.jawms.internal.modifier.ManaProviderRegistry;
 import com.mahghuuuls.jawms.internal.modifier.ManaTestEvaluations;
@@ -113,6 +120,63 @@ class ManaLifecycleTest {
         assertEquals(UPDATE_RECORDED, provider.update(player, bonusToken, 1, BONUS).getStatus());
         assertEquals(120, mana.getMaximumMana(player));
         assertEquals(100, savedMana(player));
+    }
+
+    @Test
+    void acceptedExplanationIncludesVerifiedEmptyReadinessGroupsAcrossUpdates() throws Exception {
+        ManaReadinessProvider peer = ManaApi.registerReadinessProvider(PEER);
+        AtomicInteger providerCalls = new AtomicInteger();
+        ManaProviderRegistry.instance().registerContextual(REENTRANT, player -> {
+            providerCalls.incrementAndGet();
+            return ManaContribution.EMPTY;
+        });
+        EntityPlayerMP player = pendingPlayer(ManaContribution.EMPTY);
+        ManaProfileGeneration bonusToken = token(player);
+        assertEquals(INITIAL_RECORDED, peer.completeInitial(player, peer.getGeneration(player).get(),
+                ManaContribution.EMPTY).getStatus());
+        ManaService.tickPlayer(player, RULES);
+        assertEquals(ManaProfileReadiness.READY, ManaApi.getProfileReadiness(player));
+        assertEquals(100, mana.getCurrentMana(player));
+        assertEquals(100, mana.getMaximumMana(player));
+
+        ManaProfileExplanation initial = readExplanationWithoutMutation(player, providerCalls);
+        assertEquals(100, initial.getFinalMaximumMana());
+        assertEmptySource(initial, PROVIDER);
+        assertEmptySource(initial, PEER);
+
+        ManaContributionPublicationResult applied = provider.update(player, bonusToken, 1, BONUS);
+        assertEquals(UPDATE_RECORDED, applied.getStatus());
+        assertEquals(2L, applied.getRevision().getAsLong());
+        ManaProfileExplanation atUpdate = readExplanationWithoutMutation(player, providerCalls);
+        assertEquals(mana.getMaximumMana(player), atUpdate.getFinalMaximumMana());
+        assertEmptySource(atUpdate, PEER);
+
+        when(overworld.getTotalWorldTime()).thenReturn(1L);
+        ManaService.tickPlayer(player, RULES);
+        ManaProfileExplanation afterUpdate = readExplanationWithoutMutation(player, providerCalls);
+        assertEquals(120, mana.getMaximumMana(player));
+        assertEquals(120, afterUpdate.getFinalMaximumMana());
+        assertEmptySource(afterUpdate, PEER);
+        ManaContributionExplanation active = explanationSource(afterUpdate, PROVIDER);
+        assertEquals(ManaContributionDisposition.APPLIED, active.getDisposition());
+        assertEquals(ManaContributionFailure.NONE, active.getFailure());
+        assertEquals(20, active.getAcceptedContribution().getFlatMaximumMana());
+
+        mana.setCurrentMana(player, 110, ManaCauses.COMMAND);
+        assertEquals(110, mana.getCurrentMana(player));
+        ManaContributionPublicationResult removed = provider.update(player, bonusToken,
+                applied.getRevision().getAsLong(), ManaContribution.EMPTY);
+        assertEquals(UPDATE_RECORDED, removed.getStatus());
+        assertEquals(3L, removed.getRevision().getAsLong());
+        when(overworld.getTotalWorldTime()).thenReturn(2L);
+        ManaService.tickPlayer(player, RULES);
+
+        ManaProfileExplanation afterRemoval = readExplanationWithoutMutation(player, providerCalls);
+        assertEquals(100, mana.getCurrentMana(player));
+        assertEquals(100, mana.getMaximumMana(player));
+        assertEquals(100, afterRemoval.getFinalMaximumMana());
+        assertEmptySource(afterRemoval, PROVIDER);
+        assertEmptySource(afterRemoval, PEER);
     }
 
     @Test
@@ -621,6 +685,43 @@ class ManaLifecycleTest {
                 Collections.singleton(PROVIDER));
         ManaService.applyRulesReload(player, RULES, disabled);
         ManaService.applyRulesReload(player, disabled, RULES);
+    }
+
+    private ManaProfileExplanation readExplanationWithoutMutation(EntityPlayerMP player,
+            AtomicInteger providerCalls) throws Exception {
+        ManaPublicState before = mana.getState(player);
+        ManaProfileReadiness readiness = ManaApi.getProfileReadiness(player);
+        long publications = state(player).readiness.publicationVersion();
+        long sequence = managedSequence(player);
+        int calls = providerCalls.get();
+
+        ManaProfileExplanation explanation = ManaApi.explainManaProfile(player);
+        ManaProfileExplanation repeated = ManaApi.explainManaProfile(player);
+
+        assertEquals(explanation.getEvaluatedWorldTick(), repeated.getEvaluatedWorldTick());
+        assertEquals(explanation.getGameplayRulesRevision(), repeated.getGameplayRulesRevision());
+        assertEquals(explanation.getContributions(), repeated.getContributions());
+        assertEquals(before, mana.getState(player));
+        assertEquals(readiness, ManaApi.getProfileReadiness(player));
+        assertEquals(publications, state(player).readiness.publicationVersion());
+        assertEquals(sequence, managedSequence(player));
+        assertEquals(calls, providerCalls.get());
+        return explanation;
+    }
+
+    private static void assertEmptySource(ManaProfileExplanation explanation, ResourceLocation sourceId) {
+        ManaContributionExplanation source = explanationSource(explanation, sourceId);
+        assertEquals(ManaContributionDisposition.EMPTY, source.getDisposition());
+        assertEquals(ManaContributionFailure.NONE, source.getFailure());
+        assertFalse(source.hasAcceptedContribution());
+    }
+
+    private static ManaContributionExplanation explanationSource(ManaProfileExplanation explanation,
+            ResourceLocation sourceId) {
+        return explanation.getContributions().stream()
+                .filter(source -> source.getSourceId().equals(sourceId))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Missing explanation for " + sourceId));
     }
 
     private static void setDimension(WorldServer world, int dimension) throws Exception {
