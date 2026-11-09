@@ -5,10 +5,13 @@ import com.mahghuuuls.jawms.api.IManaService;
 import com.mahghuuuls.jawms.api.ManaContribution;
 import com.mahghuuuls.jawms.api.ManaContributionPublicationResult;
 import com.mahghuuuls.jawms.api.ManaContributionPublicationStatus;
+import com.mahghuuuls.jawms.api.ManaFirstAcceptanceVerifier;
 import com.mahghuuuls.jawms.api.ManaProfileGeneration;
 import com.mahghuuuls.jawms.api.ManaProfileReadiness;
 import com.mahghuuuls.jawms.internal.modifier.ManaProviderRegistry;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -319,6 +322,7 @@ public final class ManaService implements IManaService {
     public static Optional<ManaProfileGeneration> getReadinessGeneration(EntityPlayer player,
             ResourceLocation id, Supplier<ManaProfileGeneration> create) {
         ManaState state = requireServerState(player);
+        ManaEvaluationGuard.requireNotVerifying();
         return state.readiness == null || state.checkingDeath ? Optional.empty()
                 : state.readiness.generation(id, publicationContext(player, state), create);
     }
@@ -333,6 +337,9 @@ public final class ManaService implements IManaService {
         Objects.requireNonNull(generation, "generation");
         if (expectedRevision < 1) throw new IllegalArgumentException("Expected a positive revision.");
         ManaState state = requireServerState(player);
+        if (ManaEvaluationGuard.isVerifying()) {
+            return ManaReadiness.rejection(ManaContributionPublicationStatus.BUSY);
+        }
         if (state.readiness == null) return ManaReadiness.rejection(ManaContributionPublicationStatus.INAPPLICABLE);
         return ManaLifecycle.suspend((EntityPlayerMP) player, state, id, generation, expectedRevision);
     }
@@ -343,6 +350,9 @@ public final class ManaService implements IManaService {
         Objects.requireNonNull(contribution, "contribution");
         if (!initial && revision < 1) throw new IllegalArgumentException("Expected a positive revision.");
         ManaState state = requireServerState(player);
+        if (ManaEvaluationGuard.isVerifying()) {
+            return ManaReadiness.rejection(ManaContributionPublicationStatus.BUSY);
+        }
         if (state.readiness == null) return ManaReadiness.rejection(ManaContributionPublicationStatus.INAPPLICABLE);
         if (state.checkingDeath || ManaEvaluationGuard.isEvaluating(player.getUniqueID())
                 || ManaMutationCoordinator.currentDepth(player.getUniqueID()) > 0) {
@@ -375,24 +385,37 @@ public final class ManaService implements IManaService {
         if (readiness.isRetired()) return;
         int tick = player.getServer().getTickCounter();
         List<ResourceLocation> missing = readiness.missing();
+        List<String> verificationBlockers = Collections.emptyList();
         if (missing.isEmpty() && ManaLifecycle.canAccept(player, readiness)) {
+            WorldServer world = readiness.world;
             long publicationVersion = readiness.publicationVersion();
             ManaProfileEvaluation evaluation = evaluateCurrentProfile(player, state, rules);
-            if (state.readiness != readiness || !readiness.held() || readiness.isRetired()
-                    || state.checkingDeath || !ManaLifecycle.canAccept(player, readiness)) return;
-            if (evaluation != null && publicationVersion == readiness.publicationVersion()) {
-                acceptHeldProfile(player, state, readiness, evaluation, rules.getRevision());
-                return;
+            if (!isCurrentHold(player, state, readiness, world)) return;
+            if (evaluation != null && matchesCandidate(readiness, rules, publicationVersion)) {
+                verificationBlockers = verifyHeldContributions(player, state, readiness, world, rules, publicationVersion);
+                if (!isCurrentHold(player, state, readiness, world)) return;
+                if (!matchesCandidate(readiness, rules, publicationVersion)) {
+                    verificationBlockers = Collections.emptyList();
+                } else if (verificationBlockers.isEmpty()) {
+                    acceptHeldProfile(player, state, readiness, evaluation, rules.getRevision());
+                    return;
+                }
             }
             // A suspension during evaluation can leave a required slot missing on the deadline tick.
             missing = readiness.missing();
-            if (missing.isEmpty()) return;
+            if (missing.isEmpty() && verificationBlockers.isEmpty()) return;
         }
         if (readiness.deadlineElapsed(tick)) {
             readiness.unavailable();
-            JustAnotherWizardryManaSystemMod.LOGGER.warn(
-                    "MANA_PROFILE_UNAVAILABLE player={} generation={} lifecycle={} missingProviders={}",
-                    player.getUniqueID(), readiness.identity, readiness.lifecycle, missing);
+            if (verificationBlockers.isEmpty()) {
+                JustAnotherWizardryManaSystemMod.LOGGER.warn(
+                        "MANA_PROFILE_UNAVAILABLE player={} generation={} lifecycle={} missingProviders={}",
+                        player.getUniqueID(), readiness.identity, readiness.lifecycle, missing);
+            } else {
+                JustAnotherWizardryManaSystemMod.LOGGER.warn(
+                        "MANA_PROFILE_UNAVAILABLE player={} generation={} lifecycle={} missingProviders={} verificationBlockers={}",
+                        player.getUniqueID(), readiness.identity, readiness.lifecycle, missing, verificationBlockers);
+            }
             if (Boolean.getBoolean("jawms.debugManaReadiness")) {
                 JustAnotherWizardryManaSystemMod.LOGGER.info(
                         "MANA_PROFILE_TIMEOUT_CLOCK player={} generation={} tick={} elapsedTicks={}",
@@ -400,6 +423,38 @@ public final class ManaService implements IManaService {
             }
             ManaNetwork.synchronize(player, state);
         }
+    }
+
+    private static List<String> verifyHeldContributions(EntityPlayerMP player, ManaState state, ManaReadiness readiness,
+            WorldServer world, GameplayRules rules, long publicationVersion) {
+        List<String> blockers = new ArrayList<>();
+        for (ResourceLocation id : readiness.eligibleProviders()) {
+            ManaFirstAcceptanceVerifier verifier = ManaProviderRegistry.instance().readinessVerifier(id);
+            if (verifier == null) continue;
+
+            // The fenced ledger still contains the group read by the evaluator, even for EMPTY.
+            ManaReadiness.Publication input = readiness.recordedPublication(id);
+            try (ManaEvaluationGuard.VerificationScope ignored = ManaEvaluationGuard.beginVerification()) {
+                if (!verifier.verify(player, input.token, input.revision, input.contribution)) {
+                    blockers.add(id + "=DECLINED");
+                }
+            } catch (RuntimeException exception) {
+                blockers.add(id + "=EXCEPTION");
+            }
+            if (!isCurrentHold(player, state, readiness, world)
+                    || !matchesCandidate(readiness, rules, publicationVersion)) break;
+        }
+        return blockers;
+    }
+
+    private static boolean isCurrentHold(EntityPlayerMP player, ManaState state, ManaReadiness readiness,
+            WorldServer world) {
+        return state.readiness == readiness && readiness.held() && !readiness.isRetired()
+                && !state.checkingDeath && readiness.world == world && ManaLifecycle.canAccept(player, readiness);
+    }
+
+    private static boolean matchesCandidate(ManaReadiness readiness, GameplayRules rules, long publicationVersion) {
+        return rules == GameplayRulesManager.current() && publicationVersion == readiness.publicationVersion();
     }
 
     private static void acceptHeldProfile(EntityPlayerMP player, ManaState state, ManaReadiness readiness,

@@ -9,6 +9,7 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.WorldServer;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -112,6 +113,16 @@ final class ManaReadiness {
         return slot == null ? null : slot.contribution;
     }
 
+    Set<ResourceLocation> eligibleProviders() {
+        return Collections.unmodifiableSet(slots.keySet());
+    }
+
+    /** Read under the publication fence of a complete candidate. */
+    Publication recordedPublication(ResourceLocation id) {
+        Slot slot = slots.get(id);
+        return new Publication(slot.token, slot.revision, slot.contribution);
+    }
+
     Optional<ManaProfileGeneration> generation(ResourceLocation id, Object context,
             Supplier<ManaProfileGeneration> create) {
         Slot slot = slots.get(id);
@@ -169,6 +180,18 @@ final class ManaReadiness {
 
     static ManaContributionPublicationResult rejection(ManaContributionPublicationStatus status) {
         return new ManaContributionPublicationResult(status, OptionalLong.empty());
+    }
+
+    static final class Publication {
+        final ManaProfileGeneration token;
+        final long revision;
+        final ManaContribution contribution;
+
+        private Publication(ManaProfileGeneration token, long revision, ManaContribution contribution) {
+            this.token = token;
+            this.revision = revision;
+            this.contribution = contribution;
+        }
     }
 
     private static final class Slot {

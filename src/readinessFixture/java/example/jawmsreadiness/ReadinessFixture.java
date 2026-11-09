@@ -35,13 +35,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-@Mod(modid = ReadinessFixture.ID, name = "JAWMS Readiness Verification", version = "1.1",
-        dependencies = "required-after:jawms@[1.4.0,)")
+@Mod(modid = ReadinessFixture.ID, name = "JAWMS Readiness Verification", version = "1.2",
+        dependencies = "required-after:jawms@[1.5.0,)")
 public final class ReadinessFixture {
     static final String ID = "jawmsreadinessfixture";
     private static final Logger LOG = LogManager.getLogger(ID);
     private static final ResourceLocation CAUSE = new ResourceLocation(ID, "probe");
     private static final ManaContribution BONUS = ManaContribution.builder().flatMaximumMana(20).build();
+    private static final ManaContribution REDUCTION = ManaContribution.builder().flatMaximumMana(-20).build();
+    private static final boolean VERIFY_FIRST_ACCEPTANCE =
+            Boolean.getBoolean("jawms.readinessFixture.verifyFirstAcceptance");
 
     private ManaReadinessProvider provider;
     private ManaReadinessProvider peer;
@@ -50,10 +53,13 @@ public final class ReadinessFixture {
     private int earlyEvents;
     private final Map<EntityPlayer, Integer> delayedPeers = new IdentityHashMap<>();
     private final Map<EntityPlayer, SuspensionProbe> suspensions = new IdentityHashMap<>();
+    private final Map<EntityPlayer, VerificationProbe> verifications = new IdentityHashMap<>();
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
-        provider = ManaApi.registerReadinessProvider(new ResourceLocation(ID, "bonus"));
+        ResourceLocation id = new ResourceLocation(ID, "bonus");
+        provider = VERIFY_FIRST_ACCEPTANCE ? ManaApi.registerReadinessProvider(id, this::verifyContribution)
+                : ManaApi.registerReadinessProvider(id);
         peer = ManaApi.registerReadinessProvider(new ResourceLocation(ID, "peer"));
         MinecraftForge.EVENT_BUS.register(this);
         if (event.getSide().isClient()) MinecraftForge.EVENT_BUS.register(new ClientObserver());
@@ -68,6 +74,7 @@ public final class ReadinessFixture {
     public void serverStopped(FMLServerStoppedEvent event) {
         delayedPeers.clear();
         suspensions.clear();
+        verifications.clear();
         nextTransition = null;
     }
 
@@ -97,14 +104,18 @@ public final class ReadinessFixture {
         if (hold != null && hold.player.equals(event.player.getUniqueID())
                 && hold.save.equals(saveDirectory(event.player.getServer()))) {
             nextLoginHold = null;
-            if (hold.suspend) {
+            if ("hold-suspend".equals(hold.action)) {
                 beginSuspension(event.player);
+                return;
+            }
+            if ("hold-verify-false".equals(hold.action) || "hold-verify-throw".equals(hold.action)) {
+                beginVerification(event.player, "hold-verify-throw".equals(hold.action));
                 return;
             }
             LOG.info("READINESS_FIXTURE_WITHHELD player={}", event.player.getUniqueID());
             return;
         }
-        complete(event.player, provider, BONUS);
+        complete(event.player, provider, VERIFY_FIRST_ACCEPTANCE ? ManaContribution.EMPTY : BONUS);
         delayPeer(event.player);
     }
 
@@ -173,6 +184,71 @@ public final class ReadinessFixture {
         }
     }
 
+    private void beginVerification(EntityPlayer player, boolean throwsException) {
+        Optional<ManaProfileGeneration> token = provider.getGeneration(player);
+        if (!token.isPresent()) {
+            LOG.error("READINESS_FIXTURE_VERIFY no token for player={}", player.getUniqueID());
+            return;
+        }
+        ManaContributionPublicationResult initial = provider.completeInitial(player, token.get(), REDUCTION);
+        logVerification(player, "record-reduction", initial);
+        if (initial.getStatus() != ManaContributionPublicationStatus.INITIAL_RECORDED) return;
+        int tick = player.getServer().getTickCounter();
+        verifications.put(player, new VerificationProbe(token.get(), initial.getRevision().getAsLong(),
+                throwsException, tick + 35));
+        delayPeer(player);
+    }
+
+    private boolean verifyContribution(EntityPlayer player, ManaProfileGeneration token, long revision,
+            ManaContribution contribution) {
+        VerificationProbe probe = verifications.get(player);
+        if (probe == null) return true;
+        // Test-only observation. Settlement and publication are controlled outside the verifier.
+        probe.calls++;
+        if (probe.token != token || probe.revision != revision
+                || contribution != (probe.recovered ? ManaContribution.EMPTY : REDUCTION)) {
+            LOG.error("READINESS_FIXTURE_VERIFY unexpected candidate player={} revision={} flatMaximum={}",
+                    player.getUniqueID(), revision, contribution.getFlatMaximumMana());
+            return false;
+        }
+        if (probe.calls == 1 || probe.recovered) {
+            LOG.info("READINESS_FIXTURE_VERDICT player={} tick={} revision={} flatMaximum={} outcome={} calls={}",
+                    player.getUniqueID(), player.getServer().getTickCounter(), revision,
+                    contribution.getFlatMaximumMana(),
+                    probe.recovered ? "VERIFIED_EMPTY" : probe.throwsException ? "THROW" : "DECLINE", probe.calls);
+        }
+        if (probe.recovered) return true;
+        if (probe.throwsException) throw new IllegalStateException("Synthetic first-acceptance verifier exception");
+        return false;
+    }
+
+    private boolean recoverVerification(EntityPlayer player, VerificationProbe probe) {
+        ManaContributionPublicationResult update = provider.update(
+                player, probe.token, probe.revision, ManaContribution.EMPTY);
+        logVerification(player, "recover-empty", update);
+        if (update.getStatus() != ManaContributionPublicationStatus.UPDATE_RECORDED) return false;
+        probe.revision = update.getRevision().getAsLong();
+        probe.recovered = true;
+        return true;
+    }
+
+    private static final class VerificationProbe {
+        final ManaProfileGeneration token;
+        final boolean throwsException;
+        final int recoveryTick;
+        long revision;
+        int calls;
+        boolean recovered;
+        boolean recoveryAttempted;
+
+        VerificationProbe(ManaProfileGeneration token, long revision, boolean throwsException, int recoveryTick) {
+            this.token = token;
+            this.revision = revision;
+            this.throwsException = throwsException;
+            this.recoveryTick = recoveryTick;
+        }
+    }
+
     private static final class TransitionProbe {
         final EntityPlayerMP source;
         final ManaProfileGeneration token;
@@ -192,12 +268,12 @@ public final class ReadinessFixture {
     private static final class LoginHold {
         final UUID player;
         final File save;
-        final boolean suspend;
+        final String action;
 
-        private LoginHold(UUID player, File save, boolean suspend) {
+        private LoginHold(UUID player, File save, String action) {
             this.player = player;
             this.save = save;
-            this.suspend = suspend;
+            this.action = action;
         }
     }
 
@@ -210,8 +286,21 @@ public final class ReadinessFixture {
             if (suspensions.containsKey(event.player)) {
                 peer.getGeneration(event.player).ifPresent(token -> logSuspension(event.player, "complete-peer",
                         peer.completeInitial(event.player, token, ManaContribution.EMPTY)));
+            } else if (verifications.containsKey(event.player)) {
+                peer.getGeneration(event.player).ifPresent(token -> logVerification(event.player, "complete-peer",
+                        peer.completeInitial(event.player, token, ManaContribution.EMPTY)));
             } else {
                 complete(event.player, peer, ManaContribution.EMPTY);
+            }
+        }
+        VerificationProbe probe = verifications.get(event.player);
+        if (probe != null && !probe.throwsException && !probe.recoveryAttempted
+                && event.player.getServer().getTickCounter() - probe.recoveryTick >= 0) {
+            probe.recoveryAttempted = true;
+            if (probe.calls == 0 || ManaApi.getProfileReadiness(event.player) != ManaProfileReadiness.PENDING) {
+                LOG.error("READINESS_FIXTURE_VERIFY pre-deadline recovery fixture did not reach the held verdict");
+            } else {
+                recoverVerification(event.player, probe);
             }
         }
     }
@@ -220,6 +309,7 @@ public final class ReadinessFixture {
     public void logout(PlayerEvent.PlayerLoggedOutEvent event) {
         delayedPeers.remove(event.player);
         suspensions.remove(event.player);
+        verifications.remove(event.player);
         if (nextTransition != null && nextTransition.source == event.player) nextTransition = null;
     }
 
@@ -240,6 +330,11 @@ public final class ReadinessFixture {
                 player.getUniqueID(), action, player.getServer().getTickCounter(), result.getStatus(), result.getRevision());
     }
 
+    private static void logVerification(EntityPlayer player, String action, ManaContributionPublicationResult result) {
+        LOG.info("READINESS_FIXTURE_VERIFY player={} action={} tick={} result={} revision={}",
+                player.getUniqueID(), action, player.getServer().getTickCounter(), result.getStatus(), result.getRevision());
+    }
+
     private final class ProbeCommand extends CommandBase {
         @Override
         public String getName() {
@@ -249,7 +344,8 @@ public final class ReadinessFixture {
         @Override
         public String getUsage(ICommandSender sender) {
             return "/readinessfixture <hold|hold-suspend|release|recover-suspended|refuse-suspend|seed|remove|inspect"
-                    + "|hold-transition|empty-transition|trace-transition>";
+                    + "|hold-transition|empty-transition|trace-transition|hold-verify-false|hold-verify-throw"
+                    + "|recover-verified|update-verified>";
         }
 
         @Override
@@ -266,12 +362,42 @@ public final class ReadinessFixture {
             EntityPlayerMP player = (EntityPlayerMP) sender.getCommandSenderEntity();
             IManaService service = ManaApi.getManaService();
             SuspensionProbe probe = suspensions.get(player);
+            VerificationProbe verification = verifications.get(player);
             switch (arguments[0]) {
                 case "hold":
                 case "hold-suspend":
                     // Reopening single-player stops and recreates the logical server in this JVM.
-                    nextLoginHold = new LoginHold(player.getUniqueID(), saveDirectory(server),
-                            "hold-suspend".equals(arguments[0]));
+                    nextLoginHold = new LoginHold(player.getUniqueID(), saveDirectory(server), arguments[0]);
+                    break;
+                case "hold-verify-false":
+                case "hold-verify-throw":
+                    if (!VERIFY_FIRST_ACCEPTANCE || ManaApi.getProfileReadiness(player) != ManaProfileReadiness.READY
+                            || service.getCurrentMana(player) != 110 || service.getMaximumMana(player) != 120) {
+                        throw new CommandException("Expected verification mode and a seeded 110/120 profile.");
+                    }
+                    nextLoginHold = new LoginHold(player.getUniqueID(), saveDirectory(server), arguments[0]);
+                    break;
+                case "recover-verified":
+                    if (verification == null || verification.calls == 0 || verification.recovered
+                            || ManaApi.getProfileReadiness(player) != ManaProfileReadiness.UNAVAILABLE
+                            || !recoverVerification(player, verification)) {
+                        throw new CommandException("Expected a verified recovery from the held timeout.");
+                    }
+                    break;
+                case "update-verified":
+                    if (verification == null || !verification.recovered
+                            || ManaApi.getProfileReadiness(player) != ManaProfileReadiness.READY) {
+                        throw new CommandException("Expected the accepted recovered generation.");
+                    }
+                    ManaContributionPublicationResult verifiedUpdate = provider.update(
+                            player, verification.token, verification.revision, REDUCTION);
+                    logVerification(player, "update-accepted", verifiedUpdate);
+                    if (verifiedUpdate.getStatus() != ManaContributionPublicationStatus.UPDATE_RECORDED) {
+                        throw new CommandException("Accepted profile update refused.");
+                    }
+                    verification.revision = verifiedUpdate.getRevision().getAsLong();
+                    LOG.info("READINESS_FIXTURE_VERIFY acceptedUpdate player={} verifierCalls={}",
+                            player.getUniqueID(), verification.calls);
                     break;
                 case "recover-suspended":
                     if (probe == null || ManaApi.getProfileReadiness(player) == ManaProfileReadiness.READY) {

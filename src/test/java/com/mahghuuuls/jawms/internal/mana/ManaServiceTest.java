@@ -16,6 +16,7 @@ import com.mahghuuuls.jawms.internal.casting.CastCostContextTestProbe;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.CastPaymentContextManager;
 import com.mahghuuuls.jawms.internal.integration.wizardry.payment.DemonicSealPolicy;
 import com.mahghuuuls.jawms.internal.rules.GameplayRules;
+import com.mahghuuuls.jawms.internal.rules.GameplayRulesManager;
 import com.mahghuuuls.jawms.internal.rules.WizardryArmorProfile;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -54,6 +56,8 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 
 class ManaServiceTest {
+    private Field activeRulesField;
+    private GameplayRules previousRules;
 
     @BeforeAll
     static void bootstrapMinecraft() {
@@ -128,7 +132,7 @@ class ManaServiceTest {
     }
 
     @Test
-    void playerTickWaitsForAllPublicationsAndAcceptsOnlyAfterValidRecovery() {
+    void playerTickWaitsForAllPublicationsAndAcceptsOnlyAfterValidRecovery() throws Exception {
         ResourceLocation first = new ResourceLocation("test", "first");
         ResourceLocation peer = new ResourceLocation("test", "peer");
         PlayerFixture fixture = boundLoginFixture(first, peer);
@@ -165,7 +169,7 @@ class ManaServiceTest {
     }
 
     @Test
-    void freshProfileFillsToItsFirstCompleteMaximum() {
+    void freshProfileFillsToItsFirstCompleteMaximum() throws Exception {
         ResourceLocation provider = new ResourceLocation("test", "fresh");
         PlayerFixture fixture = boundLoginFixture(provider);
         fixture.state.applyEffectiveStats(100, 0);
@@ -189,7 +193,7 @@ class ManaServiceTest {
     }
 
     @Test
-    void allEmptyInitialGroupsWaitForEveryProviderBeforeClampingSavedMana() {
+    void allEmptyInitialGroupsWaitForEveryProviderBeforeClampingSavedMana() throws Exception {
         ResourceLocation first = new ResourceLocation("test", "empty_first");
         ResourceLocation peer = new ResourceLocation("test", "empty_peer");
         PlayerFixture fixture = boundLoginFixture(first, peer);
@@ -225,10 +229,11 @@ class ManaServiceTest {
     private final List<Object> registeredListeners = new ArrayList<>();
 
     @AfterEach
-    void unregisterListeners() {
+    void restoreFixtureState() throws IllegalAccessException {
         for (Object listener : registeredListeners) {
             MinecraftForge.EVENT_BUS.unregister(listener);
         }
+        if (activeRulesField != null) activeRulesField.set(null, previousRules);
     }
 
     @Test
@@ -897,9 +902,14 @@ class ManaServiceTest {
         return fixture;
     }
 
-    private static GameplayRules readinessRules(int baseMaximum) {
-        return new GameplayRules(1, baseMaximum, 0, 0L, "base",
+    private GameplayRules readinessRules(int baseMaximum) throws ReflectiveOperationException {
+        GameplayRules rules = new GameplayRules(1, baseMaximum, 0, 0L, "base",
                 20, 50, 100, Collections.emptyMap(), Collections.emptyList(), WizardryArmorProfile.DEFAULT);
+        activeRulesField = GameplayRulesManager.class.getDeclaredField("current");
+        activeRulesField.setAccessible(true);
+        previousRules = GameplayRulesManager.current();
+        activeRulesField.set(null, rules);
+        return rules;
     }
 
     private static void publishEmptyInitialGroup(EntityPlayer player, ResourceLocation provider) {

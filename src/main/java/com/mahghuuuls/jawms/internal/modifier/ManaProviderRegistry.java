@@ -7,6 +7,7 @@ import com.mahghuuuls.jawms.api.ManaContribution;
 import com.mahghuuuls.jawms.api.ManaContributionDisposition;
 import com.mahghuuuls.jawms.api.ManaContributionFailure;
 import com.mahghuuuls.jawms.api.ManaContributionSourceKind;
+import com.mahghuuuls.jawms.api.ManaFirstAcceptanceVerifier;
 import com.mahghuuuls.jawms.api.ManaItemContext;
 import com.mahghuuuls.jawms.api.ManaProviderDescriptor;
 import com.mahghuuuls.jawms.api.ManaProviderKind;
@@ -89,9 +90,18 @@ public final class ManaProviderRegistry {
         put(id, new ContextualRegistration(id, provider));
     }
 
-    public synchronized void registerReadiness(ResourceLocation id) {
+    public void registerReadiness(ResourceLocation id) {
+        registerReadiness(id, null);
+    }
+
+    public synchronized void registerReadiness(ResourceLocation id, ManaFirstAcceptanceVerifier verifier) {
         requireRegistration(id, id);
-        put(id, new ReadinessRegistration(id));
+        put(id, new ReadinessRegistration(id, verifier));
+    }
+
+    public synchronized ManaFirstAcceptanceVerifier readinessVerifier(ResourceLocation id) {
+        Registration registration = registrations.get(id);
+        return registration instanceof ReadinessRegistration ? ((ReadinessRegistration) registration).verifier : null;
     }
 
     public synchronized Set<ResourceLocation> eligibleReadinessProviders(GameplayRules rules) {
@@ -489,8 +499,11 @@ public final class ManaProviderRegistry {
     }
 
     private static final class ReadinessRegistration extends Registration {
-        private ReadinessRegistration(ResourceLocation id) {
+        private final ManaFirstAcceptanceVerifier verifier;
+
+        private ReadinessRegistration(ResourceLocation id, ManaFirstAcceptanceVerifier verifier) {
             super(id);
+            this.verifier = verifier;
         }
     }
 

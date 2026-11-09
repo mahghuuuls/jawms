@@ -9,11 +9,13 @@ public final class ManaEvaluationGuard {
 
     private static final ThreadLocal<Set<UUID>> EVALUATING =
             ThreadLocal.withInitial(HashSet::new);
+    private static final ThreadLocal<Boolean> VERIFYING = new ThreadLocal<>();
 
     private ManaEvaluationGuard() {
     }
 
     public static Scope begin(UUID playerId) {
+        requireNotVerifying();
         if (playerId == null) {
             throw new NullPointerException("playerId");
         }
@@ -25,11 +27,37 @@ public final class ManaEvaluationGuard {
     }
 
     public static boolean isEvaluating(UUID playerId) {
-        return EVALUATING.get().contains(playerId);
+        return isVerifying() || EVALUATING.get().contains(playerId);
     }
 
     public static boolean isEvaluatingOnCurrentThread() {
-        return !EVALUATING.get().isEmpty();
+        return isVerifying() || !EVALUATING.get().isEmpty();
+    }
+
+    static VerificationScope beginVerification() {
+        requireNotVerifying();
+        VERIFYING.set(Boolean.TRUE);
+        return new VerificationScope();
+    }
+
+    static boolean isVerifying() {
+        return VERIFYING.get() != null;
+    }
+
+    static void requireNotVerifying() {
+        if (isVerifying()) {
+            throw new IllegalStateException("JAWMS first-acceptance verification is read-only.");
+        }
+    }
+
+    static final class VerificationScope implements AutoCloseable {
+        private VerificationScope() {
+        }
+
+        @Override
+        public void close() {
+            VERIFYING.remove();
+        }
     }
 
     public static final class Scope implements AutoCloseable {

@@ -54,7 +54,7 @@ class MixinBootstrapContractTest {
         }
         assertEquals("11.8", properties.getProperty("mixin_booter_version").trim());
         assertEquals("10.7", properties.getProperty("mixin_booter_min_version").trim());
-        assertEquals("1.4.1", metadata.get("version").getAsString());
+        assertEquals("1.5.0", metadata.get("version").getAsString());
     }
 
     @Test

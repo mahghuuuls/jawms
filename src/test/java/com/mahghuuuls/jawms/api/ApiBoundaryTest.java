@@ -4,6 +4,8 @@ import com.mahghuuuls.jawms.api.client.ClientManaApi;
 import com.mahghuuuls.jawms.api.client.ClientHudContext;
 import com.mahghuuuls.jawms.api.client.ClientManaSnapshot;
 import com.mahghuuuls.jawms.api.client.ManaHudRenderEvent;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -20,9 +22,9 @@ class ApiBoundaryTest {
 
     @Test
     void apiVersionAndSurfaceAreStableAndServerSafe() throws Exception {
-        assertEquals("1.9", ManaApi.API_VERSION);
+        assertEquals("1.10", ManaApi.API_VERSION);
         assertEquals(1, ManaApiVersion.MAJOR);
-        assertEquals(9, ManaApiVersion.MINOR);
+        assertEquals(10, ManaApiVersion.MINOR);
         String packageContract = new String(Files.readAllBytes(Paths.get(
                 "src/main/java/com/mahghuuuls/jawms/api/package-info.java")), StandardCharsets.UTF_8);
         assertTrue(packageContract.contains("JAWMS API, version " + ManaApi.API_VERSION + "."));
@@ -50,6 +52,14 @@ class ApiBoundaryTest {
         assertPublicSignaturesDoNotExposeImplementation(ManaStateChangeEvent.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaContribution.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaReadinessProvider.class);
+        assertPublicSignaturesDoNotExposeImplementation(ManaFirstAcceptanceVerifier.class);
+        assertTrue(ManaFirstAcceptanceVerifier.class.isAnnotationPresent(FunctionalInterface.class));
+        assertEquals(boolean.class, ManaFirstAcceptanceVerifier.class.getMethod("verify", EntityPlayer.class,
+                ManaProfileGeneration.class, long.class, ManaContribution.class).getReturnType());
+        assertEquals(ManaReadinessProvider.class,
+                ManaApi.class.getMethod("registerReadinessProvider", ResourceLocation.class).getReturnType());
+        assertEquals(ManaReadinessProvider.class, ManaApi.class.getMethod("registerReadinessProvider",
+                ResourceLocation.class, ManaFirstAcceptanceVerifier.class).getReturnType());
         assertPublicSignaturesDoNotExposeImplementation(ManaContributionPublicationResult.class);
         assertPublicSignaturesDoNotExposeImplementation(ConfiguredFlaskSnapshot.class);
         assertPublicSignaturesDoNotExposeImplementation(ManaItemContext.class);

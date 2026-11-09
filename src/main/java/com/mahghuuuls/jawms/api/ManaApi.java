@@ -9,6 +9,7 @@ import net.minecraft.item.Item;
 import net.minecraft.util.ResourceLocation;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Stable entry point for the JAWMS player-mana API.
@@ -20,6 +21,13 @@ public final class ManaApi {
     /** Register a contextual source that publishes complete groups before first acceptance. */
     public static ManaReadinessProvider registerReadinessProvider(ResourceLocation id) {
         ManaProviderRegistry.instance().registerReadiness(id);
+        return new ManaReadinessProvider(id);
+    }
+
+    /** Register a readiness source with a verifier for its first-acceptance candidates. */
+    public static ManaReadinessProvider registerReadinessProvider(
+            ResourceLocation id, ManaFirstAcceptanceVerifier verifier) {
+        ManaProviderRegistry.instance().registerReadiness(id, Objects.requireNonNull(verifier, "verifier"));
         return new ManaReadinessProvider(id);
     }
 

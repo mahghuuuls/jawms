@@ -510,42 +510,55 @@ def readinessFixtureJar = tasks.register('readinessFixtureJar', Jar) {
     dependsOn sourceSets.readinessFixture.classesTaskName
     from sourceSets.readinessFixture.output
     archiveBaseName.set('jawms-readiness-fixture')
-    archiveVersion.set('1.1')
+    archiveVersion.set('1.2')
     archiveClassifier.set('dev')
     preserveFileTimestamps = false
     reproducibleFileOrder = true
 }
 
-def api18Oracle = providers.gradleProperty('jawmsApi18Oracle').map { file(it) }
-def requireApi18Oracle = { File oracle ->
-    def expected = '5cf0d7af943e0e477550b62716373b24698ef3b213bc2d3a28d56a587be6e4f4'
-    if (!oracle.isFile() || java.security.MessageDigest.getInstance('SHA-256')
-            .digest(oracle.bytes).encodeHex().toString() != expected) {
-        throw new GradleException('Expected the verified JAWMS 1.3.0 release JAR for the API 1.8 oracle.')
+def readinessApiOracles = [
+        [version: '1.8', suffix: '18', release: '1.3.0',
+         sha256: '5cf0d7af943e0e477550b62716373b24698ef3b213bc2d3a28d56a587be6e4f4'],
+        [version: '1.9', suffix: '19', release: '1.4.1',
+         sha256: 'a43b145fa4db156b02cbd54f0d5de0b4360adf4b27f3bcea3c90c4a44af7316f']
+]
+def requireReadinessApiOracle = { File jar, oracle ->
+    if (!jar.isFile() || java.security.MessageDigest.getInstance('SHA-256')
+            .digest(jar.bytes).encodeHex().toString() != oracle.sha256) {
+        throw new GradleException("Expected the verified JAWMS ${oracle.release} release JAR for API ${oracle.version}.")
     }
-    return oracle
+    return jar
 }
-if (api18Oracle.isPresent()) {
+readinessApiOracles.each { oracle ->
+    oracle.artifact = providers.gradleProperty("jawmsApi${oracle.suffix}Oracle").map { file(it) }
+}
+readinessApiOracles.findAll { it.artifact.isPresent() }.each { oracle ->
     def mainCompile = tasks.named('compileJava', JavaCompile)
-    def compileApi18Consumer = tasks.register('compileApi18BinaryFixtureJava', JavaCompile) {
-        source fileTree('src/api18BinaryFixture/java')
-        destinationDirectory.set(layout.buildDirectory.dir('classes/java/api18BinaryFixture'))
+    def compileConsumer = tasks.register("compileApi${oracle.suffix}BinaryFixtureJava", JavaCompile) {
+        source fileTree("src/api${oracle.suffix}BinaryFixture/java")
+        destinationDirectory.set(layout.buildDirectory.dir("classes/java/api${oracle.suffix}BinaryFixture"))
         javaCompiler.set(mainCompile.flatMap { it.javaCompiler })
-        classpath = files(api18Oracle) + mainCompile.get().classpath
+        classpath = files(oracle.artifact) + mainCompile.get().classpath
         sourceCompatibility = targetCompatibility = 8
         options.compilerArgs.add('-proc:none')
-        inputs.file(api18Oracle)
+        inputs.file(oracle.artifact)
         doFirst {
-            requireApi18Oracle(api18Oracle.get())
-            if (!classpath.files.intersect(sourceSets.main.output.files).empty) {
-                throw new GradleException('API 1.8 binary fixture classpath includes candidate output.')
+            requireReadinessApiOracle(oracle.artifact.get(), oracle)
+            def candidateOutputs = sourceSets.main.output.files.collect { it.canonicalFile }
+            if (classpath.files.any { it.canonicalFile in candidateOutputs }) {
+                throw new GradleException("API ${oracle.version} binary fixture classpath includes candidate output.")
             }
         }
     }
     tasks.named('test', Test).configure {
-        dependsOn compileApi18Consumer
-        classpath += files(compileApi18Consumer.flatMap { it.destinationDirectory })
-        systemProperty 'jawms.api18FrozenConsumer', 'true'
+        dependsOn compileConsumer
+        classpath += files(compileConsumer.flatMap { it.destinationDirectory })
+        systemProperty "jawms.api${oracle.suffix}FrozenConsumer", 'true'
+        doFirst {
+            if (classpath.files.any { it.canonicalFile == oracle.artifact.get().canonicalFile }) {
+                throw new GradleException("API ${oracle.version} oracle is on the candidate test runtime classpath.")
+            }
+        }
     }
 }
 
@@ -1103,8 +1116,8 @@ tasks.register('verifyApiCompatibilityFixture') {
             }
         }
         comparePublishedApi(file('src/api16BinaryFixture/artifacts/jawms-1.1.0.jar'), '1.6')
-        if (api18Oracle.isPresent()) {
-            comparePublishedApi(requireApi18Oracle(api18Oracle.get()), '1.8')
+        readinessApiOracles.findAll { it.artifact.isPresent() }.each { oracle ->
+            comparePublishedApi(requireReadinessApiOracle(oracle.artifact.get(), oracle), oracle.version)
         }
 
         def candidateOutputs = sourceSets.main.output.files.collect { it.canonicalFile }
@@ -1534,6 +1547,7 @@ tasks.register('verifyApiCompatibilityFixture') {
                     'LICENSE',
                     'THIRD-PARTY-NOTICES.md',
                     'com/mahghuuuls/jawms/api/ManaApi.class',
+                    'com/mahghuuuls/jawms/api/ManaFirstAcceptanceVerifier.class',
                     'com/mahghuuuls/jawms/api/ConfiguredFlaskSnapshot.class',
                     'com/mahghuuuls/jawms/api/ManaMutationFailure.class',
                     'com/mahghuuuls/jawms/api/ManaContributionDisposition.class',
@@ -1554,6 +1568,13 @@ tasks.register('verifyApiCompatibilityFixture') {
             def missingEntries = requiredEntries.findAll { archive.getEntry(it) == null }
             if (!missingEntries.empty) {
                 throw new GradleException("Production jar is missing required entries: ${missingEntries}")
+            }
+            def readinessFixtureEntries = archive.entries().findAll { entry ->
+                !entry.directory && (entry.name.startsWith('example/jawmsreadiness/')
+                        || entry.name.startsWith('example/jawmsapi19/'))
+            }*.name
+            if (!readinessFixtureEntries.empty) {
+                throw new GradleException("Production jar contains readiness fixtures: ${readinessFixtureEntries}")
             }
 
             def refmapText = archive.getInputStream(archive.getEntry('mixins.jawms.refmap.json'))
@@ -1676,7 +1697,7 @@ tasks.register('verifyStableReleaseMetadata') {
     inputs.file 'README.md'
     inputs.file 'MOD-PAGE.md'
     doLast {
-        def expectedVersion = '1.4.1'
+        def expectedVersion = '1.5.0'
         if (propertyString('mod_version') != expectedVersion
                 || propertyString('developer_tools_version') != expectedVersion
                 || propertyString('release_type') != 'release') {
