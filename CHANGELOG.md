@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.0]
+
+### Added
+
+- API `1.10` lets readiness providers register a read-only first-acceptance verifier for the exact recorded mana contribution.
+
+### Fixed
+
+- Preserve saved mana while an opted-in addon cannot confirm its contribution. Once the addon verifies the complete contribution, the same mana profile can become available, even after the original deadline.
+
+### Compatibility
+
+- Retains API `1.9` binary compatibility and the existing mana save format. Accepted profiles continue to apply ordinary provider updates.
+
 ## [1.4.1]
 
 ### Fixed
